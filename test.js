@@ -30,14 +30,11 @@ console.log(`[INFO] Node: ${process.version}`);
 const chromeEnv = process.env.CHROME_BIN;
 const edgeEnv = process.env.EDGE_BIN;
 
-// defaults “oficiales”
 const chromeDefault = "google-chrome-stable";
 const edgeDefault = "microsoft-edge-stable";
 
-// decide qué probar, basado en lo que realmente existe en la imagen
 let testedAny = false;
 
-// Chrome (solo si existe el binario)
 const chromeCandidate = chromeEnv || chromeDefault;
 console.log(`[INFO] CHROME_BIN: ${chromeEnv || "(not set)"} (candidate: ${chromeCandidate})`);
 if (exists(chromeCandidate)) {
@@ -48,7 +45,6 @@ if (exists(chromeCandidate)) {
   console.log(`[SKIP] Google Chrome: ${chromeCandidate} not found in image`);
 }
 
-// Edge (solo si existe el binario)
 const edgeCandidate = edgeEnv || edgeDefault;
 console.log(`[INFO] EDGE_BIN: ${edgeEnv || "(not set)"} (candidate: ${edgeCandidate})`);
 if (exists(edgeCandidate)) {

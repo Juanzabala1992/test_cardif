@@ -1,0 +1,36 @@
+podman build -f node-chrome.Containerfile -t node22-chrome:latest \
+  --build-arg NODE_BASE_IMAGE=registry.redhat.io/ubi9/nodejs-22:latest .
+
+podman build -f node-edge.Containerfile -t node22-edge:latest \
+  --build-arg NODE_BASE_IMAGE=registry.redhat.io/ubi9/nodejs-22:latest .
+
+
+  *****************************
+
+build sin ambiente
+
+podman build --no-cache -f node-chrome.Containerfile -t node22-chrome:latest --build-arg NODE_BASE_IMAGE=registry.redhat.io/ubi9/nodejs-22:latest .
+podman build --no-cache -f node-edge.Containerfile -t node22-edge:latest --build-arg NODE_BASE_IMAGE=registry.redhat.io/ubi9/nodejs-22:latest .
+
+*******************
+test:
+
+PS C:\Users\fliaz\Documents\cardif> podman run --rm --pull=never node22-chrome:latest sh -lc "google-chrome-stable --version"
+Google Chrome 143.0.7499.169 
+PS C:\Users\fliaz\Documents\cardif> podman run --rm --pull=never node22-edge:latest sh -lc "microsoft-edge-stable --version"
+Microsoft Edge 143.0.3650.96 
+PS C:\Users\fliaz\Documents\cardif> 
+
+
+*******************************
+comandos:
+
+# Chrome
+podman build --no-cache -f node-chrome.Containerfile -t node22-chrome:latest --build-arg NODE_BASE_IMAGE=registry.redhat.io/ubi9/nodejs-22:latest .
+
+# Edge
+podman build --no-cache -f node-edge.Containerfile -t node22-edge:latest --build-arg NODE_BASE_IMAGE=registry.redhat.io/ubi9/nodejs-22:latest .
+
+
+podman run --rm --pull=never node22-chrome:latest sh -lc "node -v; google-chrome-stable --version"
+podman run --rm --pull=never node22-edge:latest sh -lc "node -v; microsoft-edge-stable --version"
