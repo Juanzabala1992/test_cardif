@@ -1,4 +1,67 @@
 ARG NODE_BASE_IMAGE=registry.redhat.io/ubi9/nodejs-22:latest
+
+# ------------------------------------------------------------
+# Stage 1: construir RPMs "shim/compat" (xdg-utils y liberation-fonts)
+# ------------------------------------------------------------
+FROM registry.redhat.io/ubi9/ubi:latest AS shim-builder
+USER 0
+
+RUN dnf -y install rpm-build redhat-rpm-config \
+  && dnf clean all && rm -rf /var/cache/dnf /var/cache/yum
+
+RUN mkdir -p /root/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+
+# xdg-utils shim
+RUN cat > /root/rpmbuild/SPECS/xdg-utils-compat.spec << 'EOF'
+Name:           xdg-utils-compat
+Version:        1.0
+Release:        1%{?dist}
+Summary:        Compatibility RPM to satisfy xdg-utils requirement
+License:        MIT
+BuildArch:      noarch
+Provides:       xdg-utils
+Provides:       xdg-open
+
+%description
+Compatibility RPM providing xdg-utils requirements for third-party packages on UBI.
+
+%install
+mkdir -p %{buildroot}/usr/share/doc/%{name}
+echo "Compatibility RPM: provides xdg-utils" > %{buildroot}/usr/share/doc/%{name}/README
+
+%files
+/usr/share/doc/%{name}/README
+EOF
+
+RUN rpmbuild -ba /root/rpmbuild/SPECS/xdg-utils-compat.spec
+
+# liberation-fonts shim
+RUN cat > /root/rpmbuild/SPECS/liberation-fonts-compat.spec << 'EOF'
+Name:           liberation-fonts-compat
+Version:        1.0
+Release:        1%{?dist}
+Summary:        Compatibility RPM to satisfy liberation-fonts requirement
+License:        MIT
+BuildArch:      noarch
+Provides:       liberation-fonts
+
+%description
+Compatibility RPM providing liberation-fonts requirement for third-party packages on UBI.
+
+%install
+mkdir -p %{buildroot}/usr/share/doc/%{name}
+echo "Compatibility RPM: provides liberation-fonts" > %{buildroot}/usr/share/doc/%{name}/README
+
+%files
+/usr/share/doc/%{name}/README
+EOF
+
+RUN rpmbuild -ba /root/rpmbuild/SPECS/liberation-fonts-compat.spec
+
+
+# ------------------------------------------------------------
+# Stage 2: imagen final (Node + Chrome estable)
+# ------------------------------------------------------------
 FROM ${NODE_BASE_IMAGE}
 
 USER 0
@@ -33,9 +96,9 @@ RUN dnf -y install \
     unzip \
   && dnf clean all && rm -rf /var/cache/dnf /var/cache/yum
 
-COPY rpms/*.rpm /tmp/
-RUN dnf -y install /tmp/*.rpm \
-  && rm -f /tmp/*.rpm \
+COPY --from=shim-builder /root/rpmbuild/RPMS/noarch/*.rpm /var/tmp/
+RUN dnf -y install /var/tmp/*.rpm \
+  && rm -f /var/tmp/*.rpm \
   && dnf clean all && rm -rf /var/cache/dnf /var/cache/yum
 
 RUN rpm --import https://dl.google.com/linux/linux_signing_key.pub && \
@@ -50,14 +113,6 @@ EOF
 
 RUN dnf -y install google-chrome-stable \
   && dnf clean all && rm -rf /var/cache/dnf /var/cache/yum
-
-USER 1001
-WORKDIR /opt/app-root/src
-
-COPY package*.json ./
-RUN npm install
-
-COPY . .
 
 ENV CHROME_BIN=/usr/bin/google-chrome-stable
 
