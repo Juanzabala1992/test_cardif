@@ -132,3 +132,73 @@ for ns in "${NAMESPACES[@]}"; do
 done
 
 echo "OK -> generado: $OUT_FILE"
+
+
+        ***********
+
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+PATTERN='col-c-dev|dv'
+OUT_FILE="reporte_limits_namespaces.txt"
+
+# Lista namespaces filtrados
+mapfile -t NAMESPACES < <(oc get ns -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep -E "$PATTERN" || true)
+
+# Header
+{
+  echo -e "NAMESPACE\tCPU_LIMIT(m)\tMEM_LIMIT(Mi)\tCREATED_AT\tREQUESTER"
+  echo -e "---------\t-----------\t------------\t----------\t---------"
+} > "$OUT_FILE"
+
+for ns in "${NAMESPACES[@]}"; do
+  created="$(oc get ns "$ns" -o jsonpath='{.metadata.creationTimestamp}' 2>/dev/null || echo 'N/A')"
+  requester="$(oc get project "$ns" -o jsonpath='{.metadata.annotations.openshift\.io/requester}' 2>/dev/null || echo 'N/A')"
+
+  rq_json="$(oc get resourcequota -n "$ns" -o json 2>/dev/null || echo '{}')"
+
+  # Suma limits.cpu (m) y limits.memory (Mi) en spec.hard de todas las quotas del ns
+  cpu_m="$(echo "$rq_json" | jq -r '
+    def cpu_to_m:
+      if . == null then 0
+      elif (type=="number") then (. * 1000)
+      else
+        tostring
+        | if test("m$") then (sub("m$";"")|tonumber)
+          else (tonumber * 1000)
+          end
+      end;
+
+    [ .items[]?.spec.hard["limits.cpu"]? ] | map(cpu_to_m) | add // empty
+  ' 2>/dev/null || true)"
+
+  mem_mi="$(echo "$rq_json" | jq -r '
+    def mem_to_mi:
+      if . == null then 0
+      else
+        tostring
+        | if test("Ki$") then (sub("Ki$";"")|tonumber/1024)
+          elif test("Mi$") then (sub("Mi$";"")|tonumber)
+          elif test("Gi$") then (sub("Gi$";"")|tonumber*1024)
+          elif test("Ti$") then (sub("Ti$";"")|tonumber*1024*1024)
+          else (tonumber) # si viene sin unidad, asumimos Mi
+          end
+      end;
+
+    [ .items[]?.spec.hard["limits.memory"]? ] | map(mem_to_mi) | add // empty
+  ' 2>/dev/null || true)"
+
+  # Si no hay esos campos en quotas
+  [[ -z "${cpu_m:-}" ]] && cpu_m="N/A"
+  [[ -z "${mem_mi:-}" ]] && mem_mi="N/A"
+
+  # Formato final (si existen)
+  [[ "$cpu_m" != "N/A" ]] && cpu_m="$(printf "%.0f" "$cpu_m")"
+  [[ "$mem_mi" != "N/A" ]] && mem_mi="$(printf "%.0f" "$mem_mi")"
+
+  echo -e "${ns}\t${cpu_m}\t${mem_mi}\t${created}\t${requester}" >> "$OUT_FILE"
+done
+
+echo "OK -> generado: $OUT_FILE"
+  
