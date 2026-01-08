@@ -65,3 +65,70 @@ if (!testedAny) {
 }
 
 console.log("✅ Todo OK");
+
+
+
+****************
+
+  #!/usr/bin/env bash
+set -euo pipefail
+
+# --- Config ---
+PATTERN='col-c-dev|dv'
+OUT_FILE="reporte_namespaces.txt"
+
+# --- Helpers: sumar CPU/Mem desde "oc adm top pods" ---
+sum_usage() {
+  local ns="$1"
+
+  # Si no hay métricas o falla, retornamos vacío y el caller pondrá N/A
+  oc adm top pods -n "$ns" --no-headers 2>/dev/null | awk '
+    function cpu_to_m(x){
+      # "50m" -> 50
+      if (x ~ /m$/) { sub(/m$/,"",x); return x+0 }
+      # "0.2" (cores) -> 200m
+      return (x+0)*1000
+    }
+    function mem_to_mi(x){
+      # Ki/Mi/Gi/Ti -> Mi
+      if (x ~ /Ki$/) { sub(/Ki$/,"",x); return (x+0)/1024 }
+      if (x ~ /Mi$/) { sub(/Mi$/,"",x); return x+0 }
+      if (x ~ /Gi$/) { sub(/Gi$/,"",x); return (x+0)*1024 }
+      if (x ~ /Ti$/) { sub(/Ti$/,"",x); return (x+0)*1024*1024 }
+      return x+0
+    }
+    { cpu+=cpu_to_m($2); mem+=mem_to_mi($3) }
+    END {
+      # imprime: CPU(m) \t MEM(Mi)
+      if (NR>0) printf "%.0f\t%.0f\n", cpu, mem
+    }
+  '
+}
+
+# --- Obtener namespaces filtrados (desde namespaces reales) ---
+mapfile -t NAMESPACES < <(oc get ns -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep -E "$PATTERN" || true)
+
+# --- Header del reporte ---
+{
+  echo -e "NAMESPACE\tCPU(m)\tMEM(Mi)\tCREATED_AT\tREQUESTER"
+  echo -e "---------\t------\t-------\t----------\t---------"
+} > "$OUT_FILE"
+
+# --- Loop ---
+for ns in "${NAMESPACES[@]}"; do
+  created="$(oc get ns "$ns" -o jsonpath='{.metadata.creationTimestamp}' 2>/dev/null || echo 'N/A')"
+  requester="$(oc get project "$ns" -o jsonpath='{.metadata.annotations.openshift\.io/requester}' 2>/dev/null || echo 'N/A')"
+
+  usage="$(sum_usage "$ns" || true)"
+  if [[ -z "${usage}" ]]; then
+    cpu="N/A"
+    mem="N/A"
+  else
+    cpu="$(echo "$usage" | awk -F'\t' '{print $1}')"
+    mem="$(echo "$usage" | awk -F'\t' '{print $2}')"
+  fi
+
+  echo -e "${ns}\t${cpu}\t${mem}\t${created}\t${requester}" >> "$OUT_FILE"
+done
+
+echo "OK -> generado: $OUT_FILE"
