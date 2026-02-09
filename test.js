@@ -246,3 +246,55 @@ done <<'EOF'
 10.229.253.110 9092
 10.229.253.110 9093
 EOF
+
+******************************************************
+
+
+  1. Generate certificate for Apigee production clusters
+
+➡️ Se ajusta a:
+1. Prepare Apigee production clusters for upgrade
+(Pre-checks, health validation, and upgrade readiness)
+
+2. Rolling update per cluster (via load balancer routing)
+2.1 Cluster 1
+
+2.1.1 Disable Cluster 1 on Load Balancer
+
+2.1.2 Verify cluster status
+
+2.1.3 Apply Apigee platform upgrade
+
+2.1.4 Enable Cluster 1 on Load Balancer
+
+2.2 Cluster 2
+
+2.2.1 Disable Cluster 2 on Load Balancer
+
+2.2.2 Verify cluster status
+
+2.2.3 Apply Apigee platform upgrade
+
+2.2.4 Enable Cluster 2 on Load Balancer
+
+3. Validate the right behavior in production environment
+
+Validate Apigee runtime services
+
+Validate API traffic routing
+
+Validate management plane and analytics
+
+4. Validate these applications work fine in production
+
+Smoke tests on critical APIs
+
+End-to-end validation with consumers
+
+5. Provide on-call support during the Apigee cluster upgrade to version 1.15.1
+
+Monitor the rollout
+
+Troubleshoot any issues that arise
+
+Assist the operations team with upgrade validation and rollback if required
