@@ -298,3 +298,20 @@ Monitor the rollout
 Troubleshoot any issues that arise
 
 Assist the operations team with upgrade validation and rollback if required
+
+
+****************************************************************************************
+
+
+  Los encabezados solicitados se configuran normalmente en el archivo de configuración de Nginx del aplicativo, por ejemplo en archivos como nginx.conf, default.conf o similares.
+Aunque administro OpenShift, mi alcance está orientado a la operación de la plataforma: despliegues, pods, rutas, servicios, namespaces, políticas, secretos, configmaps y troubleshooting de infraestructura.
+
+En este caso, no tengo acceso al repositorio del desarrollo ni al proceso de construcción de la imagen, por lo tanto:
+
+No puedo modificar el archivo fuente de Nginx donde se definen esos add_header.
+No puedo reconstruir la imagen del contenedor para incluir esos cambios.
+No es recomendable ni soportado modificar manualmente archivos dentro de un pod en ejecución, porque:
+el cambio sería temporal;
+se perdería al reiniciar el pod o al hacer un redeploy;
+rompe la trazabilidad y el control de versiones;
+no garantiza consistencia entre ambientes.
