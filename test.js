@@ -68,10 +68,7 @@ console.log("✅ Todo OK");
 
 **********************************************************************************************
   *************************************************************************************
-
-
-
-  # OpenShift Enterprise Platform Presentation Script
+# OpenShift Enterprise Platform Presentation Script
 
 ## Slide 1 — Introduction
 
@@ -83,6 +80,7 @@ During this presentation, I will explain the general architecture, how our DevOp
 
 The main idea of this presentation is to show how OpenShift has become a stable enterprise platform that supports automation, security, observability, and business continuity.
 
+Let’s get started.
 
 ---
 
@@ -116,9 +114,11 @@ Dynatrace is used for observability and monitoring.
 
 And LAAS provides centralized logging as a service.
 
+Another important point is that, for production projects, we do not use persistent storage inside OpenShift. Applications are expected to externalize state and avoid depending on local or persistent storage inside the platform.
+
 Regarding Disaster Recovery, the DRS deployment is not always automatic. The CI/CD pipeline includes an optional stage to deploy into the Disaster Recovery Site when it is required by the project or by operational needs.
 
-Another important point is that the CI/CD framework is standardized and maintained by our ALM team.
+The CI/CD framework is standardized and maintained by our ALM team.
 
 This allows development teams to focus on delivering code, while the platform and automation process handle the operational complexity.
 
@@ -144,11 +144,17 @@ After that, unit tests are executed.
 
 The pipeline also performs code quality validation, package generation, container image validation, image signing, and finally deployment into OpenShift.
 
+One important point is the standardization of container images.
+
+Instead of requiring every development team to build and maintain complex Dockerfiles, corporate standard images and reusable patterns were defined to simplify the developer experience.
+
+This allows developers to focus mainly on the application code.
+
 The main benefit is that we do not need to create a completely different pipeline for every project.
 
 Instead, we use a shared and reusable framework.
 
-This provides process standardization, integrated security controls, reduced manual operations, consistent developer experience, centralized governance, and scalable enterprise operations.
+This provides process standardization, integrated security controls, reduced manual operations, a consistent developer experience, centralized governance, and scalable enterprise operations.
 
 Another important advantage is that the same pipeline can be reused across different technologies.
 
@@ -159,8 +165,6 @@ This approach allows us to achieve standardization, reuse, and automation.
 As a result, we reduce delivery time, operational risk, and manual effort.
 
 One point to clarify is that the exact implementation details for image scanning and image signing are managed by the ALM team.
-
-
 
 ---
 
@@ -174,7 +178,9 @@ Thanks to automation, the onboarding process for a new microservice can be compl
 
 The platform automation helps manage components such as ConfigMaps, Secrets, and Certificates.
 
-This reduces operational support activities and allows development teams to focus more on business functionality.
+These repetitive activities were automated to reduce operational support demand and to make the onboarding process faster and more consistent.
+
+This allows development teams to focus more on business functionality instead of infrastructure tasks.
 
 In the center of the slide, we can see the DevOps pipeline.
 
@@ -230,6 +236,10 @@ One of the key lessons we have learned is that OpenShift provides a very powerfu
 
 Applications still need proper database connection pooling, correct Kafka producer and consumer configuration, good retry mechanisms, health checks, and appropriate resource sizing.
 
+Some of the most common issues are related to missing readiness and liveness probes, inefficient retry mechanisms, incorrect resource sizing, thread and session tuning, and incorrect database connection pool configuration.
+
+Also, for production projects, applications should not depend on persistent storage inside OpenShift. State should be externalized whenever possible.
+
 To support development teams, we provide shared best practices, technical coaching, and a shared knowledge base.
 
 In summary, building the platform was the first step.
@@ -257,6 +267,8 @@ Dynatrace is now one of the most valuable components of the platform because it 
 Another important point is that developers can now focus more on business logic instead of infrastructure complexity.
 
 Through automation and self-service, the platform reduces manual tasks related to ConfigMaps, Secrets, Certificates, and deployment activities.
+
+The standardization of corporate container images also simplified the developer experience, because teams do not need to build and maintain complex Dockerfiles for every project.
 
 Disaster Recovery was also incorporated as part of the design.
 
@@ -322,7 +334,25 @@ It helps identify vulnerabilities, enforce security policies, and monitor worklo
 
 ---
 
-## 5. Is the DRS deployment automatic?
+## 5. What is LAAS?
+
+LAAS means Logging as a Service.
+
+It provides centralized logging so that application and platform logs can be collected and analyzed in a common place.
+
+---
+
+## 6. Why do you not use persistent storage in production projects?
+
+For production projects, applications should not depend on persistent storage inside OpenShift.
+
+State should be externalized whenever possible, for example in databases or external services.
+
+This makes applications easier to restart, move, recover, and scale.
+
+---
+
+## 7. Is the DRS deployment automatic?
 
 No, not always.
 
@@ -332,7 +362,7 @@ This stage is executed only when required by the project or by operational needs
 
 ---
 
-## 6. How is DRS involved in the flow?
+## 8. How is DRS involved in the flow?
 
 The normal deployment goes to the Primary Site.
 
@@ -342,7 +372,7 @@ This allows the application to be available in the recovery site for business co
 
 ---
 
-## 7. Who manages the CI/CD pipelines?
+## 9. Who manages the CI/CD pipelines?
 
 The CI/CD framework is maintained by the ALM team.
 
@@ -352,7 +382,7 @@ Development teams use the framework, but ALM owns and maintains the implementati
 
 ---
 
-## 8. What is the role of the OpenShift team?
+## 10. What is the role of the OpenShift team?
 
 The OpenShift team manages the platform itself.
 
@@ -362,7 +392,7 @@ The OpenShift team also supports application onboarding and helps development te
 
 ---
 
-## 9. What does “developers only commit code” mean?
+## 11. What does “developers only commit code” mean?
 
 It means developers do not need to manually manage all deployment steps.
 
@@ -370,7 +400,7 @@ They commit the code, and the automated pipeline handles build, testing, code qu
 
 ---
 
-## 10. What is the benefit of Jenkins Shared Libraries?
+## 12. What is the benefit of Jenkins Shared Libraries?
 
 Jenkins Shared Libraries allow us to reuse the same pipeline logic across multiple projects.
 
@@ -378,17 +408,27 @@ This improves standardization, reduces duplicated effort, and makes the deployme
 
 ---
 
-## 11. What tools are used for image scanning and image signing?
+## 13. Why are corporate container images important?
+
+Corporate container images help standardize how applications are built and deployed.
+
+Instead of every team creating and maintaining complex Dockerfiles, the organization provides standard images and reusable patterns.
+
+This simplifies the developer experience and reduces operational risk.
+
+---
+
+## 14. What tools are used for image scanning and image signing?
 
 The pipeline includes image scanning and image signing stages.
 
 The exact implementation details are managed by the ALM team.
 
-My understanding is that image scanning may be related to ACS and image signing may be related to Cosign, but I would confirm those details with the ALM team.
+I would confirm the specific tools with them.
 
 ---
 
-## 12. Why do you say OpenShift does not replace good development practices?
+## 15. Why do you say OpenShift does not replace good development practices?
 
 Because OpenShift provides platform capabilities such as deployment automation, scaling, monitoring, and resilience mechanisms.
 
@@ -398,7 +438,7 @@ For example, applications must manage database connections, retries, Kafka consu
 
 ---
 
-## 13. What are readiness and liveness probes?
+## 16. What are readiness and liveness probes?
 
 Liveness probes verify whether the application is still running correctly.
 
@@ -408,7 +448,15 @@ These probes help OpenShift manage application availability.
 
 ---
 
-## 14. What is the main current challenge?
+## 17. What are common application issues in OpenShift?
+
+Some common issues are missing readiness and liveness probes, inefficient retry mechanisms, incorrect resource sizing, incorrect database connection pool configuration, and incorrect Kafka producer or consumer configuration.
+
+These are application design issues, not platform issues.
+
+---
+
+## 18. What is the main current challenge?
 
 The main current challenge is cloud-native adoption.
 
@@ -416,7 +464,7 @@ The platform is already mature, but applications must also be designed to fully 
 
 ---
 
-## 15. Why is Dynatrace important?
+## 19. Why is Dynatrace important?
 
 Dynatrace is important because it provides observability.
 
@@ -424,15 +472,7 @@ It helps us monitor application behavior, identify issues, analyze performance, 
 
 ---
 
-## 16. What is LAAS?
-
-LAAS means Logging as a Service.
-
-It provides centralized logging so that application and platform logs can be collected and analyzed in a common place.
-
----
-
-## 17. What are the main benefits of the platform?
+## 20. What are the main benefits of the platform?
 
 The main benefits are standardization, automation, security, observability, disaster recovery, and reduced operational effort.
 
@@ -440,7 +480,7 @@ The platform also allows development teams to focus more on business logic inste
 
 ---
 
-## 18. What is the final message of the presentation?
+## 21. What is the final message of the presentation?
 
 The final message is that OpenShift has become a stable enterprise platform.
 
