@@ -68,7 +68,9 @@ console.log("✅ Todo OK");
 
 **********************************************************************************************
   *************************************************************************************
-cat > extract_limits_excel.sh <<'EOF'
+
+
+  cat > extract_limits_excel.sh <<'EOF'
 #!/usr/bin/env bash
 
 set -o pipefail
@@ -79,74 +81,40 @@ PATTERN="${1:-c-prd-|c-prod-}"
 # Segundo argumento: nombre del CSV.
 OUTPUT_FILE="${2:-limites_deployments_$(date +%Y%m%d_%H%M%S).csv}"
 
-TEMP_FILE="${OUTPUT_FILE}.tmp"
-
-
 # ============================================================
-# Escapar valores de texto para CSV
+# Validaciones
 # ============================================================
 
-csv_escape() {
-    local value="$1"
-
-    value="${value//\"/\"\"}"
-
-    printf '%s' "$value"
-}
-
-
-# ============================================================
-# Validar comandos requeridos
-# ============================================================
-
-for cmd in oc jq awk grep; do
-
+for cmd in oc jq grep; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo "ERROR: No se encontró el comando requerido: $cmd" >&2
+        echo "ERROR: No se encontró el comando: $cmd" >&2
         exit 1
     fi
-
 done
 
-
-# ============================================================
-# Validar conexión con OpenShift
-# ============================================================
-
 if ! oc whoami >/dev/null 2>&1; then
-    echo "ERROR: No hay una sesión activa en OpenShift." >&2
+    echo "ERROR: No existe una sesión activa en OpenShift." >&2
     echo "Ejecuta primero oc login." >&2
     exit 1
 fi
 
-
 # ============================================================
-# Preparar archivo temporal
+# Crear archivo compatible con Excel
 # ============================================================
 
-rm -f "$TEMP_FILE"
-
-trap 'rm -f "$TEMP_FILE"' EXIT
-
-
-# BOM UTF-8 para que Excel muestre correctamente los caracteres.
-printf '\xEF\xBB\xBF' > "$TEMP_FILE"
+# BOM UTF-8 y configuración del separador.
+printf '\xEF\xBB\xBFsep=;\r\n' > "$OUTPUT_FILE"
 
 # Encabezados.
-# Se usa ; porque Excel en español normalmente utiliza coma decimal.
-printf 'Namespace;Servicio;CPU;Memoria\r\n' >> "$TEMP_FILE"
-
+printf 'Namespace;Servicio;CPU;Memoria\r\n' >> "$OUTPUT_FILE"
 
 rows=0
-namespaces=0
-
 
 echo "============================================================"
 echo "Generando archivo CSV"
 echo "Patrón: $PATTERN"
 echo "Archivo: $OUTPUT_FILE"
 echo "============================================================"
-
 
 # ============================================================
 # Recorrer namespaces
@@ -156,10 +124,7 @@ while IFS= read -r ns; do
 
     [[ -z "$ns" ]] && continue
 
-    namespaces=$((namespaces + 1))
-
-    echo "Procesando: $ns"
-
+    echo "Procesando namespace: $ns"
 
     deployment_json="$(
         oc get deployments \
@@ -168,172 +133,149 @@ while IFS= read -r ns; do
             2>/dev/null
     )" || continue
 
-
     # ========================================================
-    # Recorrer deployments
+    # Obtener servicio, CPU limit y memoria limit
     # ========================================================
 
-    while IFS= read -r deployment; do
+    while IFS='|' read -r servicio cpu memoria; do
 
-        [[ -z "$deployment" ]] && continue
+        [[ -z "$servicio" ]] && continue
 
-
-        service="$(
-            jq -r '.metadata.name' <<< "$deployment"
-        )"
-
-
-        # Obtener los limits de todos los contenedores.
-        limits="$(
-            jq -r '
-                (.spec.template.spec.containers // [])[]
-                |
-                [
-                    (.resources.limits.cpu // ""),
-                    (.resources.limits.memory // "")
-                ]
-                |
-                @tsv
-            ' <<< "$deployment"
-        )"
-
-
-        # ====================================================
-        # Convertir CPU a cores y memoria a GiB
-        # ====================================================
-
-        result="$(
-            printf '%s\n' "$limits" |
-            awk -F '\t' '
-
-                function cpu_to_cores(value, number) {
-
-                    number = value
-
-                    if (number ~ /n$/) {
-                        sub(/n$/, "", number)
-                        return number / 1000000000
-                    }
-
-                    if (number ~ /u$/) {
-                        sub(/u$/, "", number)
-                        return number / 1000000
-                    }
-
-                    if (number ~ /m$/) {
-                        sub(/m$/, "", number)
-                        return number / 1000
-                    }
-
-                    return number + 0
-                }
-
-
-                function memory_to_gib(value, number) {
-
-                    number = value
-
-                    if (number ~ /Ki$/) {
-                        sub(/Ki$/, "", number)
-                        return number / 1048576
-                    }
-
-                    if (number ~ /Mi$/) {
-                        sub(/Mi$/, "", number)
-                        return number / 1024
-                    }
-
-                    if (number ~ /Gi$/) {
-                        sub(/Gi$/, "", number)
-                        return number + 0
-                    }
-
-                    if (number ~ /Ti$/) {
-                        sub(/Ti$/, "", number)
-                        return number * 1024
-                    }
-
-                    if (number ~ /Pi$/) {
-                        sub(/Pi$/, "", number)
-                        return number * 1048576
-                    }
-
-                    if (number ~ /[kK]$/) {
-                        sub(/[kK]$/, "", number)
-                        return (number * 1000) / 1073741824
-                    }
-
-                    if (number ~ /M$/) {
-                        sub(/M$/, "", number)
-                        return (number * 1000000) / 1073741824
-                    }
-
-                    if (number ~ /G$/) {
-                        sub(/G$/, "", number)
-                        return (number * 1000000000) / 1073741824
-                    }
-
-                    if (number ~ /T$/) {
-                        sub(/T$/, "", number)
-                        return (number * 1000000000000) / 1073741824
-                    }
-
-                    # Sin unidad, Kubernetes lo interpreta como bytes.
-                    return number / 1073741824
-                }
-
-
-                {
-                    if ($1 != "") {
-                        cpu_sum += cpu_to_cores($1)
-                        has_cpu = 1
-                    }
-
-                    if ($2 != "") {
-                        memory_sum += memory_to_gib($2)
-                        has_memory = 1
-                    }
-                }
-
-
-                END {
-                    cpu_text = has_cpu ? sprintf("%.3f", cpu_sum) : ""
-                    memory_text = has_memory ? sprintf("%.3f", memory_sum) : ""
-
-                    printf "%s|%s", cpu_text, memory_text
-                }
-            '
-        )"
-
-
-        IFS='|' read -r cpu memory <<< "$result"
-
-
-        # Cambiar punto decimal por coma para Excel en español.
+        # Convertir punto decimal en coma para Excel en español.
         cpu="${cpu/./,}"
-        memory="${memory/./,}"
+        memoria="${memoria/./,}"
 
-
-        ns_csv="$(csv_escape "$ns")"
-        service_csv="$(csv_escape "$service")"
-
-
-        # Escribir la fila.
         printf '"%s";"%s";%s;%s\r\n' \
-            "$ns_csv" \
-            "$service_csv" \
+            "$ns" \
+            "$servicio" \
             "$cpu" \
-            "$memory" \
-            >> "$TEMP_FILE"
-
+            "$memoria" \
+            >> "$OUTPUT_FILE"
 
         rows=$((rows + 1))
 
-
     done < <(
-        jq -c '.items[]' <<< "$deployment_json"
-    )
+        jq -r '
+            # ================================================
+            # Convertir CPU de Kubernetes a cores
+            # ================================================
 
+            def cpu_to_cores:
+                tostring as $q
+                |
+                if ($q | test("n$")) then
+                    (($q | sub("n$"; "") | tonumber) / 1000000000)
+
+                elif ($q | test("u$")) then
+                    (($q | sub("u$"; "") | tonumber) / 1000000)
+
+                elif ($q | test("m$")) then
+                    (($q | sub("m$"; "") | tonumber) / 1000)
+
+                else
+                    ($q | tonumber)
+                end;
+
+            # ================================================
+            # Convertir memoria de Kubernetes a GiB
+            # ================================================
+
+            def memory_to_gib:
+                tostring as $q
+                |
+                if ($q | test("Ki$")) then
+                    (($q | sub("Ki$"; "") | tonumber) / 1048576)
+
+                elif ($q | test("Mi$")) then
+                    (($q | sub("Mi$"; "") | tonumber) / 1024)
+
+                elif ($q | test("Gi$")) then
+                    ($q | sub("Gi$"; "") | tonumber)
+
+                elif ($q | test("Ti$")) then
+                    (($q | sub("Ti$"; "") | tonumber) * 1024)
+
+                elif ($q | test("K$")) then
+                    (
+                        (($q | sub("K$"; "") | tonumber) * 1000)
+                        / 1073741824
+                    )
+
+                elif ($q | test("M$")) then
+                    (
+                        (($q | sub("M$"; "") | tonumber) * 1000000)
+                        / 1073741824
+                    )
+
+                elif ($q | test("G$")) then
+                    (
+                        (($q | sub("G$"; "") | tonumber) * 1000000000)
+                        / 1073741824
+                    )
+
+                elif ($q | test("T$")) then
+                    (
+                        (($q | sub("T$"; "") | tonumber) * 1000000000000)
+                        / 1073741824
+                    )
+
+                else
+                    (($q | tonumber) / 1073741824)
+                end;
+
+            # Redondear a máximo tres decimales.
+            def round3:
+                (((. * 1000) | round) / 1000 | tostring);
+
+            .items[]
+            |
+            .metadata.name as $service
+
+            # Obtener y sumar CPU limits de todos los contenedores.
+            |
+            [
+                (.spec.template.spec.containers // [])[]
+                |
+                (.resources.limits.cpu? // empty)
+                |
+                cpu_to_cores
+            ] as $cpus
+
+            # Obtener y sumar memoria limits de todos los contenedores.
+            |
+            [
+                (.spec.template.spec.containers // [])[]
+                |
+                (.resources.limits.memory? // empty)
+                |
+                memory_to_gib
+            ] as $memories
+
+            |
+            [
+                $service,
+
+                (
+                    if ($cpus | length) > 0 then
+                        ($cpus | add | round3)
+                    else
+                        ""
+                    end
+                ),
+
+                (
+                    if ($memories | length) > 0 then
+                        ($memories | add | round3)
+                    else
+                        ""
+                    end
+                )
+            ]
+
+            |
+            join("|")
+        ' <<< "$deployment_json"
+    )
 
 done < <(
     oc get namespaces \
@@ -342,41 +284,9 @@ done < <(
     grep -E "$PATTERN" || true
 )
 
-
-# ============================================================
-# Validar que se encontraron namespaces
-# ============================================================
-
-if (( namespaces == 0 )); then
-
-    echo "No se encontraron namespaces con el patrón: $PATTERN" >&2
-
-    exit 1
-
-fi
-
-
-# ============================================================
-# Finalizar archivo
-# ============================================================
-
-mv "$TEMP_FILE" "$OUTPUT_FILE"
-
-trap - EXIT
-
-
 echo
 echo "============================================================"
-echo "Archivo creado correctamente: $OUTPUT_FILE"
+echo "Archivo creado: $OUTPUT_FILE"
 echo "Filas generadas: $rows"
 echo "============================================================"
-echo
-echo "Columnas:"
-echo "  Namespace"
-echo "  Servicio"
-echo "  CPU"
-echo "  Memoria"
-echo
-echo "CPU: límite por pod expresado en cores."
-echo "Memoria: límite por pod expresado en GiB."
 EOF
