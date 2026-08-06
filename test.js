@@ -68,420 +68,469 @@ console.log("✅ Todo OK");
 
 **********************************************************************************************
   *************************************************************************************
-# OpenShift Enterprise Platform Presentation Script
 
-## Slide 1 — Introduction
 
-Good morning everyone.
+  #!/usr/bin/env bash
 
-My name is Juan, and today I would like to give you a brief overview of our OpenShift Enterprise Platform for the LATAM region.
+set -euo pipefail
 
-During this presentation, I will explain the general architecture, how our DevOps process is integrated with the platform, the main benefits we have achieved, and the current challenges related to cloud-native adoption.
+PATTERN='c-prd-|c-prod-'
+FORMATO='table'
+JSON_FIRST=true
 
-The main idea of this presentation is to show how OpenShift has become a stable enterprise platform that supports automation, security, observability, and business continuity.
+usage() {
+  cat <<'EOF'
+Uso: ./extract_deployments.sh [-p <patrón>] [-f <formato>]
 
-Let’s get started.
+Opciones:
 
----
+  -p <patrón>   Patrón para buscar namespaces.
+                Default: c-prd-|c-prod-
 
-## Slide 2 — OpenShift On-Premise Overview
+  -f <formato>  Formato de salida:
+                  table
+                  csv
+                  json
+                Default: table
 
-This slide presents our OpenShift on-premise enterprise architecture.
+  -h            Mostrar esta ayuda.
 
-Our platform is deployed across two main sites.
+Ejemplos:
 
-The first one is the Primary Site, where the main workloads are running.
+  ./extract_deployments.sh
 
-The second one is the Disaster Recovery Site, or DRS, which supports business continuity in case the primary site becomes unavailable.
+  ./extract_deployments.sh \
+    -p 'c-prd-|c-prod-' \
+    -f table
 
-In the Primary Site, we separate workloads into different clusters according to their purpose.
+  ./extract_deployments.sh \
+    -p '^bra-c-prd-' \
+    -f csv
 
-We have a Platform Services cluster, which provides shared services for the entire platform.
+  ./extract_deployments.sh \
+    -f json
+EOF
+}
 
-We also have an Internal Applications cluster, dedicated to internal business applications.
 
-And we have a Presentation cluster, which is designed for applications and APIs exposed to external channels or external consumers.
+# ============================================================
+# Leer parámetros
+# ============================================================
 
-This separation helps us improve security, workload isolation, operational stability, and independent scalability.
+while getopts ':p:f:h' opt; do
+  case "$opt" in
 
-The platform also includes several shared services.
+    p)
+      PATTERN=$OPTARG
+      ;;
 
-Quay is used as our enterprise container registry. It stores and manages the container images used by the platform.
+    f)
+      FORMATO=$OPTARG
+      ;;
 
-ACS, or Advanced Cluster Security, provides security capabilities for container workloads and OpenShift environments.
+    h)
+      usage
+      exit 0
+      ;;
 
-Dynatrace is used for observability and monitoring.
+    :)
+      echo "La opción -$OPTARG requiere un valor." >&2
+      usage >&2
+      exit 1
+      ;;
 
-And LAAS provides centralized logging as a service.
+    \?)
+      echo "Opción no válida: -$OPTARG" >&2
+      usage >&2
+      exit 1
+      ;;
 
-Another important point is that, for production projects, we do not use persistent storage inside OpenShift. Applications are expected to externalize state and avoid depending on local or persistent storage inside the platform.
+  esac
+done
 
-Regarding Disaster Recovery, the DRS deployment is not always automatic. The CI/CD pipeline includes an optional stage to deploy into the Disaster Recovery Site when it is required by the project or by operational needs.
 
-The CI/CD framework is standardized and maintained by our ALM team.
+# ============================================================
+# Validar formato solicitado
+# ============================================================
 
-This allows development teams to focus on delivering code, while the platform and automation process handle the operational complexity.
+case "$FORMATO" in
 
----
+  table|csv|json)
+    ;;
 
-## Slide 3 — DevOps Overview
+  *)
+    echo "Formato no válido: $FORMATO" >&2
+    echo "Los formatos permitidos son: table, csv o json." >&2
+    exit 1
+    ;;
 
-This slide shows our standardized DevOps framework.
+esac
 
-The main objective is to provide a reusable and automated CI/CD process across the organization.
 
-Developers only need to commit their code into the source repository.
+# ============================================================
+# Validar comandos requeridos
+# ============================================================
 
-From that point, the Jenkins Shared Library, maintained by our ALM team, executes the standardized pipeline automatically.
+for command in oc jq awk; do
 
-The pipeline includes several automated stages.
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "No se encontró el comando requerido: $command" >&2
+    exit 1
+  fi
 
-It starts with the source code checkout.
+done
 
-Then, the application is built.
 
-After that, unit tests are executed.
+# ============================================================
+# Obtener namespaces que coincidan con el patrón
+# ============================================================
 
-The pipeline also performs code quality validation, package generation, container image validation, image signing, and finally deployment into OpenShift.
+mapfile -t ns_list < <(
+  oc get namespaces \
+    -o jsonpath='{.items[*].metadata.name}' |
+    tr ' ' '\n' |
+    grep -E "$PATTERN" || true
+)
 
-One important point is the standardization of container images.
 
-Instead of requiring every development team to build and maintain complex Dockerfiles, corporate standard images and reusable patterns were defined to simplify the developer experience.
+if (( ${#ns_list[@]} == 0 )); then
 
-This allows developers to focus mainly on the application code.
+  echo \
+    "No se encontraron namespaces que coincidan con el patrón: $PATTERN" \
+    >&2
 
-The main benefit is that we do not need to create a completely different pipeline for every project.
+  exit 0
 
-Instead, we use a shared and reusable framework.
+fi
 
-This provides process standardization, integrated security controls, reduced manual operations, a consistent developer experience, centralized governance, and scalable enterprise operations.
 
-Another important advantage is that the same pipeline can be reused across different technologies.
+# ============================================================
+# Imprimir resultado
+# ============================================================
 
-For example, the application can be built with Java, Node.js, Nginx, or other supported technologies, but the deployment process remains standardized.
+print_result() {
 
-This approach allows us to achieve standardization, reuse, and automation.
+  local ns=$1
+  local dep_name=$2
+  local cpu_total=$3
+  local mem_total=$4
 
-As a result, we reduce delivery time, operational risk, and manual effort.
+  case "$FORMATO" in
 
-One point to clarify is that the exact implementation details for image scanning and image signing are managed by the ALM team.
+    table)
 
----
+      printf '%-40s %12s %12s\n' \
+        "$dep_name" \
+        "$cpu_total" \
+        "$mem_total"
 
-## Slide 4 — General Overview / OpenShift Architecture with DevOps Integration
+      ;;
 
-This slide combines the DevOps process with our OpenShift platform architecture.
 
-On the left side, we have the DevOps team, which provides a standardized onboarding process for new microservices.
+    csv)
 
-Thanks to automation, the onboarding process for a new microservice can be completed in less than one hour.
+      printf '%s,%s,%s,%s\n' \
+        "$ns" \
+        "$dep_name" \
+        "$cpu_total" \
+        "$mem_total"
 
-The platform automation helps manage components such as ConfigMaps, Secrets, and Certificates.
+      ;;
 
-These repetitive activities were automated to reduce operational support demand and to make the onboarding process faster and more consistent.
 
-This allows development teams to focus more on business functionality instead of infrastructure tasks.
+    json)
 
-In the center of the slide, we can see the DevOps pipeline.
+      # Separar los objetos JSON con coma,
+      # evitando dejar una coma al final.
+      if [[ "$JSON_FIRST" == true ]]; then
+        JSON_FIRST=false
+      else
+        printf ',\n'
+      fi
 
-Developers commit their code, and the standardized CI/CD process takes care of validation, build, security controls, and deployment.
+      if [[ "$cpu_total" == '-' ]]; then
+        cpu_total=null
+      fi
 
-Again, the automation framework is maintained by the ALM team through Jenkins Shared Libraries.
+      if [[ "$mem_total" == '-' ]]; then
+        mem_total=null
+      fi
 
-On the right side, we have the OpenShift platform.
+      printf \
+        '  {"namespace":"%s","name":"%s","cpuCores":%s,"memGiB":%s}' \
+        "$ns" \
+        "$dep_name" \
+        "$cpu_total" \
+        "$mem_total"
 
-Applications are deployed into the Internal Applications cluster or the Presentation cluster, depending on the workload requirements.
+      ;;
 
-The Presentation cluster is used for workloads exposed to external channels, while the Internal Applications cluster is used for internal business applications.
+  esac
+}
 
-The platform also includes shared services such as Quay, ACS, Dynatrace, and LAAS.
 
-For business continuity, the pipeline also supports deployment into the Disaster Recovery Site.
+# ============================================================
+# Procesar deployments de un namespace
+# ============================================================
 
-This DRS deployment is optional and is executed only when required by the project or operational needs.
+summarise_deployments() {
 
-Overall, this architecture allows us to combine automation, security, observability, and platform standardization into a single enterprise solution.
+  local ns=$1
+  local dep_json
+  local dep
+  local dep_name
+  local selector
+  local metrics
+  local cpu_total
+  local mem_total
 
----
 
-## Slide 5 — Cloud-Native Adoption Challenges
+  # Obtener todos los deployments del namespace.
+  dep_json=$(
+    oc get deployments \
+      -n "$ns" \
+      -o json \
+      2>/dev/null
+  ) || return 0
 
-This slide explains the current challenges after building a mature OpenShift platform.
 
-At this point, our OpenShift platform has reached a good level of maturity.
+  # Si el namespace no tiene deployments, continuar.
+  if [[ $(jq '.items | length' <<< "$dep_json") -eq 0 ]]; then
+    return 0
+  fi
 
-Most operational challenges are no longer related to the platform itself, but to how applications adopt cloud-native principles.
 
-The platform already provides several enterprise capabilities.
+  # Imprimir encabezado para la salida tipo tabla.
+  if [[ "$FORMATO" == 'table' ]]; then
 
-First, it reduces dependencies by giving development teams more autonomy.
+    printf '\nNAMESPACE: %s\n' "$ns"
 
-Second, it enables scalable operations through standardization and automation.
+    printf '%-40s %12s %12s\n' \
+      'NAME' \
+      'CPU(cores)' \
+      'MEM(GiB)'
 
-And finally, security is integrated by default as part of the development lifecycle.
+    printf '%0.s-' {1..68}
+    printf '\n'
 
-However, applications still need to be properly designed to fully benefit from these capabilities.
+  fi
 
-Our current focus areas are resilience and scalability.
 
-For resilience, applications must properly handle failures and recovery scenarios.
+  # Recorrer los deployments.
+  while IFS= read -r dep; do
 
-In distributed environments, temporary failures can happen, so applications need to recover gracefully.
+    dep_name=$(
+      jq -r '.metadata.name' <<< "$dep"
+    )
 
-For scalability, applications must efficiently manage resources and external connections.
 
-OpenShift can scale workloads and provide platform capabilities, but the application design is still very important.
+    # Crear el selector usando los matchLabels del deployment.
+    #
+    # Ejemplo:
+    # app=mi-aplicacion,version=v1
+    selector=$(
+      jq -r '
+        .spec.selector.matchLabels
+        | to_entries
+        | map("\(.key)=\(.value)")
+        | join(",")
+      ' <<< "$dep"
+    )
 
-One of the key lessons we have learned is that OpenShift provides a very powerful platform, but a container platform by itself does not replace good development practices.
 
-Applications still need proper database connection pooling, correct Kafka producer and consumer configuration, good retry mechanisms, health checks, and appropriate resource sizing.
+    # Si no existe selector, no se pueden encontrar sus pods.
+    if [[ -z "$selector" ]]; then
 
-Some of the most common issues are related to missing readiness and liveness probes, inefficient retry mechanisms, incorrect resource sizing, thread and session tuning, and incorrect database connection pool configuration.
+      print_result \
+        "$ns" \
+        "$dep_name" \
+        '-' \
+        '-'
 
-Also, for production projects, applications should not depend on persistent storage inside OpenShift. State should be externalized whenever possible.
+      continue
 
-To support development teams, we provide shared best practices, technical coaching, and a shared knowledge base.
+    fi
 
-In summary, building the platform was the first step.
 
-The next challenge is helping applications fully use the capabilities that OpenShift already provides.
+    # Obtener las métricas de todos los pods que pertenezcan
+    # al deployment.
+    metrics=$(
+      oc adm top pods \
+        -n "$ns" \
+        -l "$selector" \
+        --no-headers \
+        2>/dev/null || true
+    )
 
----
 
-## Slide 6 — Summary
+    # Si no hay métricas disponibles.
+    if [[ -z "$metrics" ]]; then
 
-To close the presentation, this slide summarizes the main lessons learned from our OpenShift enterprise platform journey.
+      print_result \
+        "$ns" \
+        "$dep_name" \
+        '-' \
+        '-'
 
-First, the platform has proven to be stable and reliable for enterprise workloads.
+      continue
 
-One important result is that we have not had platform-wide critical incidents during the last three years of operation.
+    fi
 
-Second, the initial investment was significant.
 
-Standardization, automation, and governance required effort at the beginning, but they simplified future operations and made the platform easier to manage.
+    # Convertir:
+    #
+    # CPU:
+    #   n  -> cores
+    #   u  -> cores
+    #   m  -> cores
+    #
+    # Memoria:
+    #   Ki -> GiB
+    #   Mi -> GiB
+    #   Gi -> GiB
+    #   Ti -> GiB
+    #
+    # También suma el consumo de todas las réplicas.
+    read -r cpu_total mem_total <<< "$(
+      awk '
+      {
+        # ====================================================
+        # CPU: convertir a cores
+        # ====================================================
 
-Third, observability became a critical capability.
+        cpu = $2
 
-Dynatrace is now one of the most valuable components of the platform because it helps us monitor application behavior, identify issues, and support troubleshooting activities.
+        if (cpu ~ /n$/) {
 
-Another important point is that developers can now focus more on business logic instead of infrastructure complexity.
+          sub(/n$/, "", cpu)
+          cpu = cpu / 1000000000
 
-Through automation and self-service, the platform reduces manual tasks related to ConfigMaps, Secrets, Certificates, and deployment activities.
+        } else if (cpu ~ /u$/) {
 
-The standardization of corporate container images also simplified the developer experience, because teams do not need to build and maintain complex Dockerfiles for every project.
+          sub(/u$/, "", cpu)
+          cpu = cpu / 1000000
 
-Disaster Recovery was also incorporated as part of the design.
+        } else if (cpu ~ /m$/) {
 
-This is important because resilience and business continuity cannot be treated as an afterthought.
+          sub(/m$/, "", cpu)
+          cpu = cpu / 1000
 
-Finally, the next challenge is cloud-native adoption.
+        } else {
 
-The platform is already mature, but now we need to help development teams design applications that fully use the capabilities provided by OpenShift.
+          cpu = cpu + 0
 
-Developer autonomy is increasing, but support is still very important during the onboarding phase.
+        }
 
-In conclusion, OpenShift has become a stable enterprise platform for us.
+        sum_cpu += cpu
 
-Now the focus is shifting from building the platform to helping teams use it in the best possible way.
 
-Thank you very much.
+        # ====================================================
+        # Memoria: convertir a GiB
+        # ====================================================
 
-I will be happy to answer any questions.
+        mem = $3
 
----
+        if (mem ~ /Ki$/) {
 
-# Possible Questions and Answers
+          sub(/Ki$/, "", mem)
+          mem = mem / 1048576
 
-## 1. What is the purpose of the Presentation cluster?
+        } else if (mem ~ /Mi$/) {
 
-The Presentation cluster is used for applications and APIs exposed to external channels or external consumers.
+          sub(/Mi$/, "", mem)
+          mem = mem / 1024
 
-We separate these workloads from internal applications because they have different security, traffic, and operational requirements.
+        } else if (mem ~ /Gi$/) {
 
-This separation improves isolation and reduces risk.
+          sub(/Gi$/, "", mem)
+          mem = mem + 0
 
----
+        } else if (mem ~ /Ti$/) {
 
-## 2. What is the difference between the Internal Applications cluster and the Presentation cluster?
+          sub(/Ti$/, "", mem)
+          mem = mem * 1024
 
-The Internal Applications cluster is used for internal business applications.
+        } else {
 
-The Presentation cluster is used for workloads exposed to external channels.
+          mem = mem + 0
 
-The main difference is the type of consumers and the security requirements.
+        }
 
----
+        sum_mem += mem
+        rows++
+      }
 
-## 3. What is Quay?
+      END {
 
-Quay is our enterprise container registry.
+        if (rows == 0) {
 
-It stores and manages the approved container images used by OpenShift.
+          print "- -"
 
-During the CI/CD process, the pipeline builds the container image and pushes it to the registry.
+        } else {
 
-Then, OpenShift pulls the image from the registry during deployment.
+          printf "%.3f %.3f\n", sum_cpu, sum_mem
 
----
+        }
 
-## 4. What is ACS?
+      }
+      ' <<< "$metrics"
+    )"
 
-ACS stands for Advanced Cluster Security.
 
-It provides security capabilities for container images and OpenShift workloads.
+    print_result \
+      "$ns" \
+      "$dep_name" \
+      "$cpu_total" \
+      "$mem_total"
 
-It helps identify vulnerabilities, enforce security policies, and monitor workloads.
+  done < <(
+    jq -c '.items[]' <<< "$dep_json"
+  )
+}
 
----
 
-## 5. What is LAAS?
+# ============================================================
+# Encabezado general
+# ============================================================
 
-LAAS means Logging as a Service.
+if [[ "$FORMATO" == 'table' ]]; then
 
-It provides centralized logging so that application and platform logs can be collected and analyzed in a common place.
+  printf '%0.s=' {1..68}
+  printf '\n'
 
----
+  printf \
+    'Buscando deployments en namespaces con patrón: %s\n' \
+    "$PATTERN"
 
-## 6. Why do you not use persistent storage in production projects?
+  printf '%0.s=' {1..68}
+  printf '\n'
 
-For production projects, applications should not depend on persistent storage inside OpenShift.
 
-State should be externalized whenever possible, for example in databases or external services.
+elif [[ "$FORMATO" == 'csv' ]]; then
 
-This makes applications easier to restart, move, recover, and scale.
+  printf 'namespace,name,cpu_cores,mem_gib\n'
 
----
 
-## 7. Is the DRS deployment automatic?
+elif [[ "$FORMATO" == 'json' ]]; then
 
-No, not always.
+  printf '[\n'
 
-The pipeline includes an optional stage for Disaster Recovery deployment.
+fi
 
-This stage is executed only when required by the project or by operational needs.
 
----
+# ============================================================
+# Ejecutar la consulta por cada namespace
+# ============================================================
 
-## 8. How is DRS involved in the flow?
+for ns in "${ns_list[@]}"; do
+  summarise_deployments "$ns"
+done
 
-The normal deployment goes to the Primary Site.
 
-When required, the same pipeline can also trigger a deployment into the Disaster Recovery Site.
+# ============================================================
+# Cerrar JSON
+# ============================================================
 
-This allows the application to be available in the recovery site for business continuity purposes.
-
----
-
-## 9. Who manages the CI/CD pipelines?
-
-The CI/CD framework is maintained by the ALM team.
-
-They provide the Jenkins Shared Libraries and the standardized deployment process.
-
-Development teams use the framework, but ALM owns and maintains the implementation.
-
----
-
-## 10. What is the role of the OpenShift team?
-
-The OpenShift team manages the platform itself.
-
-This includes cluster lifecycle, capacity management, network policies, security controls, observability, and disaster recovery support.
-
-The OpenShift team also supports application onboarding and helps development teams use the platform correctly.
-
----
-
-## 11. What does “developers only commit code” mean?
-
-It means developers do not need to manually manage all deployment steps.
-
-They commit the code, and the automated pipeline handles build, testing, code quality validation, image creation, security controls, and deployment.
-
----
-
-## 12. What is the benefit of Jenkins Shared Libraries?
-
-Jenkins Shared Libraries allow us to reuse the same pipeline logic across multiple projects.
-
-This improves standardization, reduces duplicated effort, and makes the deployment process more consistent.
-
----
-
-## 13. Why are corporate container images important?
-
-Corporate container images help standardize how applications are built and deployed.
-
-Instead of every team creating and maintaining complex Dockerfiles, the organization provides standard images and reusable patterns.
-
-This simplifies the developer experience and reduces operational risk.
-
----
-
-## 14. What tools are used for image scanning and image signing?
-
-The pipeline includes image scanning and image signing stages.
-
-The exact implementation details are managed by the ALM team.
-
-I would confirm the specific tools with them.
-
----
-
-## 15. Why do you say OpenShift does not replace good development practices?
-
-Because OpenShift provides platform capabilities such as deployment automation, scaling, monitoring, and resilience mechanisms.
-
-However, applications still need to be designed correctly.
-
-For example, applications must manage database connections, retries, Kafka consumers and producers, health checks, and resource usage properly.
-
----
-
-## 16. What are readiness and liveness probes?
-
-Liveness probes verify whether the application is still running correctly.
-
-Readiness probes verify whether the application is ready to receive traffic.
-
-These probes help OpenShift manage application availability.
-
----
-
-## 17. What are common application issues in OpenShift?
-
-Some common issues are missing readiness and liveness probes, inefficient retry mechanisms, incorrect resource sizing, incorrect database connection pool configuration, and incorrect Kafka producer or consumer configuration.
-
-These are application design issues, not platform issues.
-
----
-
-## 18. What is the main current challenge?
-
-The main current challenge is cloud-native adoption.
-
-The platform is already mature, but applications must also be designed to fully benefit from the platform capabilities.
-
----
-
-## 19. Why is Dynatrace important?
-
-Dynatrace is important because it provides observability.
-
-It helps us monitor application behavior, identify issues, analyze performance, and support troubleshooting activities.
-
----
-
-## 20. What are the main benefits of the platform?
-
-The main benefits are standardization, automation, security, observability, disaster recovery, and reduced operational effort.
-
-The platform also allows development teams to focus more on business logic instead of infrastructure tasks.
-
----
-
-## 21. What is the final message of the presentation?
-
-The final message is that OpenShift has become a stable enterprise platform.
-
-Now the focus is shifting from building the platform to helping development teams fully adopt cloud-native principles and use the platform in the best possible way.
+if [[ "$FORMATO" == 'json' ]]; then
+  printf '\n]\n'
+fi
