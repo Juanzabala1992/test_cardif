@@ -69,17 +69,28 @@ console.log("✅ Todo OK");
 **********************************************************************************************
   *************************************************************************************
 
-
   cat > extract_limits_excel.sh <<'EOF'
 #!/usr/bin/env bash
 
 set -o pipefail
 
-# Primer argumento: patrón de namespaces.
-PATTERN="${1:-c-prd-|c-prod-}"
+# ============================================================
+# Configuración
+# ============================================================
 
-# Segundo argumento: nombre del CSV.
+# Incluye ambientes:
+#   c-prd-
+#   c-prod-
+#   c-dev-
+#   c-dv-
+#   c-uat-
+#
+# Puedes reemplazarlo enviando otro patrón como primer argumento.
+PATTERN="${1:-c-(prd|prod|dev|dv|uat)(-|$)}"
+
+# Segundo argumento: nombre del archivo CSV.
 OUTPUT_FILE="${2:-limites_deployments_$(date +%Y%m%d_%H%M%S).csv}"
+
 
 # ============================================================
 # Validaciones
@@ -87,34 +98,45 @@ OUTPUT_FILE="${2:-limites_deployments_$(date +%Y%m%d_%H%M%S).csv}"
 
 for cmd in oc jq grep; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo "ERROR: No se encontró el comando: $cmd" >&2
+        echo "ERROR: No se encontró el comando requerido: $cmd" >&2
         exit 1
     fi
 done
 
 if ! oc whoami >/dev/null 2>&1; then
     echo "ERROR: No existe una sesión activa en OpenShift." >&2
-    echo "Ejecuta primero oc login." >&2
+    echo "Ejecuta primero el comando oc login." >&2
     exit 1
 fi
+
 
 # ============================================================
 # Crear archivo compatible con Excel
 # ============================================================
 
-# BOM UTF-8 y configuración del separador.
+# BOM UTF-8 para que Excel reconozca correctamente caracteres.
+# sep=; indica que las columnas están separadas por punto y coma.
 printf '\xEF\xBB\xBFsep=;\r\n' > "$OUTPUT_FILE"
 
-# Encabezados.
+# Encabezados del archivo.
 printf 'Namespace;Servicio;CPU;Memoria\r\n' >> "$OUTPUT_FILE"
 
 rows=0
+namespace_count=0
+
 
 echo "============================================================"
-echo "Generando archivo CSV"
-echo "Patrón: $PATTERN"
-echo "Archivo: $OUTPUT_FILE"
+echo "Generando archivo CSV con límites de recursos"
 echo "============================================================"
+echo "Patrón utilizado: $PATTERN"
+echo "Archivo de salida: $OUTPUT_FILE"
+echo
+echo "Ambientes incluidos:"
+echo "  Producción: c-prd- y c-prod-"
+echo "  Desarrollo: c-dev- y c-dv-"
+echo "  UAT:        c-uat-"
+echo "============================================================"
+
 
 # ============================================================
 # Recorrer namespaces
@@ -124,6 +146,8 @@ while IFS= read -r ns; do
 
     [[ -z "$ns" ]] && continue
 
+    namespace_count=$((namespace_count + 1))
+
     echo "Procesando namespace: $ns"
 
     deployment_json="$(
@@ -131,17 +155,21 @@ while IFS= read -r ns; do
             -n "$ns" \
             -o json \
             2>/dev/null
-    )" || continue
+    )" || {
+        echo "  No fue posible consultar deployments."
+        continue
+    }
+
 
     # ========================================================
-    # Obtener servicio, CPU limit y memoria limit
+    # Procesar deployments del namespace
     # ========================================================
 
     while IFS='|' read -r servicio cpu memoria; do
 
         [[ -z "$servicio" ]] && continue
 
-        # Convertir punto decimal en coma para Excel en español.
+        # Excel en español normalmente usa coma decimal.
         cpu="${cpu/./,}"
         memoria="${memoria/./,}"
 
@@ -156,102 +184,215 @@ while IFS= read -r ns; do
 
     done < <(
         jq -r '
-            # ================================================
+
+            # =================================================
             # Convertir CPU de Kubernetes a cores
-            # ================================================
+            #
+            # Ejemplos:
+            #   10m  -> 0.010
+            #   100m -> 0.100
+            #   1    -> 1
+            # =================================================
 
             def cpu_to_cores:
-                tostring as $q
+
+                tostring as $quantity
+
                 |
-                if ($q | test("n$")) then
-                    (($q | sub("n$"; "") | tonumber) / 1000000000)
 
-                elif ($q | test("u$")) then
-                    (($q | sub("u$"; "") | tonumber) / 1000000)
+                if ($quantity | test("n$")) then
 
-                elif ($q | test("m$")) then
-                    (($q | sub("m$"; "") | tonumber) / 1000)
+                    (
+                        ($quantity | sub("n$"; "") | tonumber)
+                        / 1000000000
+                    )
+
+                elif ($quantity | test("u$")) then
+
+                    (
+                        ($quantity | sub("u$"; "") | tonumber)
+                        / 1000000
+                    )
+
+                elif ($quantity | test("m$")) then
+
+                    (
+                        ($quantity | sub("m$"; "") | tonumber)
+                        / 1000
+                    )
 
                 else
-                    ($q | tonumber)
+
+                    ($quantity | tonumber)
+
                 end;
 
-            # ================================================
+
+            # =================================================
             # Convertir memoria de Kubernetes a GiB
-            # ================================================
+            #
+            # Ejemplos:
+            #   10Mi  -> 0.009765625 GiB
+            #   512Mi -> 0.5 GiB
+            #   1Gi   -> 1 GiB
+            # =================================================
 
             def memory_to_gib:
-                tostring as $q
+
+                tostring as $quantity
+
                 |
-                if ($q | test("Ki$")) then
-                    (($q | sub("Ki$"; "") | tonumber) / 1048576)
 
-                elif ($q | test("Mi$")) then
-                    (($q | sub("Mi$"; "") | tonumber) / 1024)
+                if ($quantity | test("Ki$")) then
 
-                elif ($q | test("Gi$")) then
-                    ($q | sub("Gi$"; "") | tonumber)
-
-                elif ($q | test("Ti$")) then
-                    (($q | sub("Ti$"; "") | tonumber) * 1024)
-
-                elif ($q | test("K$")) then
                     (
-                        (($q | sub("K$"; "") | tonumber) * 1000)
+                        ($quantity | sub("Ki$"; "") | tonumber)
+                        / 1048576
+                    )
+
+                elif ($quantity | test("Mi$")) then
+
+                    (
+                        ($quantity | sub("Mi$"; "") | tonumber)
+                        / 1024
+                    )
+
+                elif ($quantity | test("Gi$")) then
+
+                    (
+                        $quantity
+                        | sub("Gi$"; "")
+                        | tonumber
+                    )
+
+                elif ($quantity | test("Ti$")) then
+
+                    (
+                        ($quantity | sub("Ti$"; "") | tonumber)
+                        * 1024
+                    )
+
+                elif ($quantity | test("Pi$")) then
+
+                    (
+                        ($quantity | sub("Pi$"; "") | tonumber)
+                        * 1048576
+                    )
+
+                elif ($quantity | test("[kK]$")) then
+
+                    (
+                        (
+                            $quantity
+                            | sub("[kK]$"; "")
+                            | tonumber
+                        )
+                        * 1000
                         / 1073741824
                     )
 
-                elif ($q | test("M$")) then
+                elif ($quantity | test("M$")) then
+
                     (
-                        (($q | sub("M$"; "") | tonumber) * 1000000)
+                        (
+                            $quantity
+                            | sub("M$"; "")
+                            | tonumber
+                        )
+                        * 1000000
                         / 1073741824
                     )
 
-                elif ($q | test("G$")) then
+                elif ($quantity | test("G$")) then
+
                     (
-                        (($q | sub("G$"; "") | tonumber) * 1000000000)
+                        (
+                            $quantity
+                            | sub("G$"; "")
+                            | tonumber
+                        )
+                        * 1000000000
                         / 1073741824
                     )
 
-                elif ($q | test("T$")) then
+                elif ($quantity | test("T$")) then
+
                     (
-                        (($q | sub("T$"; "") | tonumber) * 1000000000000)
+                        (
+                            $quantity
+                            | sub("T$"; "")
+                            | tonumber
+                        )
+                        * 1000000000000
                         / 1073741824
                     )
 
                 else
-                    (($q | tonumber) / 1073741824)
+
+                    # Un valor sin unidad se interpreta como bytes.
+                    (
+                        ($quantity | tonumber)
+                        / 1073741824
+                    )
+
                 end;
+
 
             # Redondear a máximo tres decimales.
             def round3:
                 (((. * 1000) | round) / 1000 | tostring);
 
+
+            # =================================================
+            # Procesar cada Deployment
+            # =================================================
+
             .items[]
+
             |
+
             .metadata.name as $service
 
-            # Obtener y sumar CPU limits de todos los contenedores.
             |
+
+            # Sumar CPU limits de todos los contenedores.
             [
                 (.spec.template.spec.containers // [])[]
+
                 |
-                (.resources.limits.cpu? // empty)
+
+                (
+                    .resources.limits.cpu?
+                    // empty
+                )
+
                 |
+
                 cpu_to_cores
+
             ] as $cpus
 
-            # Obtener y sumar memoria limits de todos los contenedores.
             |
+
+            # Sumar memoria limits de todos los contenedores.
             [
                 (.spec.template.spec.containers // [])[]
+
                 |
-                (.resources.limits.memory? // empty)
+
+                (
+                    .resources.limits.memory?
+                    // empty
+                )
+
                 |
+
                 memory_to_gib
+
             ] as $memories
 
             |
+
             [
                 $service,
 
@@ -273,7 +414,9 @@ while IFS= read -r ns; do
             ]
 
             |
+
             join("|")
+
         ' <<< "$deployment_json"
     )
 
@@ -284,9 +427,23 @@ done < <(
     grep -E "$PATTERN" || true
 )
 
+
+# ============================================================
+# Resultado
+# ============================================================
+
 echo
 echo "============================================================"
-echo "Archivo creado: $OUTPUT_FILE"
-echo "Filas generadas: $rows"
+
+if (( namespace_count == 0 )); then
+    echo "No se encontraron namespaces con el patrón:"
+    echo "$PATTERN"
+else
+    echo "Proceso finalizado correctamente."
+    echo "Namespaces procesados: $namespace_count"
+    echo "Servicios registrados: $rows"
+    echo "Archivo creado: $OUTPUT_FILE"
+fi
+
 echo "============================================================"
 EOF
