@@ -70,467 +70,234 @@ console.log("✅ Todo OK");
   *************************************************************************************
 
 
-  #!/usr/bin/env bash
+  cat > extract_services.sh <<'EOF'
+#!/usr/bin/env bash
 
-set -euo pipefail
-
-PATTERN='c-prd-|c-prod-'
-FORMATO='table'
-JSON_FIRST=true
-
-usage() {
-  cat <<'EOF'
-Uso: ./extract_deployments.sh [-p <patrón>] [-f <formato>]
-
-Opciones:
-
-  -p <patrón>   Patrón para buscar namespaces.
-                Default: c-prd-|c-prod-
-
-  -f <formato>  Formato de salida:
-                  table
-                  csv
-                  json
-                Default: table
-
-  -h            Mostrar esta ayuda.
-
-Ejemplos:
-
-  ./extract_deployments.sh
-
-  ./extract_deployments.sh \
-    -p 'c-prd-|c-prod-' \
-    -f table
-
-  ./extract_deployments.sh \
-    -p '^bra-c-prd-' \
-    -f csv
-
-  ./extract_deployments.sh \
-    -f json
-EOF
-}
-
+# Patrón predeterminado para los namespaces.
+# También puedes enviarlo como primer argumento.
+PATTERN="${1:-c-prd-|c-prod-}"
 
 # ============================================================
-# Leer parámetros
+# Validaciones
 # ============================================================
 
-while getopts ':p:f:h' opt; do
-  case "$opt" in
-
-    p)
-      PATTERN=$OPTARG
-      ;;
-
-    f)
-      FORMATO=$OPTARG
-      ;;
-
-    h)
-      usage
-      exit 0
-      ;;
-
-    :)
-      echo "La opción -$OPTARG requiere un valor." >&2
-      usage >&2
-      exit 1
-      ;;
-
-    \?)
-      echo "Opción no válida: -$OPTARG" >&2
-      usage >&2
-      exit 1
-      ;;
-
-  esac
-done
-
-
-# ============================================================
-# Validar formato solicitado
-# ============================================================
-
-case "$FORMATO" in
-
-  table|csv|json)
-    ;;
-
-  *)
-    echo "Formato no válido: $FORMATO" >&2
-    echo "Los formatos permitidos son: table, csv o json." >&2
+if ! command -v oc >/dev/null 2>&1; then
+    echo "ERROR: No se encontró el comando oc."
     exit 1
-    ;;
+fi
 
-esac
-
-
-# ============================================================
-# Validar comandos requeridos
-# ============================================================
-
-for command in oc jq awk; do
-
-  if ! command -v "$command" >/dev/null 2>&1; then
-    echo "No se encontró el comando requerido: $command" >&2
+if ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: No se encontró el comando jq."
     exit 1
-  fi
+fi
 
-done
+if ! oc whoami >/dev/null 2>&1; then
+    echo "ERROR: No hay una sesión activa en OpenShift."
+    echo "Ejecuta primero el comando oc login correspondiente."
+    exit 1
+fi
 
+echo "======================================================================"
+echo "Buscando deployments en namespaces con patrón: $PATTERN"
+echo "CPU expresada en cores y memoria expresada en GiB"
+echo "======================================================================"
 
 # ============================================================
-# Obtener namespaces que coincidan con el patrón
+# Obtener namespaces
 # ============================================================
 
-mapfile -t ns_list < <(
-  oc get namespaces \
-    -o jsonpath='{.items[*].metadata.name}' |
-    tr ' ' '\n' |
+mapfile -t namespaces < <(
+    oc get namespaces \
+        -o custom-columns='NAME:.metadata.name' \
+        --no-headers 2>/dev/null |
     grep -E "$PATTERN" || true
 )
 
-
-if (( ${#ns_list[@]} == 0 )); then
-
-  echo \
-    "No se encontraron namespaces que coincidan con el patrón: $PATTERN" \
-    >&2
-
-  exit 0
-
+if (( ${#namespaces[@]} == 0 )); then
+    echo
+    echo "No se encontraron namespaces que coincidan con:"
+    echo "$PATTERN"
+    exit 0
 fi
 
+echo
+echo "Namespaces encontrados: ${#namespaces[@]}"
 
 # ============================================================
-# Imprimir resultado
+# Recorrer namespaces
 # ============================================================
 
-print_result() {
-
-  local ns=$1
-  local dep_name=$2
-  local cpu_total=$3
-  local mem_total=$4
-
-  case "$FORMATO" in
-
-    table)
-
-      printf '%-40s %12s %12s\n' \
-        "$dep_name" \
-        "$cpu_total" \
-        "$mem_total"
-
-      ;;
-
-
-    csv)
-
-      printf '%s,%s,%s,%s\n' \
-        "$ns" \
-        "$dep_name" \
-        "$cpu_total" \
-        "$mem_total"
-
-      ;;
-
-
-    json)
-
-      # Separar los objetos JSON con coma,
-      # evitando dejar una coma al final.
-      if [[ "$JSON_FIRST" == true ]]; then
-        JSON_FIRST=false
-      else
-        printf ',\n'
-      fi
-
-      if [[ "$cpu_total" == '-' ]]; then
-        cpu_total=null
-      fi
-
-      if [[ "$mem_total" == '-' ]]; then
-        mem_total=null
-      fi
-
-      printf \
-        '  {"namespace":"%s","name":"%s","cpuCores":%s,"memGiB":%s}' \
-        "$ns" \
-        "$dep_name" \
-        "$cpu_total" \
-        "$mem_total"
-
-      ;;
-
-  esac
-}
-
-
-# ============================================================
-# Procesar deployments de un namespace
-# ============================================================
-
-summarise_deployments() {
-
-  local ns=$1
-  local dep_json
-  local dep
-  local dep_name
-  local selector
-  local metrics
-  local cpu_total
-  local mem_total
-
-
-  # Obtener todos los deployments del namespace.
-  dep_json=$(
-    oc get deployments \
-      -n "$ns" \
-      -o json \
-      2>/dev/null
-  ) || return 0
-
-
-  # Si el namespace no tiene deployments, continuar.
-  if [[ $(jq '.items | length' <<< "$dep_json") -eq 0 ]]; then
-    return 0
-  fi
-
-
-  # Imprimir encabezado para la salida tipo tabla.
-  if [[ "$FORMATO" == 'table' ]]; then
-
-    printf '\nNAMESPACE: %s\n' "$ns"
-
-    printf '%-40s %12s %12s\n' \
-      'NAME' \
-      'CPU(cores)' \
-      'MEM(GiB)'
-
-    printf '%0.s-' {1..68}
-    printf '\n'
-
-  fi
-
-
-  # Recorrer los deployments.
-  while IFS= read -r dep; do
-
-    dep_name=$(
-      jq -r '.metadata.name' <<< "$dep"
-    )
-
-
-    # Crear el selector usando los matchLabels del deployment.
-    #
-    # Ejemplo:
-    # app=mi-aplicacion,version=v1
-    selector=$(
-      jq -r '
-        .spec.selector.matchLabels
-        | to_entries
-        | map("\(.key)=\(.value)")
-        | join(",")
-      ' <<< "$dep"
-    )
-
-
-    # Si no existe selector, no se pueden encontrar sus pods.
-    if [[ -z "$selector" ]]; then
-
-      print_result \
-        "$ns" \
-        "$dep_name" \
-        '-' \
-        '-'
-
-      continue
-
-    fi
-
-
-    # Obtener las métricas de todos los pods que pertenezcan
-    # al deployment.
-    metrics=$(
-      oc adm top pods \
-        -n "$ns" \
-        -l "$selector" \
-        --no-headers \
-        2>/dev/null || true
-    )
-
-
-    # Si no hay métricas disponibles.
-    if [[ -z "$metrics" ]]; then
-
-      print_result \
-        "$ns" \
-        "$dep_name" \
-        '-' \
-        '-'
-
-      continue
-
-    fi
-
-
-    # Convertir:
-    #
-    # CPU:
-    #   n  -> cores
-    #   u  -> cores
-    #   m  -> cores
-    #
-    # Memoria:
-    #   Ki -> GiB
-    #   Mi -> GiB
-    #   Gi -> GiB
-    #   Ti -> GiB
-    #
-    # También suma el consumo de todas las réplicas.
-    read -r cpu_total mem_total <<< "$(
-      awk '
-      {
-        # ====================================================
-        # CPU: convertir a cores
-        # ====================================================
-
-        cpu = $2
-
-        if (cpu ~ /n$/) {
-
-          sub(/n$/, "", cpu)
-          cpu = cpu / 1000000000
-
-        } else if (cpu ~ /u$/) {
-
-          sub(/u$/, "", cpu)
-          cpu = cpu / 1000000
-
-        } else if (cpu ~ /m$/) {
-
-          sub(/m$/, "", cpu)
-          cpu = cpu / 1000
-
-        } else {
-
-          cpu = cpu + 0
-
-        }
-
-        sum_cpu += cpu
-
-
-        # ====================================================
-        # Memoria: convertir a GiB
-        # ====================================================
-
-        mem = $3
-
-        if (mem ~ /Ki$/) {
-
-          sub(/Ki$/, "", mem)
-          mem = mem / 1048576
-
-        } else if (mem ~ /Mi$/) {
-
-          sub(/Mi$/, "", mem)
-          mem = mem / 1024
-
-        } else if (mem ~ /Gi$/) {
-
-          sub(/Gi$/, "", mem)
-          mem = mem + 0
-
-        } else if (mem ~ /Ti$/) {
-
-          sub(/Ti$/, "", mem)
-          mem = mem * 1024
-
-        } else {
-
-          mem = mem + 0
-
-        }
-
-        sum_mem += mem
-        rows++
-      }
-
-      END {
-
-        if (rows == 0) {
-
-          print "- -"
-
-        } else {
-
-          printf "%.3f %.3f\n", sum_cpu, sum_mem
-
-        }
-
-      }
-      ' <<< "$metrics"
+for ns in "${namespaces[@]}"; do
+
+    echo
+    echo "NAMESPACE: $ns"
+
+    printf '%-60s %12s %12s\n' \
+        "NAME" \
+        "CPU(cores)" \
+        "MEM(GiB)"
+
+    printf '%-60s %12s %12s\n' \
+        "------------------------------------------------------------" \
+        "------------" \
+        "------------"
+
+    # Obtener todos los deployments del namespace.
+    dep_json="$(
+        oc get deployments \
+            -n "$ns" \
+            -o json 2>/dev/null
     )"
 
+    if [[ -z "$dep_json" ]]; then
+        echo "No fue posible consultar los deployments del namespace."
+        continue
+    fi
 
-    print_result \
-      "$ns" \
-      "$dep_name" \
-      "$cpu_total" \
-      "$mem_total"
+    dep_count="$(jq '.items | length' <<< "$dep_json")"
 
-  done < <(
-    jq -c '.items[]' <<< "$dep_json"
-  )
-}
+    if [[ "$dep_count" -eq 0 ]]; then
+        echo "No hay deployments en este namespace."
+        continue
+    fi
 
+    # ========================================================
+    # Recorrer deployments
+    # ========================================================
 
-# ============================================================
-# Encabezado general
-# ============================================================
+    while IFS= read -r dep; do
 
-if [[ "$FORMATO" == 'table' ]]; then
+        dep_name="$(
+            jq -r '.metadata.name' <<< "$dep"
+        )"
 
-  printf '%0.s=' {1..68}
-  printf '\n'
+        # Construir el selector del deployment.
+        selector="$(
+            jq -r '
+                (
+                    .spec.selector.matchLabels
+                    // .spec.template.metadata.labels
+                    // {}
+                )
+                | to_entries
+                | map("\(.key)=\(.value | tostring)")
+                | join(",")
+            ' <<< "$dep"
+        )"
 
-  printf \
-    'Buscando deployments en namespaces con patrón: %s\n' \
-    "$PATTERN"
+        if [[ -z "$selector" ]]; then
+            printf '%-60s %12s %12s\n' \
+                "$dep_name" \
+                "-" \
+                "-"
+            continue
+        fi
 
-  printf '%0.s=' {1..68}
-  printf '\n'
+        # Consultar el consumo de todos los pods correspondientes
+        # al deployment.
+        metrics="$(
+            oc adm top pods \
+                -n "$ns" \
+                -l "$selector" \
+                --no-headers 2>/dev/null || true
+        )"
 
+        if [[ -z "$metrics" ]]; then
+            printf '%-60s %12s %12s\n' \
+                "$dep_name" \
+                "-" \
+                "-"
+            continue
+        fi
 
-elif [[ "$FORMATO" == 'csv' ]]; then
+        # ====================================================
+        # Convertir las unidades
+        #
+        # CPU:
+        #   10m = 0.010 cores
+        #
+        # Memoria:
+        #   10Mi = 0.009765625 GiB
+        #        = 0.010 GiB redondeado
+        # ====================================================
 
-  printf 'namespace,name,cpu_cores,mem_gib\n'
+        read -r cpu_total mem_total < <(
+            printf '%s\n' "$metrics" |
+            awk '
+            {
+                if (NF < 3) {
+                    next
+                }
 
+                cpu = $2
+                mem = $3
 
-elif [[ "$FORMATO" == 'json' ]]; then
+                # Validar que sean métricas reales.
+                if (cpu !~ /^[0-9.]+(n|u|m)?$/) {
+                    next
+                }
 
-  printf '[\n'
+                if (mem !~ /^[0-9.]+(Ki|Mi|Gi|Ti)?$/) {
+                    next
+                }
 
-fi
+                # CPU a cores.
+                if (cpu ~ /n$/) {
+                    sub(/n$/, "", cpu)
+                    cpu = cpu / 1000000000
+                } else if (cpu ~ /u$/) {
+                    sub(/u$/, "", cpu)
+                    cpu = cpu / 1000000
+                } else if (cpu ~ /m$/) {
+                    sub(/m$/, "", cpu)
+                    cpu = cpu / 1000
+                } else {
+                    cpu = cpu + 0
+                }
 
+                # Memoria a GiB.
+                if (mem ~ /Ki$/) {
+                    sub(/Ki$/, "", mem)
+                    mem = mem / 1048576
+                } else if (mem ~ /Mi$/) {
+                    sub(/Mi$/, "", mem)
+                    mem = mem / 1024
+                } else if (mem ~ /Gi$/) {
+                    sub(/Gi$/, "", mem)
+                    mem = mem + 0
+                } else if (mem ~ /Ti$/) {
+                    sub(/Ti$/, "", mem)
+                    mem = mem * 1024
+                } else {
+                    mem = mem + 0
+                }
 
-# ============================================================
-# Ejecutar la consulta por cada namespace
-# ============================================================
+                sum_cpu += cpu
+                sum_mem += mem
+                rows++
+            }
 
-for ns in "${ns_list[@]}"; do
-  summarise_deployments "$ns"
+            END {
+                if (rows == 0) {
+                    print "- -"
+                } else {
+                    printf "%.3f %.3f\n", sum_cpu, sum_mem
+                }
+            }'
+        )
+
+        printf '%-60s %12s %12s\n' \
+            "$dep_name" \
+            "$cpu_total" \
+            "$mem_total"
+
+    done < <(
+        jq -c '.items[]' <<< "$dep_json"
+    )
+
 done
 
+echo
+echo "Consulta finalizada."
+EOF
 
-# ============================================================
-# Cerrar JSON
-# ============================================================
-
-if [[ "$FORMATO" == 'json' ]]; then
-  printf '\n]\n'
-fi
