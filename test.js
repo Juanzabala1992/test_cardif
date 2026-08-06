@@ -68,33 +68,32 @@ console.log("✅ Todo OK");
 
 **********************************************************************************************
   *************************************************************************************
+
+
+  cat > extract_limits.sh <<'EOF'
 #!/usr/bin/env bash
 
-set -uo pipefail
+set -u
 
-# Patrón predeterminado para buscar namespaces.
-# Puedes cambiarlo aquí o enviarlo como primer argumento.
+# Patrón predeterminado de namespaces.
 PATTERN="${1:-c-prd-|c-prod-}"
-
 
 # ============================================================
 # Validaciones
 # ============================================================
 
-for command in oc jq awk grep; do
-    if ! command -v "$command" >/dev/null 2>&1; then
-        echo "ERROR: No se encontró el comando requerido: $command"
+for cmd in oc jq awk grep; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "ERROR: No se encontró el comando requerido: $cmd" >&2
         exit 1
     fi
 done
 
-
 if ! oc whoami >/dev/null 2>&1; then
-    echo "ERROR: No existe una sesión activa en OpenShift."
-    echo "Ejecuta primero el comando oc login."
+    echo "ERROR: No existe una sesión activa en OpenShift." >&2
+    echo "Ejecuta primero oc login." >&2
     exit 1
 fi
-
 
 # ============================================================
 # Obtener namespaces
@@ -107,18 +106,16 @@ mapfile -t namespaces < <(
     grep -E "$PATTERN" || true
 )
 
-
 if (( ${#namespaces[@]} == 0 )); then
     echo "No se encontraron namespaces con el patrón: $PATTERN"
     exit 0
 fi
 
-
 echo "================================================================================================================"
-echo "Buscando límites configurados en namespaces con patrón: $PATTERN"
+echo "LIMITS configurados por Deployment"
 echo "CPU expresada en cores y memoria expresada en GiB"
+echo "Patrón utilizado: $PATTERN"
 echo "================================================================================================================"
-
 
 # ============================================================
 # Recorrer namespaces
@@ -131,24 +128,13 @@ for ns in "${namespaces[@]}"; do
             -n "$ns" \
             -o json \
             2>/dev/null
-    )"
+    )" || continue
 
-    if [[ $? -ne 0 || -z "$deployment_json" ]]; then
-        echo
-        echo "No fue posible consultar deployments en: $ns"
-        continue
-    fi
-
-
-    deployment_count="$(
-        jq '.items | length' <<< "$deployment_json"
-    )"
-
+    deployment_count="$(jq '.items | length' <<< "$deployment_json")"
 
     if [[ "$deployment_count" -eq 0 ]]; then
         continue
     fi
-
 
     echo
     echo "NAMESPACE: $ns"
@@ -169,7 +155,6 @@ for ns in "${namespaces[@]}"; do
         "------------" \
         "------------"
 
-
     # ========================================================
     # Recorrer deployments
     # ========================================================
@@ -180,15 +165,11 @@ for ns in "${namespaces[@]}"; do
             jq -r '.metadata.name' <<< "$deployment"
         )"
 
-
-        # Réplicas deseadas configuradas en el deployment.
         replicas="$(
             jq -r '.spec.replicas // 1' <<< "$deployment"
         )"
 
-
-        # Obtener los limits de todos los contenedores normales
-        # definidos dentro del template del deployment.
+        # Obtiene limits de todos los contenedores del Deployment.
         limits="$(
             jq -r '
                 (.spec.template.spec.containers // [])[]
@@ -202,10 +183,7 @@ for ns in "${namespaces[@]}"; do
             ' <<< "$deployment"
         )"
 
-
-        # Si no se encontraron contenedores.
         if [[ -z "$limits" ]]; then
-
             printf '%-46s %5s %11s %11s %12s %12s\n' \
                 "$deployment_name" \
                 "$replicas" \
@@ -213,214 +191,125 @@ for ns in "${namespaces[@]}"; do
                 "-" \
                 "-" \
                 "-"
-
             continue
         fi
 
-
         # ====================================================
-        # Convertir y sumar los límites
-        #
-        # CPU:
-        #   10m = 0.010 cores
-        #   500m = 0.500 cores
-        #   1 = 1.000 cores
-        #
-        # Memoria:
-        #   10Mi = 0.010 GiB
-        #   512Mi = 0.500 GiB
-        #   1Gi = 1.000 GiB
+        # Convertir y sumar límites
         # ====================================================
 
-        read -r \
-            cpu_per_pod \
-            mem_per_pod \
-            cpu_total \
-            mem_total \
-        < <(
+        result="$(
             printf '%s\n' "$limits" |
-            awk \
-                -v replicas="$replicas" \
-                '
+            awk -v replicas="$replicas" '
                 BEGIN {
                     FS = "\t"
                 }
 
-
-                # --------------------------------------------
-                # Convertir CPU a cores
-                # --------------------------------------------
-
-                function cpu_to_cores(quantity, number) {
-
-                    number = quantity
-
-                    if (number ~ /n$/) {
-                        sub(/n$/, "", number)
-                        return number / 1000000000
+                function cpu_to_cores(value) {
+                    if (value ~ /n$/) {
+                        sub(/n$/, "", value)
+                        return value / 1000000000
                     }
 
-                    if (number ~ /u$/) {
-                        sub(/u$/, "", number)
-                        return number / 1000000
+                    if (value ~ /u$/) {
+                        sub(/u$/, "", value)
+                        return value / 1000000
                     }
 
-                    if (number ~ /m$/) {
-                        sub(/m$/, "", number)
-                        return number / 1000
+                    if (value ~ /m$/) {
+                        sub(/m$/, "", value)
+                        return value / 1000
                     }
 
-                    return number + 0
+                    return value + 0
                 }
 
-
-                # --------------------------------------------
-                # Convertir memoria a GiB
-                # --------------------------------------------
-
-                function memory_to_gib(quantity, number) {
-
-                    number = quantity
-
-                    # Unidades binarias
-
-                    if (number ~ /Ki$/) {
-                        sub(/Ki$/, "", number)
-                        return number / 1048576
+                function memory_to_gib(value) {
+                    if (value ~ /Ki$/) {
+                        sub(/Ki$/, "", value)
+                        return value / 1048576
                     }
 
-                    if (number ~ /Mi$/) {
-                        sub(/Mi$/, "", number)
-                        return number / 1024
+                    if (value ~ /Mi$/) {
+                        sub(/Mi$/, "", value)
+                        return value / 1024
                     }
 
-                    if (number ~ /Gi$/) {
-                        sub(/Gi$/, "", number)
-                        return number + 0
+                    if (value ~ /Gi$/) {
+                        sub(/Gi$/, "", value)
+                        return value + 0
                     }
 
-                    if (number ~ /Ti$/) {
-                        sub(/Ti$/, "", number)
-                        return number * 1024
+                    if (value ~ /Ti$/) {
+                        sub(/Ti$/, "", value)
+                        return value * 1024
                     }
 
-                    if (number ~ /Pi$/) {
-                        sub(/Pi$/, "", number)
-                        return number * 1048576
+                    if (value ~ /Pi$/) {
+                        sub(/Pi$/, "", value)
+                        return value * 1048576
                     }
 
-
-                    # Unidades decimales
-
-                    if (number ~ /[kK]$/) {
-                        sub(/[kK]$/, "", number)
-                        return \
-                            (number * 1000) / 1073741824
+                    if (value ~ /[kK]$/) {
+                        sub(/[kK]$/, "", value)
+                        return (value * 1000) / 1073741824
                     }
 
-                    if (number ~ /M$/) {
-                        sub(/M$/, "", number)
-                        return \
-                            (number * 1000000) / 1073741824
+                    if (value ~ /M$/) {
+                        sub(/M$/, "", value)
+                        return (value * 1000000) / 1073741824
                     }
 
-                    if (number ~ /G$/) {
-                        sub(/G$/, "", number)
-                        return \
-                            (number * 1000000000) / 1073741824
+                    if (value ~ /G$/) {
+                        sub(/G$/, "", value)
+                        return (value * 1000000000) / 1073741824
                     }
 
-                    if (number ~ /T$/) {
-                        sub(/T$/, "", number)
-                        return \
-                            (number * 1000000000000) / 1073741824
+                    if (value ~ /T$/) {
+                        sub(/T$/, "", value)
+                        return (value * 1000000000000) / 1073741824
                     }
 
-
-                    # Un valor sin sufijo representa bytes.
-
-                    return number / 1073741824
+                    return value / 1073741824
                 }
-
 
                 {
-                    cpu_quantity = $1
-                    memory_quantity = $2
-
-
-                    if (
-                        cpu_quantity != "-" &&
-                        cpu_quantity != ""
-                    ) {
-                        cpu_sum += \
-                            cpu_to_cores(cpu_quantity)
-
+                    if ($1 != "-" && $1 != "") {
+                        cpu_sum += cpu_to_cores($1)
                         has_cpu = 1
                     }
 
-
-                    if (
-                        memory_quantity != "-" &&
-                        memory_quantity != ""
-                    ) {
-                        memory_sum += \
-                            memory_to_gib(memory_quantity)
-
+                    if ($2 != "-" && $2 != "") {
+                        memory_sum += memory_to_gib($2)
                         has_memory = 1
                     }
                 }
 
-
                 END {
+                    cpu_pod = has_cpu ? sprintf("%.3f", cpu_sum) : "-"
+                    memory_pod = has_memory ? sprintf("%.3f", memory_sum) : "-"
+                    cpu_total = has_cpu ? sprintf("%.3f", cpu_sum * replicas) : "-"
+                    memory_total = has_memory ? sprintf("%.3f", memory_sum * replicas) : "-"
 
-                    if (has_cpu) {
-                        cpu_pod_text = \
-                            sprintf("%.3f", cpu_sum)
-
-                        cpu_total_text = \
-                            sprintf(
-                                "%.3f",
-                                cpu_sum * replicas
-                            )
-                    } else {
-                        cpu_pod_text = "-"
-                        cpu_total_text = "-"
-                    }
-
-
-                    if (has_memory) {
-                        memory_pod_text = \
-                            sprintf("%.3f", memory_sum)
-
-                        memory_total_text = \
-                            sprintf(
-                                "%.3f",
-                                memory_sum * replicas
-                            )
-                    } else {
-                        memory_pod_text = "-"
-                        memory_total_text = "-"
-                    }
-
-
-                    print \
-                        cpu_pod_text, \
-                        memory_pod_text, \
-                        cpu_total_text, \
-                        memory_total_text
+                    printf "%s %s %s %s\n", cpu_pod, memory_pod, cpu_total, memory_total
                 }
-                '
-        )
+            '
+        )"
 
+        read -r \
+            cpu_per_pod \
+            memory_per_pod \
+            cpu_total \
+            memory_total \
+            <<< "$result"
 
         printf '%-46s %5s %11s %11s %12s %12s\n' \
             "$deployment_name" \
             "$replicas" \
             "$cpu_per_pod" \
-            "$mem_per_pod" \
+            "$memory_per_pod" \
             "$cpu_total" \
-            "$mem_total"
-
+            "$memory_total"
 
     done < <(
         jq -c '.items[]' <<< "$deployment_json"
@@ -428,7 +317,6 @@ for ns in "${namespaces[@]}"; do
 
 done
 
-
 echo
 echo "Consulta finalizada."
-
+EOF
