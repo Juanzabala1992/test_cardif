@@ -452,9 +452,5 @@ echo "============================================================"
 
 ***********************************************************************
 
-  oc exec -n openshift-monitoring prometheus-k8s-1 -c prometheus -- df -h /prometheus
-
-oc exec -n openshift-monitoring prometheus-k8s-0 -c prometheus -- df -h /prometheus
-
-oc -n openshift-monitoring get configmap cluster-monitoring-config -o yaml
+oc get events -A --sort-by=.lastTimestamp | grep -Ei 'NotReady|Ready|Evict|Killing|Reboot|worker1'
 EOF
