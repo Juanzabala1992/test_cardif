@@ -1,0 +1,1078 @@
+NS=col-c-uat-digitalsales
+
+oc get route webview-agrario -n $NS \
+  -o jsonpath='{.spec.tls.caCertificate}' \
+  > ca-actual.pem
+
+
+oc get route webview-agrario -n $NS \
+  -o jsonpath='{.spec.tls.destinationCACertificate}' \
+  > destination-ca-actual.pem
+
+openssl x509 -in ca-actual.pem -noout -subject -issuer -dates
+openssl x509 -in destination-ca-actual.pem -noout -subject -issuer -dates
+
+openssl x509 \
+  -in webview-uat.cardif.com.co.crt \
+  -pubkey -noout |
+openssl pkey -pubin -outform DER |
+sha256sum
+
+openssl pkey \
+  -in webview-uat.cardif.com.co.key \
+  -pubout -outform DER |
+sha256sum
+
+openssl x509 \
+  -in webview-uat.cardif.com.co.crt \
+  -noout \
+  -subject \
+  -issuer \
+  -dates \
+  -ext subjectAltName
+
+openssl verify \
+  -CAfile ca-actual.pem \
+  webview-uat.cardif.com.co.crt
+
+
+
+#!/bin/bash
+
+set -euo pipefail
+
+# ============================================================
+# CONFIGURACION
+# ============================================================
+
+NS="col-c-uat-digitalsales"
+HOST="webview-uat.cardif.com.co"
+
+CERT="./webview-uat.cardif.com.co.crt"
+KEY="./webview-uat.cardif.com.co.key"
+
+# Si ya tienes la CA/cadena en un archivo separado puedes ponerla aqui.
+# Si se deja vacio, el script intentara obtenerla del CRT o reutilizar
+# la CA actual de una Route si valida correctamente el nuevo certificado.
+CA_FILE=""
+
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+BACKUP_DIR="./backup_certificados_${HOST}_${TIMESTAMP}"
+BACKUP_ROUTES="${BACKUP_DIR}/routes"
+BACKUP_SECRETS="${BACKUP_DIR}/secrets"
+BACKUP_INFO="${BACKUP_DIR}/info"
+TMP_DIR="${BACKUP_DIR}/tmp"
+
+mkdir -p "$BACKUP_ROUTES"
+mkdir -p "$BACKUP_SECRETS"
+mkdir -p "$BACKUP_INFO"
+mkdir -p "$TMP_DIR"
+
+chmod 700 "$BACKUP_DIR"
+
+echo
+echo "============================================================"
+echo " ACTUALIZACION DE CERTIFICADOS OPENSHIFT"
+echo "============================================================"
+echo
+echo "Namespace : $NS"
+echo "Host      : $HOST"
+echo "CRT       : $CERT"
+echo "KEY       : $KEY"
+echo "Backup    : $BACKUP_DIR"
+echo
+
+
+# ============================================================
+# VALIDACIONES BASICAS
+# ============================================================
+
+command -v oc >/dev/null 2>&1 || {
+    echo "ERROR: No se encuentra el comando oc."
+    exit 1
+}
+
+command -v openssl >/dev/null 2>&1 || {
+    echo "ERROR: No se encuentra openssl."
+    exit 1
+}
+
+command -v python3 >/dev/null 2>&1 || {
+    echo "ERROR: No se encuentra python3."
+    exit 1
+}
+
+
+if [ ! -f "$CERT" ]; then
+    echo "ERROR: No existe el certificado:"
+    echo "$CERT"
+    exit 1
+fi
+
+
+if [ ! -f "$KEY" ]; then
+    echo "ERROR: No existe la llave:"
+    echo "$KEY"
+    exit 1
+fi
+
+
+echo "Validando acceso al namespace..."
+
+oc get namespace "$NS" >/dev/null
+
+echo "OK"
+echo
+
+
+# ============================================================
+# GUARDAR INFORMACION DEL CONTEXTO
+# ============================================================
+
+{
+    echo "Fecha:"
+    date
+
+    echo
+    echo "Contexto:"
+    oc config current-context
+
+    echo
+    echo "Servidor:"
+    oc whoami --show-server
+
+    echo
+    echo "Usuario:"
+    oc whoami
+
+    echo
+    echo "Namespace:"
+    echo "$NS"
+
+    echo
+    echo "Host:"
+    echo "$HOST"
+
+} > "${BACKUP_INFO}/contexto.txt"
+
+
+# ============================================================
+# SEPARAR CERTIFICADOS DEL CRT
+# ============================================================
+
+echo "Analizando CRT..."
+
+awk -v dir="$TMP_DIR" '
+/-----BEGIN CERTIFICATE-----/ {
+    n++
+    file=sprintf("%s/cert-%02d.pem",dir,n)
+}
+n > 0 {
+    print > file
+}
+/-----END CERTIFICATE-----/ {
+    close(file)
+}
+' "$CERT"
+
+
+CERT_COUNT=$(find "$TMP_DIR" \
+    -maxdepth 1 \
+    -name 'cert-*.pem' \
+    -type f | wc -l)
+
+
+if [ "$CERT_COUNT" -lt 1 ]; then
+    echo "ERROR: El archivo CRT no contiene certificados PEM validos."
+    exit 1
+fi
+
+
+LEAF_CERT="${TMP_DIR}/cert-01.pem"
+
+echo
+echo "Certificados encontrados en CRT: $CERT_COUNT"
+
+openssl x509 \
+    -in "$LEAF_CERT" \
+    -noout \
+    -subject \
+    -issuer \
+    -serial \
+    -dates \
+    -fingerprint \
+    -sha256 \
+    > "${BACKUP_INFO}/nuevo-certificado.txt"
+
+cat "${BACKUP_INFO}/nuevo-certificado.txt"
+
+
+# ============================================================
+# VALIDAR HOST DEL CERTIFICADO
+# ============================================================
+
+echo
+echo "Validando que el certificado corresponda a:"
+echo "$HOST"
+
+if ! openssl x509 \
+    -in "$LEAF_CERT" \
+    -checkhost "$HOST" \
+    -noout
+then
+
+    echo
+    echo "ERROR:"
+    echo "El nuevo certificado no es valido para:"
+    echo "$HOST"
+    exit 1
+fi
+
+echo "HOST: OK"
+
+
+# ============================================================
+# VALIDAR CRT CONTRA KEY
+# ============================================================
+
+echo
+echo "Validando certificado contra llave privada..."
+
+
+CERT_HASH=$(
+    openssl x509 \
+        -in "$LEAF_CERT" \
+        -pubkey \
+        -noout |
+    openssl pkey \
+        -pubin \
+        -outform DER |
+    sha256sum |
+    awk '{print $1}'
+)
+
+
+KEY_HASH=$(
+    openssl pkey \
+        -in "$KEY" \
+        -pubout \
+        -outform DER |
+    sha256sum |
+    awk '{print $1}'
+)
+
+
+if [ "$CERT_HASH" != "$KEY_HASH" ]; then
+
+    echo
+    echo "ERROR:"
+    echo "El certificado NO corresponde a la llave privada."
+    exit 1
+
+fi
+
+
+echo "CERT + KEY: OK"
+
+
+# ============================================================
+# BUSCAR ROUTES DEL HOST
+# ============================================================
+
+echo
+echo "Buscando Routes de:"
+echo "$HOST"
+echo
+
+
+ROUTES=$(
+    oc get routes \
+        -n "$NS" \
+        --no-headers \
+        -o custom-columns='NAME:.metadata.name,HOST:.spec.host,TERMINATION:.spec.tls.termination' |
+    awk -v host="$HOST" '
+        $2 == host && ($3 == "reencrypt" || $3 == "edge") {
+            print $1
+        }
+    '
+)
+
+
+if [ -z "$ROUTES" ]; then
+
+    echo "ERROR:"
+    echo "No se encontraron Routes TLS para:"
+    echo "$HOST"
+
+    exit 1
+fi
+
+
+echo "$ROUTES" > "${BACKUP_INFO}/routes.txt"
+
+echo "Routes que se actualizaran:"
+echo "------------------------------------------------"
+echo "$ROUTES"
+echo "------------------------------------------------"
+
+
+# ============================================================
+# FUNCION PARA GUARDAR YAML RESTAURABLE
+# ============================================================
+
+backup_route()
+{
+
+    local ROUTE="$1"
+
+    oc get route "$ROUTE" \
+        -n "$NS" \
+        -o yaml \
+        --show-managed-fields=false |
+    sed \
+        -e '/^  creationTimestamp:/d' \
+        -e '/^  resourceVersion:/d' \
+        -e '/^  uid:/d' \
+        -e '/^  generation:/d' |
+    awk '
+        /^status:/ {
+            exit
+        }
+        {
+            print
+        }
+    ' \
+    > "${BACKUP_ROUTES}/${ROUTE}.yaml"
+}
+
+
+backup_secret()
+{
+
+    local SECRET="$1"
+
+    oc get secret "$SECRET" \
+        -n "$NS" \
+        -o yaml \
+        --show-managed-fields=false |
+    sed \
+        -e '/^  creationTimestamp:/d' \
+        -e '/^  resourceVersion:/d' \
+        -e '/^  uid:/d' \
+        -e '/^  generation:/d' \
+    > "${BACKUP_SECRETS}/${SECRET}.yaml"
+}
+
+
+# ============================================================
+# BACKUP ROUTES
+# ============================================================
+
+echo
+echo "Realizando BACKUP de Routes..."
+echo
+
+
+for ROUTE in $ROUTES
+do
+
+    echo "Backup Route: $ROUTE"
+
+    backup_route "$ROUTE"
+
+    # Guardamos adicionalmente el hash del Destination CA.
+    # Esto permite comprobar despues que NO fue modificado.
+
+    DEST_CA=$(
+        oc get route "$ROUTE" \
+            -n "$NS" \
+            -o jsonpath='{.spec.tls.destinationCACertificate}' \
+            2>/dev/null || true
+    )
+
+    if [ -n "$DEST_CA" ]; then
+
+        printf "%s" "$DEST_CA" |
+            sha256sum |
+            awk -v route="$ROUTE" \
+                '{print route" "$1}' \
+            >> "${BACKUP_INFO}/destination-ca-hashes.txt"
+
+    fi
+
+done
+
+
+# ============================================================
+# DETECTAR SECRETS QUE CONTIENEN EL CERTIFICADO DEL HOST
+# ============================================================
+
+echo
+echo "Buscando Secrets asociados al certificado:"
+echo "$HOST"
+echo
+
+
+SECRET_LIST_FILE="${BACKUP_INFO}/secrets-detectados.txt"
+
+> "$SECRET_LIST_FILE"
+
+
+for SECRET in $(oc get secret -n "$NS" -o name | sed 's#secret/##')
+do
+
+    SERVER_CRT=$(
+        oc get secret "$SECRET" \
+            -n "$NS" \
+            -o jsonpath='{.data.server\.crt}' \
+            2>/dev/null || true
+    )
+
+    SERVER_KEY=$(
+        oc get secret "$SECRET" \
+            -n "$NS" \
+            -o jsonpath='{.data.server\.key}' \
+            2>/dev/null || true
+    )
+
+
+    if [ -n "$SERVER_CRT" ] && [ -n "$SERVER_KEY" ]; then
+
+        TEST_CERT="${TMP_DIR}/secret-test.pem"
+
+        printf "%s" "$SERVER_CRT" |
+            base64 -d \
+            > "$TEST_CERT" 2>/dev/null || true
+
+
+        if openssl x509 \
+            -in "$TEST_CERT" \
+            -checkhost "$HOST" \
+            -noout \
+            >/dev/null 2>&1
+        then
+
+            echo "${SECRET}|server.crt|server.key" \
+                >> "$SECRET_LIST_FILE"
+
+        fi
+    fi
+
+
+    TLS_CRT=$(
+        oc get secret "$SECRET" \
+            -n "$NS" \
+            -o jsonpath='{.data.tls\.crt}' \
+            2>/dev/null || true
+    )
+
+    TLS_KEY=$(
+        oc get secret "$SECRET" \
+            -n "$NS" \
+            -o jsonpath='{.data.tls\.key}' \
+            2>/dev/null || true
+    )
+
+
+    if [ -n "$TLS_CRT" ] && [ -n "$TLS_KEY" ]; then
+
+        TEST_CERT="${TMP_DIR}/secret-test.pem"
+
+        printf "%s" "$TLS_CRT" |
+            base64 -d \
+            > "$TEST_CERT" 2>/dev/null || true
+
+
+        if openssl x509 \
+            -in "$TEST_CERT" \
+            -checkhost "$HOST" \
+            -noout \
+            >/dev/null 2>&1
+        then
+
+            echo "${SECRET}|tls.crt|tls.key" \
+                >> "$SECRET_LIST_FILE"
+
+        fi
+    fi
+
+done
+
+
+rm -f "${TMP_DIR}/secret-test.pem"
+
+
+echo "Secrets detectados:"
+echo "------------------------------------------------"
+
+if [ -s "$SECRET_LIST_FILE" ]; then
+
+    cut -d'|' -f1 "$SECRET_LIST_FILE"
+
+else
+
+    echo "NINGUNO"
+
+fi
+
+echo "------------------------------------------------"
+
+
+# ============================================================
+# BACKUP SECRETS
+# ============================================================
+
+if [ -s "$SECRET_LIST_FILE" ]; then
+
+    echo
+    echo "Realizando BACKUP de Secrets..."
+
+    while IFS='|' read -r SECRET CRT_KEY KEY_KEY
+    do
+
+        echo "Backup Secret: $SECRET"
+
+        backup_secret "$SECRET"
+
+    done < "$SECRET_LIST_FILE"
+
+fi
+
+
+# ============================================================
+# DETERMINAR CA
+# ============================================================
+
+echo
+echo "Determinando CA del certificado..."
+
+
+GENERATED_CA="${BACKUP_INFO}/ca-utilizada.pem"
+
+
+# ------------------------------------------------------------
+# CASO 1: CA suministrada manualmente
+# ------------------------------------------------------------
+
+if [ -n "$CA_FILE" ]; then
+
+    if [ ! -f "$CA_FILE" ]; then
+
+        echo "ERROR:"
+        echo "No existe CA_FILE:"
+        echo "$CA_FILE"
+
+        exit 1
+    fi
+
+
+    cp "$CA_FILE" "$GENERATED_CA"
+
+    echo "Utilizando CA indicada manualmente."
+
+
+# ------------------------------------------------------------
+# CASO 2: CRT trae mas de un certificado
+# ------------------------------------------------------------
+
+elif [ "$CERT_COUNT" -gt 1 ]; then
+
+    echo "El CRT contiene cadena de certificados."
+
+    > "$GENERATED_CA"
+
+    for CERT_PART in "$TMP_DIR"/cert-*.pem
+    do
+
+        if [ "$CERT_PART" != "$LEAF_CERT" ]; then
+            cat "$CERT_PART" >> "$GENERATED_CA"
+        fi
+
+    done
+
+    echo "CA/cadena extraida automaticamente del CRT."
+
+
+# ------------------------------------------------------------
+# CASO 3: intentar usar CA actual de una Route
+# ------------------------------------------------------------
+
+else
+
+    echo
+    echo "El CRT contiene solamente el certificado servidor."
+    echo "Intentando validar contra la CA actual de OpenShift..."
+
+
+    FIRST_ROUTE=$(echo "$ROUTES" | head -1)
+
+
+    oc get route "$FIRST_ROUTE" \
+        -n "$NS" \
+        -o jsonpath='{.spec.tls.caCertificate}' \
+        > "$GENERATED_CA"
+
+
+    if [ ! -s "$GENERATED_CA" ]; then
+
+        echo
+        echo "ERROR:"
+        echo "El CRT no contiene la cadena CA y la Route actual"
+        echo "tampoco tiene caCertificate."
+
+        echo
+        echo "Necesitas obtener el certificado CA/intermedio."
+
+        exit 1
+    fi
+
+
+    if openssl verify \
+        -CAfile "$GENERATED_CA" \
+        "$LEAF_CERT"
+    then
+
+        echo
+        echo "La CA actual valida correctamente el nuevo CRT."
+        echo "Se puede reutilizar."
+
+    else
+
+        echo
+        echo "ERROR:"
+        echo "La CA actual NO valida el nuevo certificado."
+        echo
+        echo "No se realizara ningun cambio."
+        echo
+        echo "Debes obtener la cadena CA correspondiente al nuevo CRT."
+
+        exit 1
+
+    fi
+
+fi
+
+
+# ============================================================
+# MOSTRAR CA
+# ============================================================
+
+echo
+echo "CA que sera utilizada:"
+echo "------------------------------------------------"
+
+openssl x509 \
+    -in "$GENERATED_CA" \
+    -noout \
+    -subject \
+    -issuer \
+    -dates
+
+echo "------------------------------------------------"
+
+
+# ============================================================
+# GENERAR SCRIPT DE RESTAURACION
+# ============================================================
+
+cat > "${BACKUP_DIR}/RESTORE.sh" <<EOF
+#!/bin/bash
+
+set -euo pipefail
+
+NS="$NS"
+
+DIR="\$(cd "\$(dirname "\$0")" && pwd)"
+
+echo
+echo "============================================================"
+echo " RESTAURANDO BACKUP DE CERTIFICADOS"
+echo "============================================================"
+echo
+echo "Namespace: \$NS"
+echo "Backup:    \$DIR"
+echo
+
+read -p "Escriba RESTAURAR para continuar: " RESP
+
+if [ "\$RESP" != "RESTAURAR" ]; then
+    echo "Operacion cancelada."
+    exit 0
+fi
+
+echo
+echo "Restaurando Secrets..."
+
+if ls "\$DIR/secrets/"*.yaml >/dev/null 2>&1; then
+    oc apply -n "\$NS" -f "\$DIR/secrets/"
+fi
+
+echo
+echo "Restaurando Routes..."
+
+if ls "\$DIR/routes/"*.yaml >/dev/null 2>&1; then
+    oc apply -n "\$NS" -f "\$DIR/routes/"
+fi
+
+echo
+echo "============================================================"
+echo " RESTAURACION FINALIZADA"
+echo "============================================================"
+echo
+EOF
+
+
+chmod 700 "${BACKUP_DIR}/RESTORE.sh"
+
+
+# ============================================================
+# INFORMACION DEL BACKUP
+# ============================================================
+
+echo
+echo "============================================================"
+echo " BACKUP FINALIZADO"
+echo "============================================================"
+echo
+echo "Backup creado en:"
+echo
+echo "$BACKUP_DIR"
+echo
+echo "Routes:"
+echo "$BACKUP_ROUTES"
+echo
+echo "Secrets:"
+echo "$BACKUP_SECRETS"
+echo
+echo "Rollback:"
+echo "$BACKUP_DIR/RESTORE.sh"
+echo
+
+
+# ============================================================
+# CONFIRMACION ANTES DE TOCAR OPENSHIFT
+# ============================================================
+
+echo "IMPORTANTE:"
+echo "Hasta este momento NO se ha modificado nada."
+echo
+
+read -p "Escriba ACTUALIZAR para modificar certificados: " RESP
+
+
+if [ "$RESP" != "ACTUALIZAR" ]; then
+
+    echo
+    echo "Operacion cancelada."
+    echo
+    echo "El backup fue conservado en:"
+    echo "$BACKUP_DIR"
+
+    exit 0
+
+fi
+
+
+# ============================================================
+# CREAR PATCH PARA ROUTES
+# ============================================================
+
+ROUTE_PATCH=$(
+python3 - \
+    "$LEAF_CERT" \
+    "$KEY" \
+    "$GENERATED_CA" <<'PY'
+
+import json
+import sys
+
+cert_file = sys.argv[1]
+key_file = sys.argv[2]
+ca_file = sys.argv[3]
+
+with open(cert_file) as f:
+    certificate = f.read()
+
+with open(key_file) as f:
+    key = f.read()
+
+with open(ca_file) as f:
+    ca = f.read()
+
+patch = {
+    "spec": {
+        "tls": {
+            "certificate": certificate,
+            "key": key,
+            "caCertificate": ca
+        }
+    }
+}
+
+print(json.dumps(patch))
+
+PY
+)
+
+
+# ============================================================
+# ACTUALIZAR ROUTES
+# ============================================================
+
+echo
+echo "============================================================"
+echo " ACTUALIZANDO ROUTES"
+echo "============================================================"
+
+
+for ROUTE in $ROUTES
+do
+
+    echo
+    echo "Route: $ROUTE"
+
+    oc patch route "$ROUTE" \
+        -n "$NS" \
+        --type=merge \
+        -p "$ROUTE_PATCH"
+
+done
+
+
+# ============================================================
+# ACTUALIZAR SECRETS
+# ============================================================
+
+if [ -s "$SECRET_LIST_FILE" ]; then
+
+    echo
+    echo "============================================================"
+    echo " ACTUALIZANDO SECRETS"
+    echo "============================================================"
+
+
+    while IFS='|' read -r SECRET CRT_KEY KEY_KEY
+    do
+
+        echo
+        echo "Secret: $SECRET"
+
+        SECRET_PATCH=$(
+        python3 - \
+            "$CERT" \
+            "$KEY" \
+            "$CRT_KEY" \
+            "$KEY_KEY" <<'PY'
+
+import sys
+import json
+import base64
+
+cert_file = sys.argv[1]
+key_file = sys.argv[2]
+
+cert_key = sys.argv[3]
+private_key = sys.argv[4]
+
+with open(cert_file, "rb") as f:
+    cert = base64.b64encode(f.read()).decode()
+
+with open(key_file, "rb") as f:
+    key = base64.b64encode(f.read()).decode()
+
+patch = {
+    "data": {
+        cert_key: cert,
+        private_key: key
+    }
+}
+
+print(json.dumps(patch))
+
+PY
+        )
+
+
+        oc patch secret "$SECRET" \
+            -n "$NS" \
+            --type=merge \
+            -p "$SECRET_PATCH"
+
+    done < "$SECRET_LIST_FILE"
+
+fi
+
+
+# ============================================================
+# VALIDAR ROUTES
+# ============================================================
+
+echo
+echo "============================================================"
+echo " VALIDANDO ROUTES"
+echo "============================================================"
+
+
+NEW_FP=$(
+    openssl x509 \
+        -in "$LEAF_CERT" \
+        -noout \
+        -fingerprint \
+        -sha256 |
+    cut -d= -f2
+)
+
+
+ERRORS=0
+
+
+for ROUTE in $ROUTES
+do
+
+    echo
+    echo "Validando: $ROUTE"
+
+
+    CURRENT_FP=$(
+        oc get route "$ROUTE" \
+            -n "$NS" \
+            -o jsonpath='{.spec.tls.certificate}' |
+        openssl x509 \
+            -noout \
+            -fingerprint \
+            -sha256 |
+        cut -d= -f2
+    )
+
+
+    if [ "$CURRENT_FP" = "$NEW_FP" ]; then
+
+        echo "Certificado: OK"
+
+    else
+
+        echo "ERROR: Certificado diferente"
+        ERRORS=$((ERRORS + 1))
+
+    fi
+
+
+    if [ -f "${BACKUP_INFO}/destination-ca-hashes.txt" ]; then
+
+        OLD_DEST_HASH=$(
+            awk -v route="$ROUTE" \
+                '$1 == route {print $2}' \
+                "${BACKUP_INFO}/destination-ca-hashes.txt"
+        )
+
+
+        if [ -n "$OLD_DEST_HASH" ]; then
+
+            CURRENT_DEST_HASH=$(
+                oc get route "$ROUTE" \
+                    -n "$NS" \
+                    -o jsonpath='{.spec.tls.destinationCACertificate}' |
+                sha256sum |
+                awk '{print $1}'
+            )
+
+
+            if [ "$OLD_DEST_HASH" = "$CURRENT_DEST_HASH" ]; then
+
+                echo "Destination CA: SIN CAMBIOS"
+
+            else
+
+                echo "ERROR: Destination CA fue modificado"
+                ERRORS=$((ERRORS + 1))
+
+            fi
+
+        fi
+
+    fi
+
+done
+
+
+# ============================================================
+# VALIDAR SECRETS
+# ============================================================
+
+if [ -s "$SECRET_LIST_FILE" ]; then
+
+    echo
+    echo "============================================================"
+    echo " VALIDANDO SECRETS"
+    echo "============================================================"
+
+
+    while IFS='|' read -r SECRET CRT_KEY KEY_KEY
+    do
+
+        echo
+        echo "Validando Secret: $SECRET"
+
+
+        SECRET_FP=$(
+            oc get secret "$SECRET" \
+                -n "$NS" \
+                -o jsonpath="{.data.${CRT_KEY//./\\.}}" |
+            base64 -d |
+            openssl x509 \
+                -noout \
+                -fingerprint \
+                -sha256 |
+            cut -d= -f2
+        )
+
+
+        if [ "$SECRET_FP" = "$NEW_FP" ]; then
+
+            echo "Certificado: OK"
+
+        else
+
+            echo "ERROR: Certificado diferente"
+            ERRORS=$((ERRORS + 1))
+
+        fi
+
+    done < "$SECRET_LIST_FILE"
+
+fi
+
+
+# ============================================================
+# RESULTADO
+# ============================================================
+
+echo
+echo "============================================================"
+
+if [ "$ERRORS" -eq 0 ]; then
+
+    echo " ACTUALIZACION FINALIZADA CORRECTAMENTE"
+
+else
+
+    echo " SE ENCONTRARON $ERRORS ERRORES"
+
+fi
+
+echo "============================================================"
+
+echo
+echo "Backup disponible en:"
+echo "$BACKUP_DIR"
+
+echo
+echo "Para restaurar:"
+echo
+echo "bash \"$BACKUP_DIR/RESTORE.sh\""
+echo
+
+echo "IMPORTANTE:"
+echo "Conserva esta carpeta hasta terminar todas las pruebas."
+echo
