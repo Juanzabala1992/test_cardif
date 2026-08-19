@@ -49,6 +49,36 @@ openssl verify \
   -CAfile ca-actual.pem \
   server.crt
 
+
+
+
+
+simulador	https://webview-uat.cardif.com.co/wv_simulador
+webview-agrario	https://webview-uat.cardif.com.co/wv_agrario
+webview-av-villas	https://webview-uat.cardif.com.co/wv_avvillas
+webview-bancolombia	https://webview-uat.cardif.com.co/wv_bancolombia
+webview-banistmo-app	https://webview-uat.cardif.com.co/wv_banistmo_app
+webview-bogota-refactor	https://webview-uat.cardif.com.co/wv_bdb
+webview-confianza	https://webview-uat.cardif.com.co/wv_confianza
+webview-occidente	https://webview-uat.cardif.com.co/wv_occidente
+webview-popular	https://webview-uat.cardif.com.co/wv_popular
+webview-popular-v2	https://webview-uat.cardif.com.co/popular-v2
+webview-portal-sac	https://webview-uat.cardif.com.co/portal_sac
+webview-santander-peru	https://webview-uat.cardif.com.co/wv_santander_peru
+webview-scotiabank-nginx	https://webview-uat.cardif.com.co/wv_sbk
+webview-tuya	https://webview-uat.cardif.com.co/wv_tuya
+
+
+
+
+
+
+
+
+
+
+
+
 ************************************
 
 #!/usr/bin/env bash
