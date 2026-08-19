@@ -35,6 +35,20 @@ openssl verify \
   -CAfile ca-actual.pem \
   webview-uat.cardif.com.co.crt
 
+
+openssl x509 -in server.crt \
+  -checkhost webview-uat.cardif.com.co \
+  -noout
+
+# 2. Ver cuántos certificados trae el CRT
+grep -c "BEGIN CERTIFICATE" server.crt
+
+# 3. Comprobar la cadena con el CA actual
+openssl verify \
+  -partial_chain \
+  -CAfile ca-actual.pem \
+  server.crt
+
 ************************************
 
 #!/usr/bin/env bash
