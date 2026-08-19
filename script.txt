@@ -94,6 +94,24 @@ oc get route webview-occidente -n col-c-uat-digitalsales \
 | grep -c "BEGIN CERTIFICATE"
 
 
+
+
+echo | openssl s_client \
+  -connect webview-uat.cardif.com.co:443 \
+  -servername webview-uat.cardif.com.co \
+  2>/dev/null |
+openssl x509 \
+  -noout \
+  -subject \
+  -issuer \
+  -serial \
+  -dates \
+  -fingerprint \
+  -sha256
+
+
+
+
 ************************************
 
 #!/usr/bin/env bash
