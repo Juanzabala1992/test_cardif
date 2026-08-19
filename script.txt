@@ -72,11 +72,26 @@ webview-tuya	https://webview-uat.cardif.com.co/wv_tuya
 
 
 
+oc get route webview-occidente -n col-c-uat-digitalsales \
+  -o jsonpath='{.spec.tls.termination}{"\n"}'
 
 
 
+oc get route webview-occidente -n col-c-uat-digitalsales \
+  -o jsonpath='{.spec.tls.certificate}' \
+| grep -c "BEGIN CERTIFICATE"
 
+oc get route webview-occidente -n col-c-uat-digitalsales \
+  -o jsonpath='{.spec.tls.certificate}' \
+| openssl x509 \
+  -noout \
+  -subject \
+  -issuer \
+  -dates
 
+oc get route webview-occidente -n col-c-uat-digitalsales \
+  -o jsonpath='{.spec.tls.caCertificate}' \
+| grep -c "BEGIN CERTIFICATE"
 
 
 ************************************
