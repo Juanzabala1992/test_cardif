@@ -114,6 +114,2513 @@ openssl x509 \
 
 ************************************
 
+cat > actualizar_certificados_prd.sh <<'SCRIPT_END'
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+# ============================================================
+# CONFIGURACION PRD
+# ============================================================
+
+NS="col-c-prd-digitalsales"
+
+# IMPORTANTE:
+# Si conoces exactamente el host de PRD puedes escribirlo aqui:
+#
+# HOST="webview.cardif.com.co"
+#
+# Si se deja vacio, el script intenta detectarlo automaticamente
+# entre las Routes del namespace y se detiene si hay ambiguedad.
+HOST=""
+
+CERT="./server.crt"
+KEY="./server.key"
+
+# Si te entregaron CA/intermedios en archivo independiente:
+#
+# CA_FILE="./ca.pem"
+#
+# Normalmente dejar vacio.
+CA_FILE=""
+
+
+# ============================================================
+# FUNCIONES BASICAS
+# ============================================================
+
+die()
+{
+    echo
+    echo "============================================================"
+    echo " ERROR"
+    echo "============================================================"
+    echo
+    echo "$*"
+    echo
+    exit 1
+}
+
+
+need_cmd()
+{
+    command -v "$1" >/dev/null 2>&1 || \
+        die "No se encuentra el comando requerido: $1"
+}
+
+
+# ============================================================
+# VALIDAR COMANDOS
+# ============================================================
+
+need_cmd oc
+need_cmd openssl
+need_cmd base64
+need_cmd sha256sum
+need_cmd awk
+need_cmd sed
+need_cmd grep
+need_cmd python3
+need_cmd curl
+
+
+# ============================================================
+# PROTECCION PRD
+# ============================================================
+
+if ! echo "$NS" | grep -Eqi 'prd|prod'
+then
+    die "El namespace configurado no parece ser PRD: $NS"
+fi
+
+
+echo
+echo "============================================================"
+echo " VALIDANDO ENTORNO DE PRODUCCION"
+echo "============================================================"
+echo
+echo "Namespace configurado:"
+echo "  $NS"
+echo
+
+
+if ! oc get namespace "$NS" >/dev/null 2>&1
+then
+
+    echo "No existe o no tienes acceso a:"
+    echo "  $NS"
+    echo
+    echo "Namespaces candidatos:"
+    echo
+
+    oc get ns \
+        -o custom-columns='NAME:.metadata.name' \
+        --no-headers \
+        2>/dev/null |
+    grep -Ei 'prd.*digitalsales|digitalsales.*prd|prod.*digitalsales|digitalsales.*prod' \
+        || true
+
+    die "Verifica el namespace de PRD."
+fi
+
+
+CURRENT_CONTEXT=$(oc config current-context 2>/dev/null || true)
+CURRENT_SERVER=$(oc whoami --show-server 2>/dev/null || true)
+CURRENT_USER=$(oc whoami 2>/dev/null || true)
+
+
+echo "Contexto:"
+echo "  $CURRENT_CONTEXT"
+
+echo
+echo "Servidor:"
+echo "  $CURRENT_SERVER"
+
+echo
+echo "Usuario:"
+echo "  $CURRENT_USER"
+
+echo
+
+
+# ============================================================
+# DETECTAR HOST PRD
+# ============================================================
+
+if [ -z "$HOST" ]; then
+
+    echo "Buscando hostname webview de PRD..."
+    echo
+
+
+    mapfile -t HOST_CANDIDATES < <(
+
+        oc get routes \
+            -n "$NS" \
+            -o json |
+        python3 -c '
+import json
+import sys
+
+data=json.load(sys.stdin)
+
+hosts=set()
+
+for route in data.get("items", []):
+
+    host=route.get("spec", {}).get("host", "")
+
+    h=host.lower()
+
+    if not host:
+        continue
+
+    if "webview" not in h:
+        continue
+
+    if "cardif.com.co" not in h:
+        continue
+
+    hosts.add(host)
+
+for host in sorted(hosts):
+    print(host)
+'
+
+    )
+
+
+    if [ "${#HOST_CANDIDATES[@]}" -eq 0 ]; then
+
+        echo "No se encontro automaticamente un host webview/cardif."
+        echo
+        echo "Hosts disponibles en el namespace:"
+        echo
+
+        oc get routes \
+            -n "$NS" \
+            -o custom-columns='NAME:.metadata.name,HOST:.spec.host' \
+            --no-headers
+
+        die "Configura HOST manualmente al inicio del script."
+
+    fi
+
+
+    if [ "${#HOST_CANDIDATES[@]}" -gt 1 ]; then
+
+        echo "Se encontraron varios posibles hosts:"
+        echo
+
+        printf "  %s\n" "${HOST_CANDIDATES[@]}"
+
+        echo
+        echo "Por seguridad no se seleccionara ninguno automaticamente."
+        echo
+        echo "Edita el script y configura:"
+        echo
+        echo 'HOST="HOST_PRD_CORRECTO"'
+
+        exit 1
+
+    fi
+
+
+    HOST="${HOST_CANDIDATES[0]}"
+
+fi
+
+
+# ============================================================
+# EVITAR ACCIDENTALMENTE UAT/DEV
+# ============================================================
+
+if echo "$HOST" | grep -Eqi 'uat|staging|stage|qa|test|dev'
+then
+
+    die "El hostname detectado parece NO ser PRD: $HOST"
+
+fi
+
+
+echo "Host de produccion:"
+echo "  $HOST"
+echo
+
+
+# ============================================================
+# VARIABLES DE BACKUP
+# ============================================================
+
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+BACKUP_DIR="./backup_certificados_PRD_${HOST}_${TIMESTAMP}"
+
+RAW_ROUTES="${BACKUP_DIR}/original/routes"
+RAW_SECRETS="${BACKUP_DIR}/original/secrets"
+
+RESTORE_ROUTES="${BACKUP_DIR}/restore/routes"
+RESTORE_SECRETS="${BACKUP_DIR}/restore/secrets"
+
+INFO_DIR="${BACKUP_DIR}/info"
+TMP_DIR="${BACKUP_DIR}/tmp"
+
+
+mkdir -p \
+    "$RAW_ROUTES" \
+    "$RAW_SECRETS" \
+    "$RESTORE_ROUTES" \
+    "$RESTORE_SECRETS" \
+    "$INFO_DIR" \
+    "$TMP_DIR"
+
+
+chmod 700 "$BACKUP_DIR"
+chmod 700 "$RAW_ROUTES"
+chmod 700 "$RAW_SECRETS"
+chmod 700 "$RESTORE_ROUTES"
+chmod 700 "$RESTORE_SECRETS"
+chmod 700 "$INFO_DIR"
+chmod 700 "$TMP_DIR"
+
+
+# ============================================================
+# FUNCIONES QUE USAN BACKUP_DIR
+# ============================================================
+
+fingerprint_cert()
+{
+    openssl x509 \
+        -in "$1" \
+        -noout \
+        -fingerprint \
+        -sha256 |
+    cut -d= -f2
+}
+
+
+backup_restore_yaml()
+{
+    local KIND="$1"
+    local NAME="$2"
+    local OUTPUT="$3"
+
+
+    oc get "$KIND" "$NAME" \
+        -n "$NS" \
+        -o yaml \
+        --show-managed-fields=false |
+    sed \
+        -e '/^  creationTimestamp:/d' \
+        -e '/^  resourceVersion:/d' \
+        -e '/^  uid:/d' \
+        -e '/^  generation:/d' |
+    awk '
+        /^status:/ {
+            exit
+        }
+
+        {
+            print
+        }
+    ' > "$OUTPUT"
+
+
+    chmod 600 "$OUTPUT"
+}
+
+
+restore_everything()
+{
+    echo
+    echo "============================================================"
+    echo " INICIANDO ROLLBACK PRD"
+    echo "============================================================"
+    echo
+
+
+    local RC=0
+
+    shopt -s nullglob
+
+
+    local SECRET_FILES=("$RESTORE_SECRETS"/*.yaml)
+    local ROUTE_FILES=("$RESTORE_ROUTES"/*.yaml)
+
+
+    echo "Restaurando Secrets..."
+    echo
+
+
+    for FILE in "${SECRET_FILES[@]}"
+    do
+
+        echo " -> $(basename "$FILE")"
+
+
+        if ! oc apply \
+            -n "$NS" \
+            -f "$FILE"
+        then
+
+            RC=1
+
+        fi
+
+    done
+
+
+    echo
+    echo "Restaurando Routes..."
+    echo
+
+
+    for FILE in "${ROUTE_FILES[@]}"
+    do
+
+        echo " -> $(basename "$FILE")"
+
+
+        if ! oc apply \
+            -n "$NS" \
+            -f "$FILE"
+        then
+
+            RC=1
+
+        fi
+
+    done
+
+
+    echo
+
+
+    if [ "$RC" -eq 0 ]; then
+
+        echo "============================================================"
+        echo " ROLLBACK PRD FINALIZADO"
+        echo "============================================================"
+
+    else
+
+        echo "============================================================"
+        echo " ATENCION"
+        echo "============================================================"
+        echo
+        echo "Alguno de los recursos no pudo restaurarse."
+        echo
+        echo "Los YAML permanecen en:"
+        echo "$BACKUP_DIR"
+
+    fi
+
+
+    return "$RC"
+}
+
+
+# ============================================================
+# PROBAR URLS
+# ============================================================
+
+test_routes()
+{
+    local OUTPUT="$1"
+
+
+    {
+        echo "Fecha: $(date)"
+        echo "Namespace: $NS"
+        echo "Host: $HOST"
+        echo
+
+    } > "$OUTPUT"
+
+
+    for ROUTE in "${ALL_ROUTES[@]}"
+    do
+
+        PATH_URL=$(
+            oc get route "$ROUTE" \
+                -n "$NS" \
+                -o jsonpath='{.spec.path}' \
+                2>/dev/null || true
+        )
+
+
+        [ -n "$PATH_URL" ] || PATH_URL="/"
+
+
+        URL="https://${HOST}${PATH_URL}"
+
+
+        RESULT=$(
+            curl \
+                -k \
+                -sS \
+                -o /dev/null \
+                --connect-timeout 10 \
+                --max-time 20 \
+                -w "HTTP=%{http_code} TIME=%{time_total}" \
+                "$URL" \
+                2>/dev/null \
+                || echo "HTTP=000 ERROR=CURL"
+        )
+
+
+        echo "${ROUTE}|${URL}|${RESULT}" >> "$OUTPUT"
+
+
+        printf "%-32s %-60s %s\n" \
+            "$ROUTE" \
+            "$URL" \
+            "$RESULT"
+
+    done
+}
+
+
+# ============================================================
+# CERTIFICADO REMOTO
+# ============================================================
+
+capture_remote_certificate()
+{
+    local OUTPUT="$1"
+
+    local TMP_REMOTE="${TMP_DIR}/remote-cert.pem"
+
+
+    rm -f "$TMP_REMOTE"
+
+
+    if command -v timeout >/dev/null 2>&1
+    then
+
+        if echo |
+            timeout 15 \
+            openssl s_client \
+                -connect "${HOST}:443" \
+                -servername "$HOST" \
+                2>/dev/null |
+            openssl x509 \
+                > "$TMP_REMOTE" \
+                2>/dev/null
+        then
+
+            openssl x509 \
+                -in "$TMP_REMOTE" \
+                -noout \
+                -subject \
+                -issuer \
+                -serial \
+                -dates \
+                -fingerprint \
+                -sha256 \
+                > "$OUTPUT"
+
+            return 0
+
+        fi
+
+    fi
+
+
+    echo "No fue posible consultar certificado remoto." \
+        > "$OUTPUT"
+
+    return 0
+}
+
+
+# ============================================================
+# REVISAR CERTIFICADO DENTRO DE PODS
+# ============================================================
+
+check_pod_certificates()
+{
+    local OUTPUT="$1"
+    local COMPARE_NEW="$2"
+
+
+    > "$OUTPUT"
+
+
+    echo
+    echo "============================================================"
+    echo " CERTIFICADOS DENTRO DE PODS"
+    echo "============================================================"
+    echo
+
+
+    for SECRET in "${SECRETS_UPDATE[@]}"
+    do
+
+        echo "Secret: $SECRET" | tee -a "$OUTPUT"
+
+
+        MOUNTS=$(
+            oc get pods \
+                -n "$NS" \
+                -o json |
+            python3 -c '
+import json
+import sys
+
+secret_name=sys.argv[1]
+data=json.load(sys.stdin)
+
+
+for pod in data.get("items", []):
+
+    pod_name=pod.get("metadata", {}).get("name", "")
+
+    volumes={}
+
+
+    for volume in pod.get("spec", {}).get("volumes", []):
+
+        secret=volume.get("secret")
+
+        if not secret:
+            continue
+
+        if secret.get("secretName") != secret_name:
+            continue
+
+
+        cert_path="server.crt"
+
+
+        for item in secret.get("items", []) or []:
+
+            if item.get("key") == "server.crt":
+                cert_path=item.get("path", "server.crt")
+
+
+        volumes[volume["name"]]=cert_path
+
+
+    if not volumes:
+        continue
+
+
+    for container in pod.get("spec", {}).get("containers", []):
+
+        cname=container.get("name", "")
+
+
+        for mount in container.get("volumeMounts", []):
+
+            volume_name=mount.get("name")
+
+
+            if volume_name not in volumes:
+                continue
+
+
+            mount_path=mount.get("mountPath", "")
+            sub_path=mount.get("subPath", "")
+            cert_relative=volumes[volume_name]
+
+
+            print(
+                "|".join([
+                    pod_name,
+                    cname,
+                    mount_path,
+                    sub_path,
+                    cert_relative
+                ])
+            )
+' "$SECRET"
+        )
+
+
+        if [ -z "$MOUNTS" ]; then
+
+            echo "  No se encontraron pods montando este Secret." \
+                | tee -a "$OUTPUT"
+
+            echo | tee -a "$OUTPUT"
+
+            continue
+
+        fi
+
+
+        while IFS='|' read -r POD CONTAINER MOUNT_PATH SUB_PATH CERT_REL
+        do
+
+            [ -n "$POD" ] || continue
+
+
+            echo "  Pod       : $POD" | tee -a "$OUTPUT"
+            echo "  Container : $CONTAINER" | tee -a "$OUTPUT"
+            echo "  Mount     : $MOUNT_PATH" | tee -a "$OUTPUT"
+
+
+            CERT_PATH=""
+
+
+            if [ -n "$SUB_PATH" ]; then
+
+                echo "  subPath   : $SUB_PATH" | tee -a "$OUTPUT"
+
+
+                if [ "$SUB_PATH" = "$CERT_REL" ] || \
+                   [ "$SUB_PATH" = "server.crt" ]
+                then
+
+                    CERT_PATH="$MOUNT_PATH"
+
+
+                    echo "  ATENCION: certificado montado usando subPath." \
+                        | tee -a "$OUTPUT"
+
+                    echo "  Este pod puede requerir reinicio para reflejar" \
+                        | tee -a "$OUTPUT"
+
+                    echo "  modificaciones posteriores del Secret." \
+                        | tee -a "$OUTPUT"
+
+                else
+
+                    echo "  El subPath no corresponde a server.crt." \
+                        | tee -a "$OUTPUT"
+
+                    echo | tee -a "$OUTPUT"
+
+                    continue
+
+                fi
+
+            else
+
+                CERT_PATH="${MOUNT_PATH%/}/${CERT_REL}"
+
+            fi
+
+
+            SAFE_POD=$(echo "$POD" | tr '/:' '__')
+            SAFE_CONTAINER=$(echo "$CONTAINER" | tr '/:' '__')
+
+            POD_CERT="${TMP_DIR}/pod-${SAFE_POD}-${SAFE_CONTAINER}.crt"
+
+
+            if oc exec \
+                -n "$NS" \
+                "$POD" \
+                -c "$CONTAINER" \
+                -- cat "$CERT_PATH" \
+                > "$POD_CERT" \
+                2>/dev/null
+            then
+
+                if openssl x509 \
+                    -in "$POD_CERT" \
+                    -noout \
+                    >/dev/null 2>&1
+                then
+
+                    POD_FP=$(fingerprint_cert "$POD_CERT")
+
+
+                    POD_INFO=$(
+                        openssl x509 \
+                            -in "$POD_CERT" \
+                            -noout \
+                            -subject \
+                            -issuer \
+                            -dates |
+                        tr '\n' ' '
+                    )
+
+
+                    echo "  $POD_INFO" | tee -a "$OUTPUT"
+
+                    echo "  Fingerprint: $POD_FP" \
+                        | tee -a "$OUTPUT"
+
+
+                    if [ "$COMPARE_NEW" = "YES" ]; then
+
+                        if [ "$POD_FP" = "$NEW_FP" ]; then
+
+                            echo "  Resultado: CERTIFICADO NUEVO OK" \
+                                | tee -a "$OUTPUT"
+
+                        else
+
+                            echo "  Resultado: TODAVIA TIENE CERTIFICADO ANTERIOR" \
+                                | tee -a "$OUTPUT"
+
+                        fi
+
+                    fi
+
+                else
+
+                    echo "  No fue posible interpretar $CERT_PATH como certificado." \
+                        | tee -a "$OUTPUT"
+
+                fi
+
+            else
+
+                echo "  No fue posible leer $CERT_PATH desde el pod." \
+                    | tee -a "$OUTPUT"
+
+            fi
+
+
+            echo | tee -a "$OUTPUT"
+
+            rm -f "$POD_CERT"
+
+
+        done <<< "$MOUNTS"
+
+    done
+}
+
+
+# ============================================================
+# MOSTRAR INICIO
+# ============================================================
+
+echo
+echo "============================================================"
+echo " ACTUALIZACION CERTIFICADOS PRD"
+echo "============================================================"
+echo
+echo "Cluster   : $CURRENT_SERVER"
+echo "Namespace : $NS"
+echo "Host      : $HOST"
+echo "CRT       : $CERT"
+echo "KEY       : $KEY"
+echo "Backup    : $BACKUP_DIR"
+echo
+
+
+# ============================================================
+# VALIDAR CERTIFICADOS LOCALES
+# ============================================================
+
+[ -f "$CERT" ] || die "No existe $CERT"
+[ -f "$KEY" ] || die "No existe $KEY"
+
+
+chmod 600 "$KEY"
+
+
+echo "Validando server.crt..."
+
+
+openssl x509 \
+    -in "$CERT" \
+    -noout \
+    >/dev/null 2>&1 \
+    || die "server.crt no contiene certificado valido."
+
+
+if ! openssl x509 \
+    -in "$CERT" \
+    -checkend 0 \
+    -noout \
+    >/dev/null 2>&1
+then
+
+    die "server.crt esta vencido."
+
+fi
+
+
+echo "Validando server.key..."
+
+
+openssl pkey \
+    -in "$KEY" \
+    -passin pass: \
+    -noout \
+    >/dev/null 2>&1 \
+    || die "server.key no es valido o esta protegido con contraseña."
+
+
+# ============================================================
+# CONTEXTO
+# ============================================================
+
+{
+    echo "Fecha:"
+    date
+
+    echo
+    echo "Usuario:"
+    echo "$CURRENT_USER"
+
+    echo
+    echo "Servidor:"
+    echo "$CURRENT_SERVER"
+
+    echo
+    echo "Contexto:"
+    echo "$CURRENT_CONTEXT"
+
+    echo
+    echo "Namespace:"
+    echo "$NS"
+
+    echo
+    echo "Host:"
+    echo "$HOST"
+
+} > "${INFO_DIR}/contexto.txt"
+
+
+chmod 600 "${INFO_DIR}/contexto.txt"
+
+
+# ============================================================
+# EXTRAER CERTIFICADOS DE SERVER.CRT
+# ============================================================
+
+echo
+echo "Analizando contenido de server.crt..."
+
+
+rm -f "${TMP_DIR}"/new-cert-*.pem
+
+
+awk -v dir="$TMP_DIR" '
+/-----BEGIN CERTIFICATE-----/ {
+    n++
+    file=sprintf("%s/new-cert-%02d.pem", dir, n)
+    in_cert=1
+}
+
+in_cert {
+    print > file
+}
+
+/-----END CERTIFICATE-----/ {
+    close(file)
+    in_cert=0
+}
+' "$CERT"
+
+
+shopt -s nullglob
+
+CERT_PARTS=("${TMP_DIR}"/new-cert-*.pem)
+
+CERT_COUNT=${#CERT_PARTS[@]}
+
+
+[ "$CERT_COUNT" -gt 0 ] \
+    || die "No fue posible extraer certificados de server.crt"
+
+
+echo "Certificados encontrados: $CERT_COUNT"
+
+
+# ============================================================
+# VALIDAR CRT VS KEY
+# ============================================================
+
+KEY_HASH=$(
+    openssl pkey \
+        -in "$KEY" \
+        -passin pass: \
+        -pubout \
+        -outform DER \
+        2>/dev/null |
+    sha256sum |
+    awk '{print $1}'
+)
+
+
+LEAF_CERT=""
+LEAF_MATCHES=0
+
+
+for PART in "${CERT_PARTS[@]}"
+do
+
+    PART_HASH=$(
+        openssl x509 \
+            -in "$PART" \
+            -pubkey \
+            -noout \
+            2>/dev/null |
+        openssl pkey \
+            -pubin \
+            -outform DER \
+            2>/dev/null |
+        sha256sum |
+        awk '{print $1}'
+    )
+
+
+    if [ "$PART_HASH" = "$KEY_HASH" ]; then
+
+        if openssl x509 \
+            -in "$PART" \
+            -checkhost "$HOST" \
+            -noout \
+            >/dev/null 2>&1
+        then
+
+            LEAF_CERT="$PART"
+
+            LEAF_MATCHES=$((LEAF_MATCHES + 1))
+
+        fi
+
+    fi
+
+done
+
+
+[ "$LEAF_MATCHES" -eq 1 ] \
+    || die "El certificado/llave no corresponden de forma unica al host $HOST"
+
+
+NEW_FP=$(fingerprint_cert "$LEAF_CERT")
+
+
+echo
+echo "============================================================"
+echo " CERTIFICADO NUEVO PRD"
+echo "============================================================"
+echo
+
+
+openssl x509 \
+    -in "$LEAF_CERT" \
+    -noout \
+    -subject \
+    -issuer \
+    -serial \
+    -dates \
+    -fingerprint \
+    -sha256 \
+    -ext subjectAltName
+
+
+echo
+echo "server.crt <-> server.key: OK"
+echo "$HOST: OK"
+
+
+openssl x509 \
+    -in "$LEAF_CERT" \
+    -noout \
+    -subject \
+    -issuer \
+    -serial \
+    -dates \
+    -fingerprint \
+    -sha256 \
+    > "${INFO_DIR}/certificado-nuevo.txt"
+
+
+# ============================================================
+# CA / CADENA
+# ============================================================
+
+NEW_CA_CHAIN="${INFO_DIR}/ca-extraida-server-crt.pem"
+
+rm -f "$NEW_CA_CHAIN"
+
+CHAIN_COUNT=0
+
+
+for PART in "${CERT_PARTS[@]}"
+do
+
+    if [ "$PART" != "$LEAF_CERT" ]; then
+
+        cat "$PART" >> "$NEW_CA_CHAIN"
+        echo >> "$NEW_CA_CHAIN"
+
+        CHAIN_COUNT=$((CHAIN_COUNT + 1))
+
+    fi
+
+done
+
+
+echo
+echo "Certificados adicionales encontrados: $CHAIN_COUNT"
+
+
+CA_MODE=""
+
+
+if [ -n "$CA_FILE" ]; then
+
+    [ -f "$CA_FILE" ] \
+        || die "No existe CA_FILE: $CA_FILE"
+
+    cp "$CA_FILE" "$NEW_CA_CHAIN"
+
+    chmod 600 "$NEW_CA_CHAIN"
+
+    CA_MODE="FILE"
+
+    echo "CA tomada de: $CA_FILE"
+
+
+elif [ "$CHAIN_COUNT" -gt 0 ]; then
+
+    chmod 600 "$NEW_CA_CHAIN"
+
+    CA_MODE="BUNDLE"
+
+    echo "CA/cadena obtenida desde server.crt."
+
+
+else
+
+    rm -f "$NEW_CA_CHAIN"
+
+    CA_MODE="CURRENT"
+
+    echo
+    echo "server.crt contiene solamente certificado servidor."
+    echo "Se conservara el caCertificate actual de las Routes."
+
+fi
+
+
+if [ "$CA_MODE" = "BUNDLE" ] || \
+   [ "$CA_MODE" = "FILE" ]
+then
+
+    openssl verify \
+        -partial_chain \
+        -CAfile "$NEW_CA_CHAIN" \
+        "$LEAF_CERT" \
+        >/dev/null 2>&1 \
+        || die "La cadena CA nueva no valida server.crt"
+
+    echo "Cadena CA: OK"
+
+fi
+
+
+# ============================================================
+# TODAS LAS ROUTES DEL HOST
+# ============================================================
+
+echo
+echo "============================================================"
+echo " BUSCANDO ROUTES PRD"
+echo "============================================================"
+echo
+
+
+mapfile -t ALL_ROUTES < <(
+
+    oc get routes \
+        -n "$NS" \
+        -o json |
+    python3 -c '
+import json
+import sys
+
+host=sys.argv[1]
+
+data=json.load(sys.stdin)
+
+for route in data.get("items", []):
+
+    spec=route.get("spec", {})
+
+    if spec.get("host") == host:
+        print(route["metadata"]["name"])
+' "$HOST"
+
+)
+
+
+[ "${#ALL_ROUTES[@]}" -gt 0 ] \
+    || die "No hay Routes para $HOST"
+
+
+# ============================================================
+# ROUTES CON CERTIFICADO PROPIO
+# ============================================================
+
+mapfile -t ROUTES_UPDATE < <(
+
+    oc get routes \
+        -n "$NS" \
+        -o json |
+    python3 -c '
+import json
+import sys
+
+host=sys.argv[1]
+
+data=json.load(sys.stdin)
+
+for route in data.get("items", []):
+
+    spec=route.get("spec", {})
+
+    tls=spec.get("tls") or {}
+
+
+    if spec.get("host") != host:
+        continue
+
+
+    termination=tls.get("termination", "")
+
+    certificate=tls.get("certificate")
+    key=tls.get("key")
+
+
+    if termination in ("edge", "reencrypt") and certificate and key:
+
+        print(route["metadata"]["name"])
+' "$HOST"
+
+)
+
+
+# ============================================================
+# ROUTES QUE NO SE TOCARAN
+# ============================================================
+
+mapfile -t ROUTES_SKIP < <(
+
+    oc get routes \
+        -n "$NS" \
+        -o json |
+    python3 -c '
+import json
+import sys
+
+host=sys.argv[1]
+
+data=json.load(sys.stdin)
+
+
+for route in data.get("items", []):
+
+    spec=route.get("spec", {})
+
+    tls=spec.get("tls") or {}
+
+
+    if spec.get("host") != host:
+        continue
+
+
+    termination=tls.get("termination", "")
+
+    certificate=tls.get("certificate")
+    key=tls.get("key")
+
+
+    if termination not in ("edge", "reencrypt"):
+
+        print(
+            route["metadata"]["name"] +
+            "|termination=" +
+            termination
+        )
+
+        continue
+
+
+    if not certificate or not key:
+
+        print(
+            route["metadata"]["name"] +
+            "|sin certificado/key propio"
+        )
+' "$HOST"
+
+)
+
+
+[ "${#ROUTES_UPDATE[@]}" -gt 0 ] \
+    || die "No hay Routes con certificado propio para actualizar."
+
+
+echo "ROUTES DEL HOST:"
+echo "------------------------------------------------------------"
+
+
+for ROUTE in "${ALL_ROUTES[@]}"
+do
+
+    TERMINATION=$(
+        oc get route "$ROUTE" \
+            -n "$NS" \
+            -o jsonpath='{.spec.tls.termination}' \
+            2>/dev/null || true
+    )
+
+
+    PATH_URL=$(
+        oc get route "$ROUTE" \
+            -n "$NS" \
+            -o jsonpath='{.spec.path}' \
+            2>/dev/null || true
+    )
+
+
+    [ -n "$PATH_URL" ] || PATH_URL="/"
+
+
+    printf "%-32s %-12s https://%s%s\n" \
+        "$ROUTE" \
+        "$TERMINATION" \
+        "$HOST" \
+        "$PATH_URL"
+
+done
+
+
+echo "------------------------------------------------------------"
+
+
+echo
+echo "ROUTES QUE SE ACTUALIZARAN:"
+
+printf "  %s\n" "${ROUTES_UPDATE[@]}"
+
+
+echo
+echo "ROUTES QUE NO SE MODIFICARAN:"
+
+
+if [ "${#ROUTES_SKIP[@]}" -gt 0 ]; then
+
+    printf "  %s\n" "${ROUTES_SKIP[@]}"
+
+else
+
+    echo "  Ninguna"
+
+fi
+
+
+printf "%s\n" "${ROUTES_UPDATE[@]}" \
+    > "${INFO_DIR}/routes-actualizar.txt"
+
+
+printf "%s\n" "${ROUTES_SKIP[@]}" \
+    > "${INFO_DIR}/routes-no-modificar.txt"
+
+
+# ============================================================
+# URLS
+# ============================================================
+
+> "${INFO_DIR}/urls.txt"
+
+
+for ROUTE in "${ALL_ROUTES[@]}"
+do
+
+    PATH_URL=$(
+        oc get route "$ROUTE" \
+            -n "$NS" \
+            -o jsonpath='{.spec.path}' \
+            2>/dev/null || true
+    )
+
+
+    [ -n "$PATH_URL" ] || PATH_URL="/"
+
+
+    echo "$ROUTE | https://${HOST}${PATH_URL}" \
+        >> "${INFO_DIR}/urls.txt"
+
+done
+
+
+# ============================================================
+# BUSCAR SECRETS *-file
+# ============================================================
+
+echo
+echo "============================================================"
+echo " BUSCANDO SECRETS *-file PRD"
+echo "============================================================"
+echo
+
+
+mapfile -t SECRET_CANDIDATES < <(
+
+    oc get secrets \
+        -n "$NS" \
+        -o name |
+    sed 's#^secret/##' |
+    grep -E -- '-file$' || true
+
+)
+
+
+SECRETS_UPDATE=()
+
+
+> "${INFO_DIR}/secrets-omitidos.txt"
+
+
+for SECRET in "${SECRET_CANDIDATES[@]}"
+do
+
+    CRT_DATA=$(
+        oc get secret "$SECRET" \
+            -n "$NS" \
+            -o jsonpath='{.data.server\.crt}' \
+            2>/dev/null || true
+    )
+
+
+    KEY_DATA=$(
+        oc get secret "$SECRET" \
+            -n "$NS" \
+            -o jsonpath='{.data.server\.key}' \
+            2>/dev/null || true
+    )
+
+
+    if [ -z "$CRT_DATA" ]; then
+
+        echo "$SECRET | no tiene server.crt" \
+            >> "${INFO_DIR}/secrets-omitidos.txt"
+
+        continue
+
+    fi
+
+
+    if [ -z "$KEY_DATA" ]; then
+
+        echo "$SECRET | no tiene server.key" \
+            >> "${INFO_DIR}/secrets-omitidos.txt"
+
+        continue
+
+    fi
+
+
+    TEST_CERT="${TMP_DIR}/secret-${SECRET}.crt"
+
+
+    if ! printf "%s" "$CRT_DATA" |
+        base64 -d \
+        > "$TEST_CERT" \
+        2>/dev/null
+    then
+
+        echo "$SECRET | no se pudo decodificar server.crt" \
+            >> "${INFO_DIR}/secrets-omitidos.txt"
+
+        rm -f "$TEST_CERT"
+
+        continue
+
+    fi
+
+
+    if openssl x509 \
+        -in "$TEST_CERT" \
+        -checkhost "$HOST" \
+        -noout \
+        >/dev/null 2>&1
+    then
+
+        SECRETS_UPDATE+=("$SECRET")
+
+    else
+
+        echo "$SECRET | certificado actual no corresponde a $HOST" \
+            >> "${INFO_DIR}/secrets-omitidos.txt"
+
+    fi
+
+
+    rm -f "$TEST_CERT"
+
+done
+
+
+[ "${#SECRETS_UPDATE[@]}" -gt 0 ] \
+    || die "No se encontraron Secrets *-file correspondientes a $HOST"
+
+
+printf "%s\n" "${SECRETS_UPDATE[@]}" \
+    > "${INFO_DIR}/secrets-actualizar.txt"
+
+
+echo "SECRETS QUE SE ACTUALIZARAN:"
+echo "------------------------------------------------------------"
+
+printf "  %s\n" "${SECRETS_UPDATE[@]}"
+
+echo "------------------------------------------------------------"
+
+
+echo
+echo "SECRETS OMITIDOS:"
+echo "------------------------------------------------------------"
+
+
+if [ -s "${INFO_DIR}/secrets-omitidos.txt" ]; then
+
+    cat "${INFO_DIR}/secrets-omitidos.txt"
+
+else
+
+    echo "  Ninguno"
+
+fi
+
+
+echo "------------------------------------------------------------"
+
+
+# ============================================================
+# BACKUP ROUTES
+# ============================================================
+
+echo
+echo "============================================================"
+echo " BACKUP ROUTES PRD"
+echo "============================================================"
+echo
+
+
+for ROUTE in "${ALL_ROUTES[@]}"
+do
+
+    echo "Backup Route: $ROUTE"
+
+
+    oc get route "$ROUTE" \
+        -n "$NS" \
+        -o yaml \
+        > "${RAW_ROUTES}/${ROUTE}.yaml"
+
+
+    chmod 600 "${RAW_ROUTES}/${ROUTE}.yaml"
+
+done
+
+
+for ROUTE in "${ROUTES_UPDATE[@]}"
+do
+
+    backup_restore_yaml \
+        route \
+        "$ROUTE" \
+        "${RESTORE_ROUTES}/${ROUTE}.yaml"
+
+done
+
+
+# ============================================================
+# BACKUP SECRETS
+# ============================================================
+
+echo
+echo "============================================================"
+echo " BACKUP SECRETS PRD"
+echo "============================================================"
+echo
+
+
+for SECRET in "${SECRETS_UPDATE[@]}"
+do
+
+    echo "Backup Secret: $SECRET"
+
+
+    oc get secret "$SECRET" \
+        -n "$NS" \
+        -o yaml \
+        > "${RAW_SECRETS}/${SECRET}.yaml"
+
+
+    chmod 600 "${RAW_SECRETS}/${SECRET}.yaml"
+
+
+    backup_restore_yaml \
+        secret \
+        "$SECRET" \
+        "${RESTORE_SECRETS}/${SECRET}.yaml"
+
+done
+
+
+# ============================================================
+# HASH destinationCACertificate
+# ============================================================
+
+DEST_CA_HASH_FILE="${INFO_DIR}/destination-ca-original.sha256"
+
+> "$DEST_CA_HASH_FILE"
+
+
+for ROUTE in "${ROUTES_UPDATE[@]}"
+do
+
+    DEST_CA=$(
+        oc get route "$ROUTE" \
+            -n "$NS" \
+            -o jsonpath='{.spec.tls.destinationCACertificate}' \
+            2>/dev/null || true
+    )
+
+
+    if [ -n "$DEST_CA" ]; then
+
+        DEST_HASH=$(
+            printf "%s" "$DEST_CA" |
+            sha256sum |
+            awk '{print $1}'
+        )
+
+
+        echo "${ROUTE}|${DEST_HASH}" \
+            >> "$DEST_CA_HASH_FILE"
+
+    else
+
+        echo "${ROUTE}|NONE" \
+            >> "$DEST_CA_HASH_FILE"
+
+    fi
+
+done
+
+
+# ============================================================
+# VALIDAR CA ACTUAL
+# ============================================================
+
+if [ "$CA_MODE" = "CURRENT" ]; then
+
+    echo
+    echo "============================================================"
+    echo " VALIDANDO caCertificate PRD"
+    echo "============================================================"
+    echo
+
+
+    CA_ERRORS=0
+
+
+    for ROUTE in "${ROUTES_UPDATE[@]}"
+    do
+
+        CURRENT_CA=$(
+            oc get route "$ROUTE" \
+                -n "$NS" \
+                -o jsonpath='{.spec.tls.caCertificate}' \
+                2>/dev/null || true
+        )
+
+
+        if [ -z "$CURRENT_CA" ]; then
+
+            echo "ERROR: $ROUTE no tiene caCertificate."
+
+            CA_ERRORS=$((CA_ERRORS + 1))
+
+            continue
+
+        fi
+
+
+        ROUTE_CA="${TMP_DIR}/ca-${ROUTE}.pem"
+
+
+        printf "%s\n" "$CURRENT_CA" \
+            > "$ROUTE_CA"
+
+
+        if openssl verify \
+            -partial_chain \
+            -CAfile "$ROUTE_CA" \
+            "$LEAF_CERT" \
+            >/dev/null 2>&1
+        then
+
+            echo "OK: $ROUTE"
+
+        else
+
+            echo "ERROR: CA de $ROUTE no valida certificado nuevo."
+
+            CA_ERRORS=$((CA_ERRORS + 1))
+
+        fi
+
+    done
+
+
+    if [ "$CA_ERRORS" -gt 0 ]; then
+
+        echo
+        echo "============================================================"
+        echo " NO SE REALIZARA NINGUN CAMBIO EN PRD"
+        echo "============================================================"
+        echo
+        echo "Hay Routes cuya CA actual no valida"
+        echo "el certificado nuevo."
+        echo
+        echo "Backup:"
+        echo "$BACKUP_DIR"
+
+        exit 1
+
+    fi
+
+fi
+
+
+# ============================================================
+# GENERAR RESTORE.SH
+# ============================================================
+
+cat > "${BACKUP_DIR}/RESTORE.sh" <<EOF
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+NS="$NS"
+
+DIR="\$(cd "\$(dirname "\$0")" && pwd)"
+
+ROUTES_DIR="\$DIR/restore/routes"
+SECRETS_DIR="\$DIR/restore/secrets"
+
+
+echo
+echo "============================================================"
+echo " ROLLBACK CERTIFICADOS PRD"
+echo "============================================================"
+echo
+echo "Namespace: \$NS"
+echo "Backup:    \$DIR"
+echo
+
+
+read -r -p "Escribe RESTAURAR-PRD para continuar: " RESP
+
+
+if [ "\$RESP" != "RESTAURAR-PRD" ]; then
+
+    echo "Operacion cancelada."
+
+    exit 0
+
+fi
+
+
+shopt -s nullglob
+
+SECRET_FILES=("\$SECRETS_DIR"/*.yaml)
+ROUTE_FILES=("\$ROUTES_DIR"/*.yaml)
+
+
+echo
+echo "Restaurando Secrets..."
+
+
+for FILE in "\${SECRET_FILES[@]}"
+do
+
+    echo " -> \$(basename "\$FILE")"
+
+    oc apply \
+        -n "\$NS" \
+        -f "\$FILE"
+
+done
+
+
+echo
+echo "Restaurando Routes..."
+
+
+for FILE in "\${ROUTE_FILES[@]}"
+do
+
+    echo " -> \$(basename "\$FILE")"
+
+    oc apply \
+        -n "\$NS" \
+        -f "\$FILE"
+
+done
+
+
+echo
+echo "============================================================"
+echo " ROLLBACK PRD FINALIZADO"
+echo "============================================================"
+EOF
+
+
+chmod 700 "${BACKUP_DIR}/RESTORE.sh"
+
+
+# ============================================================
+# PRUEBAS ANTES
+# ============================================================
+
+echo
+echo "============================================================"
+echo " PRUEBA FUNCIONAL PRD ANTES"
+echo "============================================================"
+echo
+
+
+test_routes "${INFO_DIR}/prueba_ANTES.txt"
+
+
+capture_remote_certificate \
+    "${INFO_DIR}/certificado_ANTES.txt"
+
+
+echo
+echo "CERTIFICADO REMOTO ANTES:"
+echo "------------------------------------------------------------"
+
+cat "${INFO_DIR}/certificado_ANTES.txt"
+
+echo "------------------------------------------------------------"
+
+
+# ============================================================
+# PODS ANTES
+# ============================================================
+
+check_pod_certificates \
+    "${INFO_DIR}/pods_ANTES.txt" \
+    "NO"
+
+
+# ============================================================
+# RESUMEN PRODUCCION
+# ============================================================
+
+echo
+echo
+echo "============================================================"
+echo " ATENCION - CAMBIO EN PRODUCCION"
+echo "============================================================"
+echo
+
+echo "CLUSTER:"
+echo "  $CURRENT_SERVER"
+
+echo
+echo "NAMESPACE:"
+echo "  $NS"
+
+echo
+echo "HOST:"
+echo "  $HOST"
+
+
+echo
+echo "ROUTES QUE SE MODIFICARAN:"
+printf "  %s\n" "${ROUTES_UPDATE[@]}"
+
+
+echo
+echo "ROUTES QUE NO SE MODIFICARAN:"
+
+if [ "${#ROUTES_SKIP[@]}" -gt 0 ]; then
+    printf "  %s\n" "${ROUTES_SKIP[@]}"
+else
+    echo "  Ninguna"
+fi
+
+
+echo
+echo "SECRETS QUE SE MODIFICARAN:"
+printf "  %s\n" "${SECRETS_UPDATE[@]}"
+
+
+echo
+echo "CA MODE:"
+echo "  $CA_MODE"
+
+
+echo
+echo "destinationCACertificate:"
+echo "  NO SE MODIFICARA"
+
+
+echo
+echo "BACKUP:"
+echo "  $BACKUP_DIR"
+
+
+echo
+echo "ROLLBACK:"
+echo "  $BACKUP_DIR/RESTORE.sh"
+
+
+echo
+echo "============================================================"
+echo " HASTA ESTE MOMENTO NO SE HA MODIFICADO PRODUCCION"
+echo "============================================================"
+echo
+
+
+read -r -p "Escribe ACTUALIZAR-PRD para realizar el cambio: " RESP
+
+
+if [ "$RESP" != "ACTUALIZAR-PRD" ]; then
+
+    echo
+    echo "Operacion cancelada."
+    echo
+    echo "NO se modifico ningun Route ni Secret."
+    echo
+    echo "Backup:"
+    echo "$BACKUP_DIR"
+
+    exit 0
+
+fi
+
+
+# ============================================================
+# GENERAR PATCH ROUTES
+# ============================================================
+
+ROUTE_PATCH="${TMP_DIR}/route-patch.json"
+
+
+python3 - \
+    "$LEAF_CERT" \
+    "$KEY" \
+    "$NEW_CA_CHAIN" \
+    "$CA_MODE" \
+    > "$ROUTE_PATCH" <<'PY'
+
+import json
+import sys
+
+
+cert_file=sys.argv[1]
+key_file=sys.argv[2]
+ca_file=sys.argv[3]
+ca_mode=sys.argv[4]
+
+
+with open(cert_file) as f:
+    certificate=f.read()
+
+
+with open(key_file) as f:
+    key=f.read()
+
+
+tls={
+    "certificate": certificate,
+    "key": key
+}
+
+
+if ca_mode in ("BUNDLE", "FILE"):
+
+    with open(ca_file) as f:
+        tls["caCertificate"]=f.read()
+
+
+patch={
+    "spec": {
+        "tls": tls
+    }
+}
+
+
+print(json.dumps(patch))
+PY
+
+
+chmod 600 "$ROUTE_PATCH"
+
+
+# ============================================================
+# GENERAR PATCH SECRETS
+# ============================================================
+
+SECRET_PATCH="${TMP_DIR}/secret-patch.json"
+
+
+python3 - \
+    "$CERT" \
+    "$KEY" \
+    > "$SECRET_PATCH" <<'PY'
+
+import json
+import sys
+import base64
+
+
+cert_file=sys.argv[1]
+key_file=sys.argv[2]
+
+
+with open(cert_file, "rb") as f:
+
+    cert=base64.b64encode(
+        f.read()
+    ).decode("ascii")
+
+
+with open(key_file, "rb") as f:
+
+    key=base64.b64encode(
+        f.read()
+    ).decode("ascii")
+
+
+patch={
+    "data": {
+        "server.crt": cert,
+        "server.key": key
+    }
+}
+
+
+print(json.dumps(patch))
+PY
+
+
+chmod 600 "$SECRET_PATCH"
+
+
+# ============================================================
+# ACTUALIZAR ROUTES
+# ============================================================
+
+echo
+echo "============================================================"
+echo " ACTUALIZANDO ROUTES PRD"
+echo "============================================================"
+echo
+
+
+for ROUTE in "${ROUTES_UPDATE[@]}"
+do
+
+    echo "Actualizando Route: $ROUTE"
+
+
+    if ! oc patch route "$ROUTE" \
+        -n "$NS" \
+        --type=merge \
+        --patch-file="$ROUTE_PATCH"
+    then
+
+        echo
+        echo "ERROR actualizando $ROUTE"
+        echo
+        echo "Ejecutando rollback automatico..."
+
+        restore_everything || true
+
+        exit 1
+
+    fi
+
+done
+
+
+# ============================================================
+# ACTUALIZAR SECRETS
+# ============================================================
+
+echo
+echo "============================================================"
+echo " ACTUALIZANDO SECRETS PRD"
+echo "============================================================"
+echo
+
+
+for SECRET in "${SECRETS_UPDATE[@]}"
+do
+
+    echo "Actualizando Secret: $SECRET"
+
+
+    if ! oc patch secret "$SECRET" \
+        -n "$NS" \
+        --type=merge \
+        --patch-file="$SECRET_PATCH"
+    then
+
+        echo
+        echo "ERROR actualizando $SECRET"
+        echo
+        echo "Ejecutando rollback automatico..."
+
+        restore_everything || true
+
+        exit 1
+
+    fi
+
+done
+
+
+rm -f "$ROUTE_PATCH"
+rm -f "$SECRET_PATCH"
+
+
+# ============================================================
+# VALIDAR ROUTES
+# ============================================================
+
+echo
+echo "============================================================"
+echo " VALIDANDO ROUTES PRD"
+echo "============================================================"
+echo
+
+
+ERRORS=0
+
+
+for ROUTE in "${ROUTES_UPDATE[@]}"
+do
+
+    echo "Route: $ROUTE"
+
+
+    CURRENT_CERT="${TMP_DIR}/route-${ROUTE}.crt"
+
+
+    oc get route "$ROUTE" \
+        -n "$NS" \
+        -o jsonpath='{.spec.tls.certificate}' \
+        > "$CURRENT_CERT"
+
+
+    CURRENT_FP=$(fingerprint_cert "$CURRENT_CERT")
+
+
+    if [ "$CURRENT_FP" = "$NEW_FP" ]; then
+
+        echo "  certificate: OK"
+
+    else
+
+        echo "  certificate: ERROR"
+
+        ERRORS=$((ERRORS + 1))
+
+    fi
+
+
+    OLD_DEST_HASH=$(
+        awk -F'|' \
+            -v route="$ROUTE" \
+            '$1 == route {print $2}' \
+            "$DEST_CA_HASH_FILE"
+    )
+
+
+    CURRENT_DEST_CA=$(
+        oc get route "$ROUTE" \
+            -n "$NS" \
+            -o jsonpath='{.spec.tls.destinationCACertificate}' \
+            2>/dev/null || true
+    )
+
+
+    if [ -n "$CURRENT_DEST_CA" ]; then
+
+        CURRENT_DEST_HASH=$(
+            printf "%s" "$CURRENT_DEST_CA" |
+            sha256sum |
+            awk '{print $1}'
+        )
+
+    else
+
+        CURRENT_DEST_HASH="NONE"
+
+    fi
+
+
+    if [ "$OLD_DEST_HASH" = "$CURRENT_DEST_HASH" ]; then
+
+        echo "  destinationCACertificate: SIN CAMBIOS"
+
+    else
+
+        echo "  destinationCACertificate: ERROR"
+
+        ERRORS=$((ERRORS + 1))
+
+    fi
+
+
+    rm -f "$CURRENT_CERT"
+
+done
+
+
+# ============================================================
+# VALIDAR SECRETS
+# ============================================================
+
+echo
+echo "============================================================"
+echo " VALIDANDO SECRETS PRD"
+echo "============================================================"
+echo
+
+
+for SECRET in "${SECRETS_UPDATE[@]}"
+do
+
+    echo "Secret: $SECRET"
+
+
+    SECRET_CERT="${TMP_DIR}/${SECRET}.crt"
+
+
+    if ! oc get secret "$SECRET" \
+        -n "$NS" \
+        -o jsonpath='{.data.server\.crt}' |
+        base64 -d \
+        > "$SECRET_CERT"
+    then
+
+        echo "  server.crt: ERROR"
+
+        ERRORS=$((ERRORS + 1))
+
+        continue
+
+    fi
+
+
+    SECRET_FP=$(fingerprint_cert "$SECRET_CERT")
+
+
+    if [ "$SECRET_FP" = "$NEW_FP" ]; then
+
+        echo "  server.crt: OK"
+
+    else
+
+        echo "  server.crt: ERROR"
+
+        ERRORS=$((ERRORS + 1))
+
+    fi
+
+
+    SECRET_KEY_HASH=$(
+        oc get secret "$SECRET" \
+            -n "$NS" \
+            -o jsonpath='{.data.server\.key}' |
+        base64 -d |
+        openssl pkey \
+            -passin pass: \
+            -pubout \
+            -outform DER \
+            2>/dev/null |
+        sha256sum |
+        awk '{print $1}'
+    )
+
+
+    if [ "$SECRET_KEY_HASH" = "$KEY_HASH" ]; then
+
+        echo "  server.key: OK"
+
+    else
+
+        echo "  server.key: ERROR"
+
+        ERRORS=$((ERRORS + 1))
+
+    fi
+
+
+    rm -f "$SECRET_CERT"
+
+done
+
+
+# ============================================================
+# SI ALGO QUEDO MAL EN API -> ROLLBACK
+# ============================================================
+
+if [ "$ERRORS" -gt 0 ]; then
+
+    echo
+    echo "============================================================"
+    echo " SE DETECTARON $ERRORS ERRORES"
+    echo "============================================================"
+    echo
+    echo "Ejecutando rollback automatico PRD..."
+
+    restore_everything || true
+
+    exit 1
+
+fi
+
+
+# ============================================================
+# ESPERAR PROPAGACION DEL SECRET
+# ============================================================
+
+echo
+echo "============================================================"
+echo " ESPERANDO PROPAGACION"
+echo "============================================================"
+echo
+echo "Routes y Secrets ya fueron validados en OpenShift."
+echo
+echo "Esperando 60 segundos antes de revisar los pods..."
+echo
+
+
+sleep 60
+
+
+# ============================================================
+# PODS DESPUES
+# ============================================================
+
+check_pod_certificates \
+    "${INFO_DIR}/pods_DESPUES.txt" \
+    "YES"
+
+
+# ============================================================
+# PRUEBAS DESPUES
+# ============================================================
+
+echo
+echo "============================================================"
+echo " PRUEBA FUNCIONAL PRD DESPUES"
+echo "============================================================"
+echo
+
+
+test_routes "${INFO_DIR}/prueba_DESPUES.txt"
+
+
+capture_remote_certificate \
+    "${INFO_DIR}/certificado_DESPUES.txt"
+
+
+echo
+echo "CERTIFICADO REMOTO DESPUES:"
+echo "------------------------------------------------------------"
+
+cat "${INFO_DIR}/certificado_DESPUES.txt"
+
+echo "------------------------------------------------------------"
+
+
+# ============================================================
+# COMPARAR HTTP
+# ============================================================
+
+diff -u \
+    "${INFO_DIR}/prueba_ANTES.txt" \
+    "${INFO_DIR}/prueba_DESPUES.txt" \
+    > "${INFO_DIR}/diferencias_HTTP.txt" \
+    || true
+
+
+# ============================================================
+# CERTIFICADO EXTERNO
+# ============================================================
+
+REMOTE_AFTER="${TMP_DIR}/remote-after.pem"
+
+
+if command -v timeout >/dev/null 2>&1
+then
+
+    if echo |
+        timeout 15 \
+        openssl s_client \
+            -connect "${HOST}:443" \
+            -servername "$HOST" \
+            2>/dev/null |
+        openssl x509 \
+            > "$REMOTE_AFTER" \
+            2>/dev/null
+    then
+
+        REMOTE_FP=$(fingerprint_cert "$REMOTE_AFTER")
+
+
+        if [ "$REMOTE_FP" = "$NEW_FP" ]; then
+
+            echo
+            echo "============================================================"
+            echo " CERTIFICADO EXTERNO PRD: OK"
+            echo "============================================================"
+            echo
+            echo "$HOST presenta el certificado NUEVO."
+
+        else
+
+            echo
+            echo "============================================================"
+            echo " ADVERTENCIA CERTIFICADO EXTERNO"
+            echo "============================================================"
+            echo
+            echo "$HOST todavia presenta un certificado diferente."
+            echo
+            echo "Puede deberse a:"
+            echo "  - propagacion"
+            echo "  - balanceador"
+            echo "  - proxy"
+            echo "  - certificado compartido por hostname"
+            echo "  - Ingress Controller"
+            echo
+            echo "NO se ejecutara rollback automatico por este punto."
+
+        fi
+
+    fi
+
+fi
+
+
+# ============================================================
+# LIMPIEZA TEMPORAL
+# ============================================================
+
+rm -rf "$TMP_DIR"
+
+
+# ============================================================
+# RESULTADO FINAL
+# ============================================================
+
+echo
+echo
+echo "============================================================"
+echo " ACTUALIZACION PRD FINALIZADA"
+echo "============================================================"
+echo
+
+
+echo "Cluster:"
+echo "  $CURRENT_SERVER"
+
+
+echo
+echo "Namespace:"
+echo "  $NS"
+
+
+echo
+echo "Host:"
+echo "  $HOST"
+
+
+echo
+echo "Routes actualizadas:"
+echo "  ${#ROUTES_UPDATE[@]}"
+
+
+echo
+echo "Routes NO modificadas:"
+echo "  ${#ROUTES_SKIP[@]}"
+
+
+echo
+echo "Secrets actualizados:"
+echo "  ${#SECRETS_UPDATE[@]}"
+
+
+echo
+echo "Backup:"
+echo "  $BACKUP_DIR"
+
+
+echo
+echo "Rollback:"
+echo "  $BACKUP_DIR/RESTORE.sh"
+
+
+echo
+echo "URLs:"
+echo "  ${INFO_DIR}/urls.txt"
+
+
+echo
+echo "Prueba ANTES:"
+echo "  ${INFO_DIR}/prueba_ANTES.txt"
+
+
+echo
+echo "Prueba DESPUES:"
+echo "  ${INFO_DIR}/prueba_DESPUES.txt"
+
+
+echo
+echo "Pods ANTES:"
+echo "  ${INFO_DIR}/pods_ANTES.txt"
+
+
+echo
+echo "Pods DESPUES:"
+echo "  ${INFO_DIR}/pods_DESPUES.txt"
+
+
+echo
+echo "Certificado remoto ANTES:"
+echo "  ${INFO_DIR}/certificado_ANTES.txt"
+
+
+echo
+echo "Certificado remoto DESPUES:"
+echo "  ${INFO_DIR}/certificado_DESPUES.txt"
+
+
+echo
+echo "Diferencias HTTP:"
+echo "  ${INFO_DIR}/diferencias_HTTP.txt"
+
+
+echo
+echo "============================================================"
+echo " IMPORTANTE"
+echo "============================================================"
+echo
+echo "Conserva el backup hasta finalizar todas"
+echo "las validaciones funcionales de produccion."
+echo
+
+SCRIPT_END
+
+chmod +x actualizar_certificados_prd.sh
+
 chmod +x actualizar_certificados.sh
 
 echo
