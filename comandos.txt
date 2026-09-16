@@ -21,3 +21,28 @@ rpm -q --changelog openssh-server | grep -i -B2 -A3 CVE-2024-6387
 sshd -T | grep -i '^macs'
 
 update-crypto-policies --show
+
+**********************************
+
+oc get mc 99-master-ssh -o yaml
+
+oc get mc 99-worker-ssh -o yaml
+
+
+oc debug node/worker1.saox1p0mocpb01.prd-latam-assurance.ocpdomain
+
+chroot /host
+
+rpm -q openssh
+rpm -q openssh-server
+
+sshd -T | grep -i '^macs'
+
+sshd -T | egrep -i '^(macs|ciphers|kexalgorithms|logingracetime)'
+
+update-crypto-policies --show
+
+grep -RniE 'MACs|Ciphers|KexAlgorithms|LoginGraceTime' \
+/etc/ssh/sshd_config /etc/ssh/sshd_config.d 2>/dev/null
+
+rpm -q openssh-server
