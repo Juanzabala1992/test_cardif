@@ -1,0 +1,23 @@
+comandos
+
+oc get clusterversion
+oc adm upgrade
+oc get nodes -o wide
+oc get mcp
+oc get co machine-config
+oc get mc | egrep -i 'ssh|crypto|fips'
+
+
+oc debug node/<nombre-del-worker>
+chroot /host
+
+cat /etc/os-release
+
+rpm -q openssh
+rpm -q openssh-server
+
+rpm -q --changelog openssh-server | grep -i -B2 -A3 CVE-2024-6387
+
+sshd -T | grep -i '^macs'
+
+update-crypto-policies --show
