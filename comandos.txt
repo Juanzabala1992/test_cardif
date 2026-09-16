@@ -46,3 +46,8 @@ grep -RniE 'MACs|Ciphers|KexAlgorithms|LoginGraceTime' \
 /etc/ssh/sshd_config /etc/ssh/sshd_config.d 2>/dev/null
 
 rpm -q openssh-server
+
+******************************
+
+sudo rpm -q --changelog openssh-server | \
+grep -i -B5 -A5 'CVE-2024-6387'
