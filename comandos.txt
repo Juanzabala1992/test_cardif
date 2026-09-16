@@ -47,6 +47,18 @@ grep -RniE 'MACs|Ciphers|KexAlgorithms|LoginGraceTime' \
 
 rpm -q openssh-server
 
+
+
+***********************************
+
+
+oc get mcp worker-dev -o yaml | \
+sed -n '/machineConfigSelector:/,/nodeSelector:/p'
+
+
+oc get mcp worker-uat -o yaml | \
+sed -n '/machineConfigSelector:/,/nodeSelector:/p'
+
 ******************************
 
 sudo rpm -q --changelog openssh-server | \
