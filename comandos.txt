@@ -63,3 +63,80 @@ sed -n '/machineConfigSelector:/,/nodeSelector:/p'
 
 sudo rpm -q --changelog openssh-server | \
 grep -i -B5 -A5 'CVE-2024-6387'
+
+
+*******************************
+
+
+
+cat > /tmp/99-worker-dev-disable-sha1-macs.yaml <<'EOF'
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: 99-worker-dev-disable-sha1-macs
+  labels:
+    machineconfiguration.openshift.io/role: worker-dev
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+        - path: /etc/ssh/sshd_config.d/49-disable-sha1-macs.conf
+          mode: 0644
+          overwrite: true
+          contents:
+            source: data:text/plain;charset=utf-8;base64,TUFDcyBobWFjLXNoYTItMjU2LWV0bUBvcGVuc3NoLmNvbSx1bWFjLTEyOC1ldG1Ab3BlbnNzaC5jb20saG1hYy1zaGEyLTUxMi1ldG1Ab3BlbnNzaC5jb20saG1hYy1zaGEyLTI1Nix1bWFjLTEyOEBvcGVuc3NoLmNvbSxobWFjLXNoYTItNTEyCg==
+EOF
+
+
+
+
+
+oc apply --dry-run=server \
+-f /tmp/99-worker-dev-disable-sha1-macs.yaml
+
+
+oc get mc 99-worker-dev-disable-sha1-macs \
+-o jsonpath='{.metadata.labels}{"\n"}'
+
+
+
+oc get mcp worker-dev
+oc get nodes -l machineconfiguration.openshift.io/role=worker-dev -o wide
+
+
+oc get mcp worker-dev \
+-o jsonpath='{.status.configuration.name}{"\n"}'
+
+oc apply -f /tmp/99-worker-dev-disable-sha1-macs.yaml
+
+
+watch -n 5 'oc get mcp worker-dev'
+
+*********************************
+
+actualizacion del nodo
+
+
+oc get nodes -l node-role.kubernetes.io/worker-dev -o wide
+
+NODE=<nombre-completo-del-worker-dev>
+
+NODE=<nombre-completo-del-worker-dev>
+
+oc get pods -A --field-selector spec.nodeName=$NODE -o wide
+
+sshd -T | grep -i '^macs'
+
+sshd -T | grep -i '^macs'
+
+ls -l /etc/ssh/sshd_config.d/
+
+cat > /etc/ssh/sshd_config.d/49-disable-sha1-macs.conf <<'EOF'
+MACs hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha2-256,umac-128@openssh.com,hmac-sha2-512
+EOF
+
+cat /etc/ssh/sshd_config.d/49-disable-sha1-macs.conf
+
+sshd -t
