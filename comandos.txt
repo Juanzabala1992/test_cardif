@@ -172,8 +172,21 @@ systemctl is-active sshd
 systemctl --no-pager status sshd
 
 *************************************************
+Pruebas
+
 
 ssh -vv \
 -o MACs=hmac-sha1 \
 -o ConnectTimeout=5 \
+core@workerdev1.saox1p0mocpb01.prd-latam-assurance.ocpdomain
+
+
+ssh -vv \
+-o MACs=hmac-sha1-etm@openssh.com \
+-o ConnectTimeout=5 \
+core@workerdev1.saox1p0mocpb01.prd-latam-assurance.ocpdomain
+
+
+ssh -vv \
+-o MACs=hmac-sha2-256-etm@openssh.com \
 core@workerdev1.saox1p0mocpb01.prd-latam-assurance.ocpdomain
