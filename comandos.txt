@@ -174,16 +174,31 @@ systemctl --no-pager status sshd
 *************************************************
 Pruebas
 
+deberia fallar:
 
 ssh -vv \
+-i /ruta/completa/keys/ssh/production \
+-o IdentitiesOnly=yes \
 -o MACs=hmac-sha1 \
 -o ConnectTimeout=5 \
 core@workerdev1.saox1p0mocpb01.prd-latam-assurance.ocpdomain
 
 
+tambien falla:
+
 ssh -vv \
+-i /ruta/completa/keys/ssh/production \
+-o IdentitiesOnly=yes \
 -o MACs=hmac-sha1-etm@openssh.com \
 -o ConnectTimeout=5 \
+core@workerdev1.saox1p0mocpb01.prd-latam-assurance.ocpdomain
+
+si deberia funcionar:
+
+ssh -vv \
+-i /ruta/completa/keys/ssh/production \
+-o IdentitiesOnly=yes \
+-o MACs=hmac-sha2-256-etm@openssh.com \
 core@workerdev1.saox1p0mocpb01.prd-latam-assurance.ocpdomain
 
 
