@@ -170,3 +170,10 @@ systemctl reload sshd
 systemctl is-active sshd
 
 systemctl --no-pager status sshd
+
+*************************************************
+
+ssh -vv \
+-o MACs=hmac-sha1 \
+-o ConnectTimeout=5 \
+core@workerdev1.saox1p0mocpb01.prd-latam-assurance.ocpdomain
