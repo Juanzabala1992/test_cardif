@@ -208,4 +208,30 @@ ssh -vvv \
 -o MACs=hmac-sha2-256-etm@openssh.com \
 core@$HOST
 
+#############################################
 
+segundo caso
+
+
+chroot /host rpm -q \
+--qf '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n' \
+openssh-server
+
+oc debug node/$NODE -- \
+chroot /host cat /etc/os-release
+
+oc debug node/$NODE -- \
+chroot /host rpm-ostree status
+
+
+oc debug node/$NODE -- \
+chroot /host bash -c \
+"rpm -q --changelog openssh-server | grep -i -B5 -A5 'CVE-2024-6387'"
+
+oc debug node/$NODE -- \
+chroot /host bash -c \
+"rpm -q --changelog openssh-server | grep -i -B5 -A5 'regreSSHion'"
+
+oc debug node/$NODE -- \
+chroot /host bash -c \
+"sshd -T | grep -i '^logingracetime'"
