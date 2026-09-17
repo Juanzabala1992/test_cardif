@@ -140,3 +140,33 @@ EOF
 cat /etc/ssh/sshd_config.d/49-disable-sha1-macs.conf
 
 sshd -t
+
++++++++++++++++++++++++++++++++++++++
+actualizacion por nodo
+
+chroot /host
+hostname
+sshd -T | grep -i '^macs'
+ls -l /etc/ssh/sshd_config.d/
+
+cat > /etc/ssh/sshd_config.d/49-disable-sha1-macs.conf <<'EOF'
+MACs hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha2-256,umac-128@openssh.com,hmac-sha2-512
+EOF
+
+# comprobar el archivo
+cat /etc/ssh/sshd_config.d/49-disable-sha1-macs.conf
+
+sshd -t
+
+en caso de error borrar
+rm -f /etc/ssh/sshd_config.d/49-disable-sha1-macs.conf
+
+sshd -T | grep -i '^macs'
+
+sshd -T | grep -oE 'hmac-sha1[^, ]*'
+
+systemctl reload sshd
+
+systemctl is-active sshd
+
+systemctl --no-pager status sshd
