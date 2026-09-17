@@ -176,22 +176,26 @@ Pruebas
 
 deberia fallar:
 
-ssh -vv \
--i /ruta/completa/keys/ssh/production \
+ssh -vvv \
+-i "$KEY" \
 -o IdentitiesOnly=yes \
+-o ControlMaster=no \
+-o ControlPath=none \
+-o Ciphers=aes256-ctr \
 -o MACs=hmac-sha1 \
--o ConnectTimeout=5 \
-core@workerdev1.saox1p0mocpb01.prd-latam-assurance.ocpdomain
+core@$HOST
 
 
 tambien falla:
 
-ssh -vv \
--i /ruta/completa/keys/ssh/production \
+ssh -vvv \
+-i "$KEY" \
 -o IdentitiesOnly=yes \
+-o ControlMaster=no \
+-o ControlPath=none \
+-o Ciphers=aes256-ctr \
 -o MACs=hmac-sha1-etm@openssh.com \
--o ConnectTimeout=5 \
-core@workerdev1.saox1p0mocpb01.prd-latam-assurance.ocpdomain
+core@$HOST
 
 si deberia funcionar:
 
