@@ -65,3 +65,18 @@ oc get pods -n openshift-logging -o wide | egrep "collector|fluentd|vector"
 oc get clusterlogforwarder -A
 
 oc get clusterlogforwarder -A
+
+
+**********************************************
+
+oc get pods -A -o wide | egrep -i "kibana|elasticsearch|elastic|fluentd|fluent-bit|vector|filebeat|logstash|collector|loki|promtail|splunk"
+
+oc get ds -A | egrep -i "fluent|vector|filebeat|collector|promtail|splunk|elastic"
+
+oc get route -A | egrep -i "kibana|elastic|logging"
+
+oc get csv -A | egrep -i "logging|elasticsearch|loki|elastic"
+
+oc get pods -A -o wide | grep workeruat4
+
+oc get pods -A -o wide | grep workeruat5
