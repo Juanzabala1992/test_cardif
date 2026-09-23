@@ -1,0 +1,25 @@
+oc get pods | grep ms-products
+
+oc logs ms-products-main-5889d74b5-md2xx --since=30m
+
+oc logs ms-products-main-5889d74b5-szv47 --since=30m
+
+oc get deployment ms-products-main -o yaml | egrep -i "log|logging|elastic|kibana|file|path"
+
+oc set env deployment/ms-products-main --list
+
+oc rsh ms-products-main-5889d74b5-md2xx
+
+find / -type f \( -name "*.log" -o -name "*log*" \) 2>/dev/null | head -50
+
+ls -lah /var/log 2>/dev/null
+ls -lah /app/logs 2>/dev/null
+ls -lah /opt/app-root/src/logs 2>/dev/null
+
+oc describe pod ms-products-main-5889d74b5-md2xx
+
+oc logs ms-products-main-5889d74b5-md2xx --previous
+
+oc get pods -o wide | grep ms-products
+
+oc get pods -n openshift-logging -o wide | egrep "collector|fluentd|vector"
