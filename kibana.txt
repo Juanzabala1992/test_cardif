@@ -41,6 +41,27 @@ oc get clusterlogforwarder -n openshift-logging -o yaml
 
 oc get pods -n col-c-uat-transversal -o wide | grep ms-products-main
 
+*******************************************************
+
+
+oc get pods -n col-c-uat-transversal -o wide | grep ms-products-main
+
 oc get pods -n openshift-logging -o wide | egrep "collector|fluentd|vector"
+
+oc logs -n openshift-logging <collector-pod> \
+  --all-containers=true \
+  --since=30m | egrep -i "error|warn|failed|retry|timeout|refused|drop"
+
+oc get pods -n openshift-logging -o wide | egrep "collector|fluentd|vector"
+
+oc get clusterlogforwarder -A
+
+oc get clusterlogforwarder -n openshift-logging -o yaml
+
+oc get pods -n col-c-uat-transversal -o wide | grep ms-products-main
+
+oc get pods -n openshift-logging -o wide | egrep "collector|fluentd|vector"
+
+oc get clusterlogforwarder -A
 
 oc get clusterlogforwarder -A
