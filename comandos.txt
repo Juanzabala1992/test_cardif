@@ -245,6 +245,20 @@ oc debug node/$NODE -- \
 chroot /host bash -c \
 "rpm -q --changelog openssh-server | grep -i -B5 -A5 'regreSSHion'"
 
+
+
+***********************************
+
+oc get route -A \
+-o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,HOST:.spec.host,TLS:.spec.tls.termination'
+
+
+oc get route -A -o json | jq -r '
+.items[]
+| select(.spec.tls.caCertificate != null)
+| [.metadata.namespace,.metadata.name,.spec.host,.spec.tls.termination]
+| @tsv'
+
 oc debug node/$NODE -- \
 chroot /host bash -c \
 "sshd -T | grep -i '^logingracetime'"
