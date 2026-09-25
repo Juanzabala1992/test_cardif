@@ -335,3 +335,12 @@ curl -vk \
 curl -vk \
   --resolve sunsystem-connector-cloud-pe-service-assurance.dev.echonet:443:<VIP_F5> \
   https://sunsystem-connector-cloud-pe-service-assurance.dev.echonet/
+
+
+
+************************
+
+curl -vk \
+  --connect-timeout 5 \
+  --resolve sunsystem-connector-cloud-pe-service-assurance.dev.echonet:443:127.0.0.1 \
+  https://sunsystem-connector-cloud-pe-service-assurance.dev.echonet/
