@@ -318,3 +318,20 @@ oc describe route ms-sunsystem-connector-cloud \
 
 
 curl -vk https://sunsystem-connector-cloud-pe-service-assurance.dev.echonet
+
+
+********************************************
+
+
+oc get pods -n openshift-ingress -o wide | grep router-default
+
+
+curl -vk \
+  --resolve sunsystem-connector-cloud-pe-service-assurance.dev.echonet:443:10.171.189.31 \
+  https://sunsystem-connector-cloud-pe-service-assurance.dev.echonet/
+
+
+
+curl -vk \
+  --resolve sunsystem-connector-cloud-pe-service-assurance.dev.echonet:443:<VIP_F5> \
+  https://sunsystem-connector-cloud-pe-service-assurance.dev.echonet/
