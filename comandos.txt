@@ -186,6 +186,19 @@ ssh -vvv \
 core@$HOST
 
 
+
+////////
+
+oc create route edge sunsystem-connector-cloud \
+  --service=ms-sunsystem-connector-cloud \
+  --hostname=sunsystem-connector-cloud-pe-service-assurance.dev.echonet \
+  --port=8080-tcp \
+  --cert=sunsystem-connector-cloud-pe-service-assurance.dev.echonet_3.crt \
+  --key=sunsystem-connector-cloud-pe-service-assurance.dev.echonet_1.key \
+  --insecure-policy=Redirect \
+  -n per-c-dev-sunsystemconnectorcloud
+///////
+
 tambien falla:
 
 ssh -vvv \
