@@ -280,3 +280,41 @@ oc create route edge ms-sunsystem-connector-cloud \
 oc debug node/$NODE -- \
 chroot /host bash -c \
 "sshd -T | grep -i '^logingracetime'"
+
+}
+
+
+*************************
+
+
+
+oc patch route ms-sunsystem-connector-cloud \
+  -n per-c-dev-sunsystemconnectorcloud \
+  --type=merge \
+  -p '{
+    "spec":{
+      "port":{
+        "targetPort":"8443-tcp"
+      },
+      "tls":{
+        "termination":"passthrough",
+        "insecureEdgeTerminationPolicy":"None",
+        "certificate":null,
+        "key":null,
+        "caCertificate":null,
+        "destinationCACertificate":null
+      }
+    }
+  }'
+
+
+
+oc get route ms-sunsystem-connector-cloud \
+-n per-c-dev-sunsystemconnectorcloud
+
+
+oc describe route ms-sunsystem-connector-cloud \
+-n per-c-dev-sunsystemconnectorcloud
+
+
+curl -vk https://sunsystem-connector-cloud-pe-service-assurance.dev.echonet
