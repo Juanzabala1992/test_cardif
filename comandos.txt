@@ -254,6 +254,24 @@ oc get route -A \
 
 
 oc get route -A -o json | jq -r '
+
+
+
+****************************************************
+
+
+oc create route edge ms-sunsystem-connector-cloud \
+  --service=ms-sunsystem-connector-cloud \
+  --hostname=sunsystem-connector-cloud-pe-service-assurance.dev.echonet \
+  --port=8080-tcp \
+  --cert=sunsystem-connector-cloud-pe-service-assurance.dev.echonet.crt \
+  --key=sunsystem-connector-cloud-pe-service-assurance.dev.echonet.key \
+  --ca-cert=ca.crt \
+  --insecure-policy=Redirect \
+  -n per-c-dev-sunsystemconnectorcloud
+
+
+
 .items[]
 | select(.spec.tls.caCertificate != null)
 | [.metadata.namespace,.metadata.name,.spec.host,.spec.tls.termination]
