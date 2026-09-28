@@ -344,3 +344,9 @@ curl -vk \
   --connect-timeout 5 \
   --resolve sunsystem-connector-cloud-pe-service-assurance.dev.echonet:443:127.0.0.1 \
   https://sunsystem-connector-cloud-pe-service-assurance.dev.echonet/
+
+
+
+sudo test -e /etc/ssh/sshd_config.d/49-disable-sha1-macs.conf \
+&& echo "TODAVIA EXISTE" \
+|| echo "ARCHIVO ELIMINADO"
