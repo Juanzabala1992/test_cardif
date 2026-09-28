@@ -70,3 +70,13 @@ oc adm uncordon 10.110.12.13
 
 No ejecutes todavía reload, replace ni reboot --hard: reload borra los datos locales y reinstala el nodo, mientras replace elimina el worker y crea otro. IBM recomienda reload o reemplazo cuando un worker sigue Critical/NotReady, pero son pasos posteriores si el reinicio normal no lo recupera. cloud.ibm.com
 Primero ejecuta ibmcloud oc worker ls y, si quieres, envíame la salida antes del reboot para confirmar exactamente cuál WORKER_ID debes usar.
+
+**************************************
+
+ibmcloud oc worker ls -c cmc4hrkz6o18lcrccggq
+
+ibmcloud oc worker ls -c cmc4hrkz6o18lcrccggq | grep 10.110.12.13
+
+ibmcloud oc worker get \
+  -c cmc4hrkz6o18lcrccggq \
+  -w <WORKER_ID>
