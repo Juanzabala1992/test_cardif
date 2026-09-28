@@ -1,0 +1,25 @@
+NODE=<nombre-del-nodo>
+
+oc get node "$NODE" \
+  -o jsonpath='{range .status.conditions[*]}{.type}{"="}{.status}{" | "}{.reason}{" | "}{.message}{"\n"}{end}'
+
+oc adm cordon "$NODE"
+
+chroot /host
+systemctl is-active crio
+systemctl status crio --no-pager -l
+systemctl status kubelet --no-pager -l
+
+journalctl -u crio -b --no-pager -n 200
+journalctl -u kubelet -b --no-pager -n 200
+
+df -h
+df -i
+du -xsh /var/lib/containers /var/log 2>/dev/null
+
+systemctl restart crio
+systemctl status crio --no-pager -l
+
+systemctl restart kubelet
+
+oc adm uncordon "$NODE"
