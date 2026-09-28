@@ -23,3 +23,50 @@ systemctl status crio --no-pager -l
 systemctl restart kubelet
 
 oc adm uncordon "$NODE"
+
+
+
+**********************************
+
+
+1. Identifica el worker de IBM correspondiente
+ibmcloud oc cluster ls
+
+Después:
+ibmcloud oc worker ls -c <CLUSTER_NAME_O_ID>
+
+Busca la fila cuya IP sea:
+10.110.12.13
+
+Guarda el valor de ID y consulta sus detalles:
+ibmcloud oc worker get \
+  -c <CLUSTER_NAME_O_ID> \
+  -w <WORKER_ID>
+
+2. Haz primero un reinicio normal
+Como el nodo ya está acordonado y actualmente no presta servicio, el siguiente paso razonable es:
+ibmcloud oc worker reboot \
+  -c <CLUSTER_NAME_O_ID> \
+  -w <WORKER_ID>
+
+IBM confirma que worker reboot reinicia el nodo; la opción --hard corta la energía y debe reservarse para cuando el reinicio normal no responda. IBM Cloud Docs
+3. Monitorea la recuperación
+oc get node 10.110.12.13 -w
+
+En otra terminal:
+ibmcloud oc worker get \
+  -c <CLUSTER_NAME_O_ID> \
+  -w <WORKER_ID>
+
+Dale aproximadamente 10–15 minutos. Debe cambiar de:
+NotReady
+
+a:
+Ready,SchedulingDisabled
+
+SchedulingDisabled es normal porque lo acordonamos.
+Cuando esté estable:
+oc adm uncordon 10.110.12.13
+
+No ejecutes todavía reload, replace ni reboot --hard: reload borra los datos locales y reinstala el nodo, mientras replace elimina el worker y crea otro. IBM recomienda reload o reemplazo cuando un worker sigue Critical/NotReady, pero son pasos posteriores si el reinicio normal no lo recupera. cloud.ibm.com
+Primero ejecuta ibmcloud oc worker ls y, si quieres, envíame la salida antes del reboot para confirmar exactamente cuál WORKER_ID debes usar.
