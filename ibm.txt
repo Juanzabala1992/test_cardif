@@ -101,3 +101,20 @@ ibmcloud oc worker get \
 ibmcloud oc worker reboot \
   -c cmc4hrkz6o18lcrccggq \
   -w <WORKER_ID>
+
+
+****************************************
+
+oc get pods -A \
+  --field-selector spec.nodeName=10.110.12.13 \
+  -o wide
+
+ibmcloud oc worker reboot \
+  -c carla-prd-latam-ocw2 \
+  -w <WORKER_ID>
+
+
+oc get node 10.110.12.13 -w
+
+
+oc adm uncordon 10.110.12.13
