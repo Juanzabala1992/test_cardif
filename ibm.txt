@@ -80,3 +80,24 @@ ibmcloud oc worker ls -c cmc4hrkz6o18lcrccggq | grep 10.110.12.13
 ibmcloud oc worker get \
   -c cmc4hrkz6o18lcrccggq \
   -w <WORKER_ID>
+***************************************
+
+
+
+ibmcloud target -r br-sao -g CARLA-PRD-WORKLOAD-RG
+
+ibmcloud target
+
+ibmcloud oc worker ls -c cmc4hrkz6o18lcrccggq
+
+ibmcloud oc worker ls -c cmc4hrkz6o18lcrccggq | grep -F 10.110.12.13
+
+
+ibmcloud oc worker get \
+  -c cmc4hrkz6o18lcrccggq \
+  -w <WORKER_ID>
+
+
+ibmcloud oc worker reboot \
+  -c cmc4hrkz6o18lcrccggq \
+  -w <WORKER_ID>
