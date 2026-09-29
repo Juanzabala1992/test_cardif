@@ -882,3 +882,13 @@ openssl crl2pkcs7 -nocrl -certfile /tmp/CA.cer | openssl pkcs7 -print_certs -noo
 oc get secret webview-bogota-refactor-nginx-file -o jsonpath='{.data.server2\.crt}' | base64 -d > /tmp/server2.crt
 
 openssl verify -show_chain -CAfile /tmp/CA.cer /tmp/server2.crt
+*****
+
+
+tr -d '\r' < ~/ca.crt > /tmp/ca-bundle.pem
+
+grep -c -- '-----BEGIN CERTIFICATE-----' /tmp/ca-bundle.pem
+
+openssl crl2pkcs7 -nocrl -certfile /tmp/ca-bundle.pem | openssl pkcs7 -print_certs -noout
+
+oc get secret webview-bogota-refactor-nginx-file -o jsonpath='{.data.server2\.crt}' | base64 -d > /tmp/server2.crt
