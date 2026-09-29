@@ -1,0 +1,2 @@
+Evidencia CVE-2024-6387: Se verificó en el nodo la versión instalada openssh-server-8.7p1-45.el9_6.3.x86_64. El changelog del mismo paquete registra la corrección de CVE-2024-6387 desde la revisión 8.7p1-42, asociada a RHEL-45348. La revisión instalada es posterior a la que incorpora el fix.
+
