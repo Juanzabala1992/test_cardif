@@ -554,3 +554,33 @@ sshd -T | grep -i '^macs'
 sshd -T | grep -oE 'hmac-sha1[^, ]*'
 
 systemctl is-active sshd
+
+
+********************************************
+
+oc -n bra-c-dev-redis get pdb redis-enterprise \
+  -o custom-columns=NAME:.metadata.name,MINAVAILABLE:.spec.minAvailable,ALLOWED:.status.disruptionsAllowed,CURRENT:.status.currentHealthy,DESIRED:.status.desiredHealthy
+
+
+
+oc get mcp worker-dev \
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status}{"\n"}{.reason}{"\n"}{.message}{"\n\n"}{end}'
+
+
+MCD=$(oc -n openshift-machine-config-operator get pod \
+  -l k8s-app=machine-config-daemon \
+  --field-selector spec.nodeName=workerdev4.saox1pomocpb01.prd-latam-assurance.ocpdomain \
+  -o jsonpath='{.items[0].metadata.name}')
+
+oc -n openshift-machine-config-operator logs "$MCD" -c machine-config-daemon --since=20m | tail -100
+
+
+oc -n bra-c-dev-redis patch pdb redis-enterprise \
+  --type=merge \
+  -p '{"spec":{"minAvailable":0}}'
+
+
+oc -n bra-c-dev-redis get pdb redis-enterprise
+
+
+watch -n 10 'oc get mcp worker-dev; echo; oc get node workerdev4.saox1pomocpb01.prd-latam-assurance.ocpdomain'
