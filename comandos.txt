@@ -718,3 +718,17 @@ oc -n bra-c-dev-redis patch pdb rec --type=merge \
 oc -n bra-c-dev-redis get pdb rec \
 -o custom-columns=NAME:.metadata.name,MIN:.spec.minAvailable,MAX:.spec.maxUnavailable,UNHEALTHY:.spec.unhealthyPodEvictionPolicy
 
+
+***************************************
+
+
+oc get is -A \
+  -o custom-columns='NAMESPACE:.metadata.namespace,IMAGESTREAM:.metadata.name,TAGS:.status.tags[*].tag,REPOSITORY:.status.dockerImageRepository' |
+grep -Ei 'chrome|chromium'
+
+
+
+oc get pods -A \
+  -o custom-columns='NAMESPACE:.metadata.namespace,POD:.metadata.name,IMAGES:.spec.containers[*].image' \
+  --no-headers |
+grep -Ei 'chrome|chromium'
