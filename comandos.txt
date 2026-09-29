@@ -793,3 +793,25 @@ openssl x509 -noout -subject -issuer -serial -dates
 oc get deploy | grep webview-bogota-refactor
 
 oc get secrets | grep -iE 'webview|bogota|tls|cert'
+
+****************************
+
+oc exec deploy/webview-bogota-refactor-nginx -- \
+  nginx -T 2>&1 | grep -E 'ssl_certificate |ssl_certificate_key '
+
+
+oc exec deploy/webview-bogota-refactor-nginx -- \
+  openssl x509 -in /ruta/certificado.crt \
+  -noout -subject -issuer -serial -dates
+
+oc get deploy webview-bogota-refactor-nginx \
+  -o jsonpath='{range .spec.template.spec.volumes[*]}{.name}{"  Secret: "}{.secret.secretName}{"  ConfigMap: "}{.configMap.name}{"\n"}{end}'
+
+
+oc get secret webview-bogota-refactor-nginx-file \
+  -o go-template='{{range $k,$v := .data}}{{$k}}{{"\n"}}{{end}}'
+
+
+ROUTE_HOST=$(oc get route webview-bogota-refactor2 -o jsonpath='{.spec.host}'); echo | openssl s_client -connect "${ROUTE_HOST}:443" -servername "${ROUTE_HOST}" 2>/dev/null | openssl x509 -noout -subject -issuer -serial -dates
+
+
