@@ -773,3 +773,23 @@ jq -r '
 ' |
 sort -r |
 head -30
+
+
+**********************************
+
+oc get route webview-bogota-refactor2 \
+  -o jsonpath='Host: {.spec.host}{"\n"}Terminacion: {.spec.tls.termination}{"\n"}Servicio: {.spec.to.name}{"\n"}Puerto: {.spec.port.targetPort}{"\n"}'
+
+
+ROUTE_HOST=$(oc get route webview-bogota-refactor2 -o jsonpath='{.spec.host}')
+
+echo | openssl s_client \
+  -connect "${ROUTE_HOST}:443" \
+  -servername "${ROUTE_HOST}" \
+  -showcerts 2>/dev/null |
+openssl x509 -noout -subject -issuer -serial -dates
+
+
+oc get deploy | grep webview-bogota-refactor
+
+oc get secrets | grep -iE 'webview|bogota|tls|cert'
