@@ -635,3 +635,12 @@ watch -n 5 'oc get mcp worker-dev; echo; oc get node workerdev4.saox1pomocpb01.p
 for n in $(oc get nodes -l node-role.kubernetes.io/worker-dev -o jsonpath='{.items[*].metadata.name}'); do echo "===== $n ====="; oc debug node/$n --quiet -- chroot /host rpm -q openssh-server; done
 
 for n in $(oc get nodes -l node-role.kubernetes.io/worker-dev -o jsonpath='{.items[*].metadata.name}'); do echo "===== $n ====="; oc debug node/$n --quiet -- chroot /host cat /etc/ssh/sshd_config.d/49-disable-sha1-macs.conf; done
+
+
+
+*******************************
+
+
+oc debug node/workerdev1.saox1pomocpb01.prd-latam-assurance.ocpdomain --quiet -- chroot /host sh -c "rpm -q openssh-server; rpm -q --changelog openssh-server | grep -m1 -B1 -A1 'CVE-2024-6387'"
+
+for n in $(oc get nodes -l node-role.kubernetes.io/worker-dev -o jsonpath='{.items[*].metadata.name}'); do echo "===== $n ====="; oc debug node/$n --quiet -- chroot /host sh -c "sshd -T -C user=root,host=localhost,addr=127.0.0.1 | grep '^macs '" 2>/dev/null; done
