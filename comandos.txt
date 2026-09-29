@@ -673,33 +673,15 @@ EOF
 ************************
 
 NODE=workerdev1.saox1pomocpb01.prd-latam-assurance.ocpdomain
+IP=$(oc get node "$NODE" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
+echo "$IP"
 
-oc debug node/$NODE --quiet -- chroot /host \
+oc debug node/$NODE -- chroot /host timeout 15 \
 ssh -vvv \
 -o BatchMode=yes \
--o ConnectTimeout=10 \
+-o ConnectTimeout=8 \
 -o StrictHostKeyChecking=no \
 -o UserKnownHostsFile=/dev/null \
 -o MACs=hmac-sha1 \
-core@127.0.0.1 true 2>&1 | \
-grep -Ei 'no matching MAC|their offer|bad SSH2 MAC|permission denied'
+core@$IP true
 
-oc debug node/$NODE --quiet -- chroot /host \
-ssh -vvv \
--o BatchMode=yes \
--o ConnectTimeout=10 \
--o StrictHostKeyChecking=no \
--o UserKnownHostsFile=/dev/null \
--o MACs=hmac-sha1-etm@openssh.com \
-core@127.0.0.1 true 2>&1 | \
-grep -Ei 'no matching MAC|their offer|bad SSH2 MAC|permission denied'
-
-oc debug node/$NODE --quiet -- chroot /host \
-ssh -vvv \
--o BatchMode=yes \
--o ConnectTimeout=10 \
--o StrictHostKeyChecking=no \
--o UserKnownHostsFile=/dev/null \
--o MACs=hmac-sha2-256-etm@openssh.com \
-core@127.0.0.1 true 2>&1 | \
-grep -Ei 'no matching MAC|their offer|authentication|permission denied'
