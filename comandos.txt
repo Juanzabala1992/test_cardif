@@ -443,3 +443,26 @@ oc describe machineconfignode $NODE
 oc -n openshift-machine-config-operator get pods -o wide \
 | grep machine-config-daemon \
 | grep workerdev4
+
+
+
+**************************
+
+CONTROLLER=$(oc -n openshift-machine-config-operator \
+get pods -o name | grep machine-config-controller | head -1)
+
+echo $CONTROLLER
+
+
+oc -n openshift-machine-config-operator logs \
+$CONTROLLER \
+-c machine-config-controller \
+--since=2h | \
+egrep -i 'workerdev4|drain|evict|disruption|pdb|timeout|error|fail' | tail -200
+
+
+oc get pods -A \
+--field-selector spec.nodeName=$NODE \
+-o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase,OWNER:.metadata.ownerReferences[0].kind'
+
+oc get pdb -A
