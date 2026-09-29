@@ -481,3 +481,76 @@ oc -n bra-c-dev-redis get pod rec-0 \
 oc -n bra-c-dev-redis describe pod rec-0
 
 oc -n bra-c-dev-redis get pdb rec -o yaml
+
+********************************
+
+oc get machineconfiguration.operator.openshift.io cluster \
+-o yaml > /tmp/MachineConfiguration-cluster-before.yaml
+
+
+oc get machineconfiguration.operator.openshift.io cluster \
+-o jsonpath='{.spec.nodeDisruptionPolicy}{"\n"}'
+
+
+
+oc patch machineconfiguration.operator.openshift.io cluster \
+--type=merge \
+-p '{
+  "spec": {
+    "nodeDisruptionPolicy": {
+      "files": [
+        {
+          "path": "/etc/ssh/sshd_config.d/49-disable-sha1-macs.conf",
+          "actions": [
+            {
+              "type": "Reload",
+              "reload": {
+                "serviceName": "sshd.service"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}'
+
+
+oc get machineconfiguration.operator.openshift.io cluster \
+-o yaml | grep -A12 -B3 '49-disable-sha1-macs.conf'
+
+
+oc get machineconfiguration.operator.openshift.io cluster \
+-o yaml | sed -n '/nodeDisruptionPolicyStatus:/,/observedGeneration:/p'
+
+
+oc delete mc 99-worker-dev-disable-sha1-macs
+
+
+watch -n 5 'oc get mcp worker-dev'
+
+watch -n 5 'oc get nodes -l node-role.kubernetes.io/worker-dev'
+
+oc apply -f /tmp/99-worker-dev-disable-sha1-macs.yaml
+
+watch -n 3 'oc get mcp worker-dev'
+
+watch -n 3 'oc get nodes -l node-role.kubernetes.io/worker-dev'
+
+oc get nodes -l node-role.kubernetes.io/worker-dev  
+
+
+
+**** ssh
+oc debug node/<workerdev5>
+chroot /host
+
+cat /etc/ssh/sshd_config.d/49-disable-sha1-macs.conf
+
+sshd -t
+
+sshd -T | grep -i '^macs'
+
+sshd -T | grep -oE 'hmac-sha1[^, ]*'
+
+systemctl is-active sshd
