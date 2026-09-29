@@ -629,3 +629,9 @@ oc -n bra-c-dev-redis get pod rec-0 -o wide
 oc -n bra-c-dev-redis delete pod rec-0 --grace-period=0 --force
 
 watch -n 5 'oc get mcp worker-dev; echo; oc get node workerdev4.saox1pomocpb01.prd-latam-assurance.ocpdomain; echo; oc -n bra-c-dev-redis get pod rec-0 -o wide 2>/dev/null || true'
+
+**********************************
+
+for n in $(oc get nodes -l node-role.kubernetes.io/worker-dev -o jsonpath='{.items[*].metadata.name}'); do echo "===== $n ====="; oc debug node/$n --quiet -- chroot /host rpm -q openssh-server; done
+
+for n in $(oc get nodes -l node-role.kubernetes.io/worker-dev -o jsonpath='{.items[*].metadata.name}'); do echo "===== $n ====="; oc debug node/$n --quiet -- chroot /host cat /etc/ssh/sshd_config.d/49-disable-sha1-macs.conf; done
