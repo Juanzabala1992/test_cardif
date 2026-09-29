@@ -753,3 +753,23 @@ jq -r '
 ' |
 sort -r |
 head -20
+
+
+
+oc get images -o json |
+jq -r '
+  .items[]
+  | select(
+      ((.dockerImageMetadata.Config.Env // []) | join(" ") | test("NODE_VERSION=20"; "i"))
+      or
+      ((.dockerImageReference // "") | test("node[-_.:]?20|node.*:20"; "i"))
+    )
+  | [
+      (.dockerImageMetadata.Created // "sin-fecha"),
+      .dockerImageReference,
+      .metadata.name
+    ]
+  | @tsv
+' |
+sort -r |
+head -30
