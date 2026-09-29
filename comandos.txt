@@ -833,3 +833,26 @@ oc get pod "$POD" \
 
 oc get pod "$POD" \
   -o jsonpath='{range .spec.volumes[*]}{.name}{" -> Secret: "}{.secret.secretName}{"\n"}{end}'
+
+
+
+*************************
+
+oc get route webview-bogota-refactor2 \
+  -o jsonpath='{.spec.tls.destinationCACertificate}' \
+  > /tmp/destination-aplicado.pem
+
+
+oc get secret webview-bogota-refactor-nginx-file \
+  -o jsonpath='{.data.server2\.crt}' |
+base64 -d > /tmp/server2.crt
+
+
+openssl verify -show_chain \
+  -CAfile /tmp/destination-aplicado.pem \
+  /tmp/server2.crt
+
+
+openssl crl2pkcs7 -nocrl \
+  -certfile /tmp/destination-aplicado.pem |
+openssl pkcs7 -print_certs -noout
