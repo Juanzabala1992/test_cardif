@@ -856,3 +856,20 @@ openssl verify -show_chain \
 openssl crl2pkcs7 -nocrl \
   -certfile /tmp/destination-aplicado.pem |
 openssl pkcs7 -print_certs -noout
+********************
+
+
+openssl crl2pkcs7 -nocrl -certfile /tmp/CA.cer | openssl pkcs7 -print_certs -noout
+
+oc get secret webview-bogota-refactor-nginx-file -o jsonpath='{.data.server2\.crt}' | base64 -d > /tmp/server2.crt
+
+openssl verify -show_chain -CAfile /tmp/CA.cer /tmp/server2.crt
+
+
+solo si ok 
+
+oc patch route webview-bogota-refactor2 --type=merge -p "$(jq -n --rawfile ca /tmp/CA.cer '{spec:{tls:{destinationCACertificate:$ca}}}')"
+
+oc get route webview-bogota-refactor2 -o jsonpath='{.spec.tls.destinationCACertificate}' > /tmp/destination-final.pem
+
+openssl crl2pkcs7 -nocrl -certfile /tmp/destination-final.pem | openssl pkcs7 -print_certs -noout
