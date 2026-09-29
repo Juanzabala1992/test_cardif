@@ -732,3 +732,24 @@ oc get pods -A \
   -o custom-columns='NAMESPACE:.metadata.namespace,POD:.metadata.name,IMAGES:.spec.containers[*].image' \
   --no-headers |
 grep -Ei 'chrome|chromium'
+
+
+************************
+
+oc get images -o json |
+jq -r '
+  .items[]
+  | select(
+      ((.dockerImageReference // "") | test("chrome|chromium"; "i"))
+      or
+      ((.dockerImageMetadata // {}) | tostring | test("chrome|chromium"; "i"))
+    )
+  | [
+      (.dockerImageMetadata.Created // "sin-fecha"),
+      .dockerImageReference,
+      .metadata.name
+    ]
+  | @tsv
+' |
+sort -r |
+head -20
