@@ -710,3 +710,11 @@ ssh -vvv \
 core@"$IP" true 2>&1 | \
 grep -Ei 'no matching MAC|their offer|kex:.*cipher|permission denied'
 
+*********************
+
+oc -n bra-c-dev-redis patch pdb rec --type=merge \
+-p '{"spec":{"unhealthyPodEvictionPolicy":null}}'
+
+oc -n bra-c-dev-redis get pdb rec \
+-o custom-columns=NAME:.metadata.name,MIN:.spec.minAvailable,MAX:.spec.maxUnavailable,UNHEALTHY:.spec.unhealthyPodEvictionPolicy
+
