@@ -466,3 +466,18 @@ oc get pods -A \
 -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase,OWNER:.metadata.ownerReferences[0].kind'
 
 oc get pdb -A
+
+
+
+***************************************************************************************************************************************
+
+
+oc -n bra-c-dev-redis get sts rec \
+-o custom-columns='NAME:.metadata.name,DESIRED:.spec.replicas,CURRENT:.status.currentReplicas,READY:.status.readyReplicas,AVAILABLE:.status.availableReplicas'
+
+oc -n bra-c-dev-redis get pod rec-0 \
+-o jsonpath='status={.status.phase}{"\n"}deletionTimestamp={.metadata.deletionTimestamp}{"\n"}finalizers={.metadata.finalizers}{"\n"}terminationGracePeriodSeconds={.spec.terminationGracePeriodSeconds}{"\n"}node={.spec.nodeName}{"\n"}'
+
+oc -n bra-c-dev-redis describe pod rec-0
+
+oc -n bra-c-dev-redis get pdb rec -o yaml
