@@ -911,3 +911,24 @@ oc get route webview-bogota-refactor2 -o jsonpath='{.spec.tls.destinationCACerti
 
 
 openssl crl2pkcs7 -nocrl -certfile /tmp/destination-final.pem | openssl pkcs7 -print_certs -noout
+
+
+************************
+
+openssl x509 -in /tmp/server2.crt -noout -subject -issuer
+
+openssl x509 -in /tmp/server2.crt -noout -text | sed -n '/Authority Information Access/,+5p'
+
+***************************************
+
+openssl x509 -in /tmp/server2.crt -noout -text | sed -n '/Authority Information Access/,+5p'
+
+curl -fL 'URL_QUE_APARECIO' -o /tmp/intermediate-download.crt
+
+openssl x509 -in /tmp/intermediate-download.crt -out /tmp/intermediate.pem 2>/dev/null || openssl x509 -inform DER -in /tmp/intermediate-download.crt -out /tmp/intermediate.pem
+
+openssl x509 -in /tmp/intermediate.pem -noout -subject -issuer -dates  
+
+openssl x509 -in /tmp/server2.crt -noout -issuer
+
+openssl verify -show_chain -CAfile /tmp/ca-bundle.pem -untrusted /tmp/intermediate.pem /tmp/server2.crt
