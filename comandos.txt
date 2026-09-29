@@ -668,3 +668,38 @@ spec:
           contents:
             source: data:text/plain;charset=utf-8;base64,TUFDcyAtaG1hYy1zaGExLGhtYWMtc2hhMS1ldG1Ab3BlbnNzaC5jb20K
 EOF
+
+
+************************
+
+NODE=workerdev1.saox1pomocpb01.prd-latam-assurance.ocpdomain
+
+oc debug node/$NODE --quiet -- chroot /host \
+ssh -vvv \
+-o BatchMode=yes \
+-o ConnectTimeout=10 \
+-o StrictHostKeyChecking=no \
+-o UserKnownHostsFile=/dev/null \
+-o MACs=hmac-sha1 \
+core@127.0.0.1 true 2>&1 | \
+grep -Ei 'no matching MAC|their offer|bad SSH2 MAC|permission denied'
+
+oc debug node/$NODE --quiet -- chroot /host \
+ssh -vvv \
+-o BatchMode=yes \
+-o ConnectTimeout=10 \
+-o StrictHostKeyChecking=no \
+-o UserKnownHostsFile=/dev/null \
+-o MACs=hmac-sha1-etm@openssh.com \
+core@127.0.0.1 true 2>&1 | \
+grep -Ei 'no matching MAC|their offer|bad SSH2 MAC|permission denied'
+
+oc debug node/$NODE --quiet -- chroot /host \
+ssh -vvv \
+-o BatchMode=yes \
+-o ConnectTimeout=10 \
+-o StrictHostKeyChecking=no \
+-o UserKnownHostsFile=/dev/null \
+-o MACs=hmac-sha2-256-etm@openssh.com \
+core@127.0.0.1 true 2>&1 | \
+grep -Ei 'no matching MAC|their offer|authentication|permission denied'
