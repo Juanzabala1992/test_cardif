@@ -616,3 +616,16 @@ oc -n bra-c-dev-redis patch pdb rec --type=merge -p '{"spec":{"unhealthyPodEvict
 ***************************
 
 oc get nodes -l node-role.kubernetes.io/worker-dev -o custom-columns=NODE:.metadata.name,STATE:.metadata.annotations.machineconfiguration\.openshift\.io/state,CURRENT:.metadata.annotations.machineconfiguration\.openshift\.io/currentConfig,DESIRED:.metadata.annotations.machineconfiguration\.openshift\.io/desiredConfig
+
+
+********************************
+
+oc -n bra-c-dev-redis get pod rec-0 -o custom-columns=NAME:.metadata.name,PHASE:.status.phase,NODE:.spec.nodeName,DELETING:.metadata.deletionTimestamp,FINALIZERS:.metadata.finalizers
+
+oc -n bra-c-dev-redis delete pod rec-0 --wait=false
+
+oc -n bra-c-dev-redis get pod rec-0 -o wide
+
+oc -n bra-c-dev-redis delete pod rec-0 --grace-period=0 --force
+
+watch -n 5 'oc get mcp worker-dev; echo; oc get node workerdev4.saox1pomocpb01.prd-latam-assurance.ocpdomain; echo; oc -n bra-c-dev-redis get pod rec-0 -o wide 2>/dev/null || true'
