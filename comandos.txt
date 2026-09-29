@@ -584,3 +584,20 @@ oc -n bra-c-dev-redis get pdb redis-enterprise
 
 
 watch -n 10 'oc get mcp worker-dev; echo; oc get node workerdev4.saox1pomocpb01.prd-latam-assurance.ocpdomain'
+
+*************************************************************
+
+
+oc -n bra-c-dev-redis get pdb rec -o yaml > /tmp/pdb-rec-before.yaml
+
+oc -n bra-c-dev-redis patch pdb rec --type=merge -p '{"spec":{"minAvailable":0}}'
+
+oc -n bra-c-dev-redis get pdb rec -o custom-columns=NAME:.metadata.name,MINAVAILABLE:.spec.minAvailable,ALLOWED:.status.disruptionsAllowed,CURRENT:.status.currentHealthy,DESIRED:.status.desiredHealthy
+
+
+watch -n 10 'oc get mcp worker-dev; echo; oc get node workerdev4.saox1pomocpb01.prd-latam-assurance.ocpdomain'
+
+oc -n openshift-machine-config-operator logs $(oc -n openshift-machine-config-operator get pods -o name | grep machine-config-controller | head -1) -c machine-config-controller --since=20m | grep -Ei 'workerdev4|drain|evict|redis|rec' | tail -100
+
+
+oc -n bra-c-dev-redis patch pdb rec --type=merge -p '{"spec":{"minAvailable":1}}'
