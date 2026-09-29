@@ -400,3 +400,24 @@ oc get machineconfiguration.operator.openshift.io cluster \
 
 oc apply --dry-run=server \
 -f /tmp/99-worker-dev-disable-sha1-macs.yaml
+
+
+***************************************************
+
+cambio final:
+
+OLD_RENDERED=$(oc get mcp worker-dev \
+-o jsonpath='{.status.configuration.name}')
+
+echo $OLD_RENDERED
+
+oc get mcp worker-dev
+
+oc apply -f /tmp/99-worker-dev-disable-sha1-macs.yaml
+
+watch -n 5 'oc get mcp worker-dev'
+
+watch -n 5 'oc get nodes -l node-role.kubernetes.io/worker-dev'
+
+oc get mcp worker-dev \
+-o jsonpath='{.status.configuration.name}{"\n"}'
