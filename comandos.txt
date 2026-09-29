@@ -610,4 +610,9 @@ oc -n bra-c-dev-redis get pdb rec -o custom-columns=NAME:.metadata.name,MIN:.spe
 
 watch -n 10 'oc get mcp worker-dev; echo; oc get node workerdev4.saox1pomocpb01.prd-latam-assurance.ocpdomain'
 
-oc -n bra-c-dev-redis patch pdb rec --type=merge -p '{"spec":{"unhealthyPodEvictionPolicy":null}}'
+oc -n bra-c-dev-redis patch pdb rec --type=merge -p '{"spec":{"unhealthyPodEvictionPolicy":null}}'4
+
+
+***************************
+
+oc get nodes -l node-role.kubernetes.io/worker-dev -o custom-columns=NODE:.metadata.name,STATE:.metadata.annotations.machineconfiguration\.openshift\.io/state,CURRENT:.metadata.annotations.machineconfiguration\.openshift\.io/currentConfig,DESIRED:.metadata.annotations.machineconfiguration\.openshift\.io/desiredConfig
