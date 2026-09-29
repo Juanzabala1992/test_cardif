@@ -683,3 +683,30 @@ ssh -vvv \
 core@"$IP" true 2>&1 | \
 grep -Ei 'no matching MAC|their offer|kex:.*cipher|permission denied'
 
+
+
+
+oc debug node/"$NODE" --quiet -- chroot /host timeout 15 \
+ssh -vvv \
+-o BatchMode=yes \
+-o ConnectTimeout=8 \
+-o StrictHostKeyChecking=no \
+-o UserKnownHostsFile=/dev/null \
+-o Ciphers=aes128-ctr \
+-o MACs=hmac-sha1-etm@openssh.com \
+core@"$IP" true 2>&1 | \
+grep -Ei 'no matching MAC|their offer|kex:.*cipher|permission denied'
+
+
+
+oc debug node/"$NODE" --quiet -- chroot /host timeout 15 \
+ssh -vvv \
+-o BatchMode=yes \
+-o ConnectTimeout=8 \
+-o StrictHostKeyChecking=no \
+-o UserKnownHostsFile=/dev/null \
+-o Ciphers=aes128-ctr \
+-o MACs=hmac-sha2-256-etm@openssh.com \
+core@"$IP" true 2>&1 | \
+grep -Ei 'no matching MAC|their offer|kex:.*cipher|permission denied'
+
