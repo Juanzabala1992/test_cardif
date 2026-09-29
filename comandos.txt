@@ -421,3 +421,25 @@ watch -n 5 'oc get nodes -l node-role.kubernetes.io/worker-dev'
 
 oc get mcp worker-dev \
 -o jsonpath='{.status.configuration.name}{"\n"}'
+
+*************************************************************
+
+oc get mcp worker-dev \
+-o jsonpath='{range .status.conditions[*]}{.type}{"="}{.status}{"\nReason: "}{.reason}{"\nMessage: "}{.message}{"\n\n"}{end}'
+
+NODE=workerdev4.saox1p0mocpb01.prd-latam-assurance.ocpdomain
+
+oc get node $NODE -o jsonpath='
+currentConfig={.metadata.annotations.machineconfiguration\.openshift\.io/currentConfig}
+desiredConfig={.metadata.annotations.machineconfiguration\.openshift\.io/desiredConfig}
+state={.metadata.annotations.machineconfiguration\.openshift\.io/state}
+reason={.metadata.annotations.machineconfiguration\.openshift\.io/reason}
+unschedulable={.spec.unschedulable}
+{"\n"}'
+
+oc describe machineconfignode $NODE
+
+
+oc -n openshift-machine-config-operator get pods -o wide \
+| grep machine-config-daemon \
+| grep workerdev4
