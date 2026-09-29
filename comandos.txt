@@ -601,3 +601,13 @@ oc -n openshift-machine-config-operator logs $(oc -n openshift-machine-config-op
 
 
 oc -n bra-c-dev-redis patch pdb rec --type=merge -p '{"spec":{"minAvailable":1}}'
+
+****************************
+
+oc -n bra-c-dev-redis patch pdb rec --type=merge -p '{"spec":{"minAvailable":null,"maxUnavailable":1,"unhealthyPodEvictionPolicy":"AlwaysAllow"}}'
+
+oc -n bra-c-dev-redis get pdb rec -o custom-columns=NAME:.metadata.name,MIN:.spec.minAvailable,MAX:.spec.maxUnavailable,UNHEALTHY:.spec.unhealthyPodEvictionPolicy,ALLOWED:.status.disruptionsAllowed
+
+watch -n 10 'oc get mcp worker-dev; echo; oc get node workerdev4.saox1pomocpb01.prd-latam-assurance.ocpdomain'
+
+oc -n bra-c-dev-redis patch pdb rec --type=merge -p '{"spec":{"unhealthyPodEvictionPolicy":null}}'
