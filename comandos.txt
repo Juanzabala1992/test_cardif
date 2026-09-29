@@ -814,4 +814,22 @@ oc get secret webview-bogota-refactor-nginx-file \
 
 ROUTE_HOST=$(oc get route webview-bogota-refactor2 -o jsonpath='{.spec.host}'); echo | openssl s_client -connect "${ROUTE_HOST}:443" -servername "${ROUTE_HOST}" 2>/dev/null | openssl x509 -noout -subject -issuer -serial -dates
 
+********************
 
+for f in /opt/app-root/cert/*.crt; do
+  echo "===== $f ====="
+  openssl x509 -in "$f" -noout -subject -issuer -serial -dates
+done
+
+
+nginx -T 2>&1 | grep -E 'ssl_certificate |ssl_certificate_key '
+
+
+POD=$(oc get pod -l app=webview-bogota-refactor-nginx -o jsonpath='{.items[0].metadata.name}')
+
+oc get pod "$POD" \
+  -o jsonpath='{range .spec.containers[*].volumeMounts[*]}{.name}{" -> "}{.mountPath}{"\n"}{end}'
+
+
+oc get pod "$POD" \
+  -o jsonpath='{range .spec.volumes[*]}{.name}{" -> Secret: "}{.secret.secretName}{"\n"}{end}'
