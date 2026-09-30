@@ -1,0 +1,27 @@
+podman images --no-trunc --format "table {{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.Digest}}"
+
+podman image inspect nodejs20-chrome:regional \
+  --format 'ID: {{.Id}}{{println}}{{range .RepoTags}}TAG: {{.}}{{println}}{{end}}{{range .RepoDigests}}DIGEST: {{.}}{{println}}{{end}}'
+
+
+  
+
+  IMAGE_ID=$(podman image inspect nodejs20-chrome:regional --format '{{.Id}}')
+
+podman images --no-trunc \
+  --format '{{.ID}}  {{.Repository}}:{{.Tag}}  {{.Digest}}' |
+awk -v id="$IMAGE_ID" '$1 == id'
+
+oc get pods -A \
+  -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{range .spec.initContainers[*]}{.image}{" "}{end}{range .spec.containers[*]}{.image}{" "}{end}{"\n"}{end}' |
+grep -i 'nodejs20-chrome'
+
+oc get imagestream -A | grep -i 'nodejs20-chrome'
+
+oc describe imagestream nodejs20-chrome -n <namespace>
+
+
+oc get imagestreamtag -n <namespace> | grep -i 'nodejs20-chrome'
+
+
+oc get imagestreamtag -A | grep -i 'nodejs20-chrome'
