@@ -84,3 +84,20 @@ echo "Chrome no encontrado"
 '
 
 podman tag 48220a8242bc nodejs20-chrome:anterior
+*************************
+
+
+podman images -a --no-trunc \
+  --format '{{.ID}}|{{.Repository}}|{{.Tag}}|{{.CreatedAt}}|{{.Size}}' |
+grep '/nodejs-20-regional'
+
+podman run --rm --entrypoint /bin/bash IMAGE_ID -lc '
+node --version
+google-chrome --version 2>/dev/null ||
+google-chrome-stable --version 2>/dev/null ||
+chromium --version 2>/dev/null ||
+echo "Chrome no encontrado"
+'
+
+oc get is nodejs-20-regional -n regional \
+  -o jsonpath='{range .status.tags[?(@.tag=="regional")].items[*]}{.created}{" | "}{.image}{" | "}{.dockerImageReference}{"\n"}{end}'
