@@ -166,3 +166,12 @@ oc get is nodejs-20-regional -n regional \
 podman image exists sha256:48220a8242bc && echo "La imagen existe" || echo "No existe"
 
 podman image exists sha256:48220a8242bc && echo "La imagen existe" || echo "No existe"
+
+
+***
+
+podman image exists 48220a8242bc \
+  && echo "La imagen existe" \
+  || echo "La imagen no existe"
+
+podman image inspect 48220a8242bc --format '{{.Id}}'
