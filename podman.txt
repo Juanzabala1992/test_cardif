@@ -129,3 +129,12 @@ for ID in $(podman images -aq --no-trunc | sort -u); do
 done
 
 [ "$FOUND" -eq 0 ] && echo "No existe localmente ninguna imagen con Chrome"
+
+
+***********************************
+oc get is -A \
+  -o custom-columns='NAMESPACE:.metadata.namespace,IMAGESTREAM:.metadata.name,TAGS:.status.tags[*].tag' |
+grep -Ei 'nodejs.*20|chrome|chromium'
+
+oc get is NOMBRE_IMAGESTREAM -n NAMESPACE \
+  -o jsonpath='{range .status.tags[*]}{"TAG="}{.tag}{"\n"}{range .items[*]}{.created}{" | "}{.image}{" | "}{.dockerImageReference}{"\n"}{end}{end}'
