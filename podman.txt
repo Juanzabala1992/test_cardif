@@ -25,3 +25,44 @@ oc get imagestreamtag -n <namespace> | grep -i 'nodejs20-chrome'
 
 
 oc get imagestreamtag -A | grep -i 'nodejs20-chrome'
+
+
+********************************************************
+
+podman images -a --no-trunc |
+grep -Ei 'nodejs20|nodejs-20|chrome|regional'
+
+podman images -a --no-trunc \
+  --format 'table {{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.Created}}' |
+grep -Ei 'IMAGE|nodejs20|nodejs-20|chrome|regional'
+
+
+podman images -a --filter dangling=true --no-trunc \
+  --format 'table {{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.Created}}\t{{.Size}}'
+
+podman image inspect sha256:ID_COMPLETO |
+grep -iE 'chrome|chromium|nodejs|regional'
+
+podman image history --no-trunc sha256:ID_COMPLETO |
+grep -iE 'chrome|chromium|nodejs|npm|dnf|yum'
+
+ID='sha256:ID_COMPLETO'
+
+podman images -a --no-trunc \
+  --format '{{.ID}} | {{.Repository}}:{{.Tag}} | {{.Digest}}' |
+grep -F "$ID"
+
+oc get pods -A \
+  -o jsonpath='{range .items[*]}{.metadata.namespace}{" | "}{.metadata.name}{" | "}{range .spec.initContainers[*]}{.image}{" "}{end}{range .spec.containers[*]}{.image}{" "}{end}{"\n"}{end}' |
+grep -Ei 'nodejs20|nodejs-20|chrome'
+
+
+oc get istag -A |
+grep -Ei 'nodejs20|nodejs-20|chrome'
+
+oc get deploy,statefulset,daemonset,job,cronjob -A -o yaml |
+grep -iE 'image:.*(nodejs20|nodejs-20|chrome)'
+
+podman images -a --no-trunc \
+  --format 'table {{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.Created}}\t{{.Size}}' |
+grep -Ei 'IMAGE|nodejs20|nodejs-20|chrome|regional|<none>'
