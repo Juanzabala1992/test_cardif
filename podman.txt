@@ -175,3 +175,38 @@ podman image exists 48220a8242bc \
   || echo "La imagen no existe"
 
 podman image inspect 48220a8242bc --format '{{.Id}}'
+******************************
+
+
+
+rutas:
+
+
+
+oc create route passthrough cardif-new.acioneseuseguro.com.br \
+  --service=customer-portal-frontend \
+  --port=8443 \
+  --hostname=cardif-new.acioneseuseguro.com.br
+
+oc create route passthrough luizaseg-new.acioneseuseguro.com.br \
+  --service=customer-portal-frontend \
+  --port=8443 \
+  --hostname=luizaseg-new.acioneseuseguro.com.br
+
+oc create route passthrough pagbank-new.acioneseuseguro.com.br \
+  --service=customer-portal-frontend \
+  --port=8443 \
+  --hostname=pagbank-new.acioneseuseguro.com.br
+
+
+
+oc get route \
+  cardif-new.acioneseuseguro.com.br \
+  luizaseg-new.acioneseuseguro.com.br \
+  pagbank-new.acioneseuseguro.com.br \
+  -o custom-columns='NAME:.metadata.name,HOST:.spec.host,SERVICE:.spec.to.name,PORT:.spec.port.targetPort,TLS:.spec.tls.termination,ADMITTED:.status.ingress[0].conditions[0].status'
+
+
+curl -vkI https://cardif-new.acioneseuseguro.com.br
+curl -vkI https://luizaseg-new.acioneseuseguro.com.br
+curl -vkI https://pagbank-new.acioneseuseguro.com.br
