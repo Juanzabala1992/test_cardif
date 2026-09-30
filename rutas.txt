@@ -15,3 +15,23 @@ openssl s_client \
   -servername cardif-new.acioneseuseguro.com.br \
   </dev/null 2>/dev/null |
 openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+
+
+
+****************************************
+
+HOST=cardif-new.acioneseuseguro.com.br
+SVC=customer-portal-frontend.bba-c-prd-customer-portal-frontend.svc.cluster.local
+
+curl -vk \
+  --connect-to "${HOST}:8443:${SVC}:8443" \
+  "https://${HOST}:8443/" \
+  -o /dev/null -D -
+
+curl -vk \
+  --connect-to "${HOST}:8443:${SVC}:8443" \
+  "https://${HOST}:8443/customerPortal/" \
+  -o /dev/null -D -
+
+curl -vk https://customer-portal-frontend:8443/customerPortal/ \
+  -H "Host: cardif-new.acioneseuseguro.com.br"
