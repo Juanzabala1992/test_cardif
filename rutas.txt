@@ -93,3 +93,30 @@ curl -vk \
   --resolve "${HOST}:443:${ROUTER_IP}" \
   "https://${HOST}/customerPortal/" \
   -o /dev/null -D -
+
+
+*******************************************************
+
+
+oc exec deployment/customer-portal-frontend -- sh -c '
+for cert in /opt/app-root/cert/*-new*.crt; do
+  printf "%s: " "$(basename "$cert")"
+  grep -c "BEGIN CERTIFICATE" "$cert"
+done'
+
+oc rsh tools1-6c7dac87664-9v59w
+
+HOST=cardif-new.acioneseuseguro.com.br
+
+curl -vk \
+  --connect-to "${HOST}:8443:customer-portal-frontend:8443" \
+  "https://${HOST}:8443/customerPortal/" \
+  -o /dev/null
+
+HOST=cardif-new.acioneseuseguro.com.br
+ROUTER_IP=172.33.208.212
+
+curl -vk \
+  --connect-to "${HOST}:443:${ROUTER_IP}:443" \
+  "https://${HOST}/customerPortal/" \
+  -o /dev/null -D -
