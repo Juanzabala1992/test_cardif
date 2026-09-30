@@ -66,3 +66,21 @@ grep -iE 'image:.*(nodejs20|nodejs-20|chrome)'
 podman images -a --no-trunc \
   --format 'table {{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.Created}}\t{{.Size}}' |
 grep -Ei 'IMAGE|nodejs20|nodejs-20|chrome|regional|<none>'
+
+
+sha256:48220a8242bcc912ef39201a63c45ab54f1d9ebf9cc98209d711afcd335f4fe84
+
+for ID in 66110e9d960a 48220a8242bc; do
+  podman image inspect "$ID" \
+    --format 'ID={{.Id}} | Creada={{.Created}} | Nombres={{.RepoTags}}'
+done
+
+podman run --rm --entrypoint /bin/bash 48220a8242bc -lc '
+node --version
+google-chrome --version 2>/dev/null ||
+google-chrome-stable --version 2>/dev/null ||
+chromium --version 2>/dev/null ||
+echo "Chrome no encontrado"
+'
+
+podman tag 48220a8242bc nodejs20-chrome:anterior
