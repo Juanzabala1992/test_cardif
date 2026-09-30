@@ -138,3 +138,15 @@ grep -Ei 'nodejs.*20|chrome|chromium'
 
 oc get is NOMBRE_IMAGESTREAM -n NAMESPACE \
   -o jsonpath='{range .status.tags[*]}{"TAG="}{.tag}{"\n"}{range .items[*]}{.created}{" | "}{.image}{" | "}{.dockerImageReference}{"\n"}{end}{end}'
+
+
+**********************************
+
+oc get imagestreams --all-namespaces --no-headers |
+grep -Ei 'nodejs|chrome|chromium'
+
+oc get imagestreams -n regional |
+grep -Ei 'nodejs|chrome|chromium'
+
+oc get is nodejs-20-regional -n regional \
+  -o jsonpath='{range .status.tags[*]}{"TAG="}{.tag}{"\n"}{range .items[*]}{.created}{" | "}{.image}{" | "}{.dockerImageReference}{"\n"}{end}{end}'
