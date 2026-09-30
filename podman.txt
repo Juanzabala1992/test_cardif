@@ -101,3 +101,31 @@ echo "Chrome no encontrado"
 
 oc get is nodejs-20-regional -n regional \
   -o jsonpath='{range .status.tags[?(@.tag=="regional")].items[*]}{.created}{" | "}{.image}{" | "}{.dockerImageReference}{"\n"}{end}'
+
+
+********************************
+
+
+FOUND=0
+
+for ID in $(podman images -aq --no-trunc | sort -u); do
+  CHROME=$(podman run --rm --entrypoint /bin/sh "$ID" -c '
+    for C in google-chrome google-chrome-stable chromium chromium-browser; do
+      if command -v "$C" >/dev/null 2>&1; then
+        "$C" --version
+        exit 0
+      fi
+    done
+    exit 1
+  ' 2>/dev/null)
+
+  if [ -n "$CHROME" ]; then
+    FOUND=1
+    podman image inspect "$ID" \
+      --format 'ID={{.Id}} | Nombres={{.RepoTags}} | Creada={{.Created}}'
+    echo "Chrome=$CHROME"
+    echo
+  fi
+done
+
+[ "$FOUND" -eq 0 ] && echo "No existe localmente ninguna imagen con Chrome"
