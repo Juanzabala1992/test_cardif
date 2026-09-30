@@ -146,7 +146,23 @@ oc get imagestreams --all-namespaces --no-headers |
 grep -Ei 'nodejs|chrome|chromium'
 
 oc get imagestreams -n regional |
+
+
+
+*******
+
+
+
 grep -Ei 'nodejs|chrome|chromium'
 
 oc get is nodejs-20-regional -n regional \
   -o jsonpath='{range .status.tags[*]}{"TAG="}{.tag}{"\n"}{range .items[*]}{.created}{" | "}{.image}{" | "}{.dockerImageReference}{"\n"}{end}{end}'
+
+
+
+
+****************
+
+podman image exists sha256:48220a8242bc && echo "La imagen existe" || echo "No existe"
+
+podman image exists sha256:48220a8242bc && echo "La imagen existe" || echo "No existe"
