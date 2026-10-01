@@ -120,3 +120,38 @@ curl -vk \
   --connect-to "${HOST}:443:${ROUTER_IP}:443" \
   "https://${HOST}/customerPortal/" \
   -o /dev/null -D -
+
+
+***********************************************************
+
+
+HOST=cardif-new.acioneseuseguro.com.br
+
+oc get route "$HOST" -o jsonpath='
+Host: {.spec.host}
+Service: {.spec.to.name}
+Port: {.spec.port.targetPort}
+TLS: {.spec.tls.termination}
+Router: {.status.ingress[0].routerCanonicalHostname}
+Admitted: {.status.ingress[0].conditions[0].status}
+{"\n"}'
+
+
+ROUTER_DNS=$(oc get route "$HOST" \
+  -o jsonpath='{.status.ingress[0].routerCanonicalHostname}')
+
+echo "$ROUTER_DNS"
+
+getent ahostsv4 "$ROUTER_DNS"
+
+
+INGRESS_IP=$(getent ahostsv4 "$ROUTER_DNS" | awk 'NR==1{print $1}')
+
+echo "$INGRESS_IP"
+
+curl -vk \
+  --noproxy '*' \
+  --connect-timeout 10 \
+  --resolve "${HOST}:443:${INGRESS_IP}" \
+  "https://${HOST}/customerPortal/" \
+  -o /dev/null -D -
