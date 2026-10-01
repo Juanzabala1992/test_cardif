@@ -171,3 +171,7 @@ curl -sv --connect-timeout 5 http://10.170.97.18:5045/ -o /dev/null
 Si hacemos exactamente la misma prueba forzando --noproxy '*', conecta directamente a 10.170.97.18:5045 y responde HTTP/1.1 200 OK.
 Adicionalmente, en los logs de Vector vemos 407 Proxy Authentication Required, reintentos agotados y Events dropped.
 ¿Nos ayudas a validar si saox1p0mlgs02.br.xcd.net.intra / 10.170.97.18 debería estar excluido del proxy mediante NO_PROXY, o si existe alguna regla en el proxy que esté obligando este tráfico a autenticarse?
+
+
+
+Validamos también directamente contra 10.170.97.18:5045 y sigue tomando el proxy, obteniendo 407 Proxy Authentication Required. Solo al usar --noproxy conecta directo y responde 200 OK. Por lo tanto, usar la IP en la URI no resuelve; necesitamos validar que el destino LaaS quede contemplado en NO_PROXY.
