@@ -36,3 +36,14 @@ Como acciones preventivas se propone:
 6. Realizar una prueba controlada del procedimiento actualizado antes del siguiente ejercicio de DRS, verificando que todos los componentes recuperen automáticamente su configuración original.
 
 Con estas acciones se busca garantizar que, después de cada ejecución de DRS, los servicios regresen al mismo estado de capacidad y configuración que tenían antes de iniciar el procedimiento.
+
+
+**************************
+
+
+Causa raíz:
+Durante el procedimiento de DR se ejecutó el script utilizado para el bajado y posterior recuperación de los servicios. Se identificó que, al realizar la recuperación, el procedimiento no restableció la misma cantidad de réplicas que se encontraba configurada inicialmente para la aplicación. Como consecuencia, el servicio quedó operando con una capacidad inferior a la requerida; se evidenció que el ambiente debía contar con 6 PODs y posteriormente al DR se encontró una cantidad inferior a la esperada. Esta reducción de capacidad generó degradación en los tiempos de respuesta y errores 504 Gateway Timeout.
+Solución aplicada:
+Se realizó manualmente el escalamiento/activación de los PODs hasta recuperar las 6 réplicas requeridas. Una vez restablecida la capacidad total de la aplicación, el servicio se normalizó.
+Plan de acción:
+Se realizará el ajuste del script/procedimiento de DR para almacenar previamente la cantidad de réplicas configuradas por componente y utilizar dicha información durante la recuperación, garantizando que cada servicio retorne a su capacidad original. Adicionalmente, se incorporará una validación posterior que compare las réplicas esperadas contra las réplicas disponibles y Ready. En caso de no coincidir, el procedimiento deberá generar una alerta y no darse por finalizado satisfactoriamente. Como alternativa, se evaluará un mecanismo diferente para realizar el bajado y recuperación de los servicios.
