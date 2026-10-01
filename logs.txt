@@ -1,50 +1,43 @@
-oc api-resources | egrep -i 'log|loki|observability|forward'
+oc get cm -A -o yaml | \
+grep -n -B10 -A15 -E '10\.170\.97\.18|5045'
 
-oc get csv -A | egrep -i 'logging|loki|observability'
+oc get ds instance -n openshift-logging -o yaml | \
+grep -n -B10 -A20 -E '10\.170\.97\.18|5045'
 
-
-oc get ds instance -n openshift-logging \
--o jsonpath='{.spec.template.spec.containers[*].name}{"\n"}'
-
-
-oc get ds instance -n openshift-logging \
--o jsonpath='{range .spec.template.spec.containers[*]}{.name}{" -> "}{.image}{"\n"}{end}'
-
-
-oc logs -n openshift-logging instance-237wq --since=30m
-
-oc logs -n openshift-logging instance-237wq --since=30m 2>&1 \
-| egrep -i 'error|warn|failed|timeout|refused|certificate|tls|ssl|401|403|429|connection|dns|sink|buffer' \
-| tail -100
-
-for pod in $(oc get pods -n openshift-logging -o name | grep '^pod/instance-' | head -5); do
-  echo "================ $pod ================"
-  oc logs -n openshift-logging $pod --since=30m 2>&1 \
-  | egrep -i 'error|warn|failed|timeout|refused|certificate|tls|ssl|401|403|429|connection|dns|sink|buffer' \
-  | tail -20
-done
-
-oc get cm -n openshift-logging
-
-oc get ds instance -n openshift-logging -o yaml \
-| egrep -n -A8 -B5 'configMap|secret|volumeMounts|volumes'
-
+oc get ds instance -n openshift-logging -o yaml | \
+grep -n -A15 -B5 -E 'configMap:|secret:|volumeMounts:|volumes:'
 
 oc set env ds/instance -n openshift-logging --list
 
-
-oc get pods -n openshift-logging | egrep -i 'collector|vector|fluentd|instance'
-
-oc get pods -n openshift-logging -o wide | grep instance
-
-
-oc api-resources | egrep -i 'log|loki|observability|forward'
-
-
 oc get ds instance -n openshift-logging \
--o jsonpath='{range .spec.template.spec.containers[*]}{.name}{" -> "}{.image}{"\n"}{end}'
+-o jsonpath='{range .spec.template.spec.volumes[*]}{.name}{" -> CM: "}{.configMap.name}{" SECRET: "}{.secret.secretName}{"\n"}{end}'
+
+oc get cm collector-config -n openshift-logging -o yaml
+
+oc get cm collector-config -n openshift-logging -o yaml | \
+grep -n -B10 -A20 -E '10\.170\.97\.18|5045|laas'
+
+for recurso in cm ds deploy sts svc route; do
+  echo "=========== $recurso ==========="
+  oc get $recurso -n openshift-logging -o yaml 2>/dev/null | \
+  grep -n -B5 -A10 -E '10\.170\.97\.18|5045'
+done
+
+for recurso in cm ds deploy sts svc route; do
+  echo "=========== $recurso ==========="
+  oc get $recurso -A -o yaml 2>/dev/null | \
+  grep -n -B5 -A10 -E '10\.170\.97\.18|5045'
+done
+
+oc get cm -A -o yaml | \
+grep -ni -B10 -A20 'laas'
 
 
-oc logs -n openshift-logging instance-237wq --since=30m 2>&1 \
-| egrep -i 'error|warn|failed|timeout|refused|certificate|tls|ssl|401|403|429|connection|dns|sink|buffer' \
-| tail -100
+oc get ds -A -o yaml | \
+grep -ni -B10 -A20 'laas'
+
+oc get deploy -A -o yaml | \
+grep -ni -B10 -A20 'laas'
+
+
+oc get pods -n openshift-logging | grep instance
