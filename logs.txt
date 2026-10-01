@@ -1,1 +1,50 @@
+oc api-resources | egrep -i 'log|loki|observability|forward'
 
+oc get csv -A | egrep -i 'logging|loki|observability'
+
+
+oc get ds instance -n openshift-logging \
+-o jsonpath='{.spec.template.spec.containers[*].name}{"\n"}'
+
+
+oc get ds instance -n openshift-logging \
+-o jsonpath='{range .spec.template.spec.containers[*]}{.name}{" -> "}{.image}{"\n"}{end}'
+
+
+oc logs -n openshift-logging instance-237wq --since=30m
+
+oc logs -n openshift-logging instance-237wq --since=30m 2>&1 \
+| egrep -i 'error|warn|failed|timeout|refused|certificate|tls|ssl|401|403|429|connection|dns|sink|buffer' \
+| tail -100
+
+for pod in $(oc get pods -n openshift-logging -o name | grep '^pod/instance-' | head -5); do
+  echo "================ $pod ================"
+  oc logs -n openshift-logging $pod --since=30m 2>&1 \
+  | egrep -i 'error|warn|failed|timeout|refused|certificate|tls|ssl|401|403|429|connection|dns|sink|buffer' \
+  | tail -20
+done
+
+oc get cm -n openshift-logging
+
+oc get ds instance -n openshift-logging -o yaml \
+| egrep -n -A8 -B5 'configMap|secret|volumeMounts|volumes'
+
+
+oc set env ds/instance -n openshift-logging --list
+
+
+oc get pods -n openshift-logging | egrep -i 'collector|vector|fluentd|instance'
+
+oc get pods -n openshift-logging -o wide | grep instance
+
+
+oc api-resources | egrep -i 'log|loki|observability|forward'
+
+
+oc get ds instance -n openshift-logging \
+-o jsonpath='{range .spec.template.spec.containers[*]}{.name}{" -> "}{.image}{"\n"}{end}'
+
+
+oc logs -n openshift-logging instance-237wq --since=30m 2>&1 \
+| egrep -i 'error|warn|failed|timeout|refused|certificate|tls|ssl|401|403|429|connection|dns|sink|buffer' \
+| tail -100
