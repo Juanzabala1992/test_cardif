@@ -118,3 +118,29 @@ oc get cm instance-config -n openshift-logging -o yaml
 
 oc get cm instance-config -n openshift-logging -o yaml | \
 grep -n -B8 -A12 'saox1p0mlgs02.br.xcd.net.intra'
+
+
+
+**************************************
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+sh -c 'env | grep -i proxy'
+
+
+oc get proxy cluster \
+-o jsonpath='HTTP_PROXY={.spec.httpProxy}{"\n"}HTTPS_PROXY={.spec.httpsProxy}{"\n"}NO_PROXY={.spec.noProxy}{"\n"}'
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+nc -vz -w 5 10.170.97.18 5045
+
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+curl -sv --connect-timeout 5 \
+http://saox1p0mlgs02.br.xcd.net.intra:5045/ \
+-o /dev/null
+
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+curl -sv --noproxy '*' --connect-timeout 5 \
+http://saox1p0mlgs02.br.xcd.net.intra:5045/ \
+-o /dev/null
