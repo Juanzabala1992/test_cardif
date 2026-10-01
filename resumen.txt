@@ -1,0 +1,38 @@
+### 1. ¿Qué fue lo que pasó?
+
+Durante la ejecución del procedimiento de DRS se utilizó un script para realizar el proceso de reducción y posterior recuperación de los servicios.
+
+El inconveniente se presentó porque, al finalizar el procedimiento, algunos componentes **no recuperaron la misma cantidad de réplicas que tenían configuradas inicialmente**. Es decir, el script realizó el procedimiento, pero no garantizó que el número de réplicas posterior a la recuperación coincidiera con el estado original de las aplicaciones.
+
+Esto generó una inconsistencia en la configuración de réplicas de los servicios después de la ejecución del DRS.
+
+### 2. ¿Cómo se solucionó?
+
+Una vez identificado que el problema correspondía a la cantidad de réplicas, se realizó la validación de los servicios afectados y se **restableció la cantidad de réplicas esperada**, de acuerdo con la configuración que tenían antes de ejecutar el procedimiento.
+
+De esta manera, los servicios pudieron volver a operar con la capacidad definida originalmente.
+
+El análisis permitió determinar que el inconveniente no estaba asociado directamente con las aplicaciones, sino con el procedimiento utilizado para el bajado y posterior recuperación de los servicios durante el DRS.
+
+### 3. Plan de acción para evitar que vuelva a suceder
+
+Como acciones preventivas se propone:
+
+1. **Modificar el script utilizado en el procedimiento de DRS**, de manera que antes de realizar el escalamiento hacia abajo almacene la cantidad actual de réplicas de cada deployment o componente.
+
+2. Al finalizar el procedimiento, el script deberá **restaurar automáticamente la cantidad original de réplicas**, evitando utilizar un valor fijo o diferente al previamente configurado.
+
+3. Incorporar una **validación posterior a la ejecución**, comparando el número de réplicas antes y después del procedimiento.
+
+4. Generar un registro o evidencia con:
+   - Namespace.
+   - Deployment/StatefulSet afectado.
+   - Cantidad de réplicas iniciales.
+   - Cantidad de réplicas restauradas.
+   - Estado final de los pods.
+
+5. En caso de que no sea posible garantizar esta lógica mediante el script actual, **evaluar un procedimiento alternativo para realizar el bajado y recuperación de los servicios**, evitando depender del mecanismo que ocasionó la inconsistencia.
+
+6. Realizar una prueba controlada del procedimiento actualizado antes del siguiente ejercicio de DRS, verificando que todos los componentes recuperen automáticamente su configuración original.
+
+Con estas acciones se busca garantizar que, después de cada ejecución de DRS, los servicios regresen al mismo estado de capacidad y configuración que tenían antes de iniciar el procedimiento.
