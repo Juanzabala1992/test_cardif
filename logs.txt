@@ -111,3 +111,10 @@ echo "===== RESOLUCION DNS DEL DESTINO LAAS ====="
 oc exec -n openshift-logging instance-2s7wq -c collector -- \
 getent hosts saox1p0mlgs02.br.xcd.net.intra
 
+
+
+oc get cm instance-config -n openshift-logging -o yaml
+
+
+oc get cm instance-config -n openshift-logging -o yaml | \
+grep -n -B8 -A12 'saox1p0mlgs02.br.xcd.net.intra'
