@@ -41,3 +41,73 @@ grep -ni -B10 -A20 'laas'
 
 
 oc get pods -n openshift-logging | grep instance
+
+
+********************
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+getent hosts saox1p0mlgs02.br.xcd.net.intra
+
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+nc -vz -w 5 10.170.97.18 5045
+
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+curl -v --noproxy '*' --connect-timeout 5 \
+http://10.170.97.18:5045/
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+curl -v --connect-timeout 10 \
+http://saox1p0mlgs02.br.xcd.net.intra:5045/
+
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+curl -v --noproxy '*' --connect-timeout 10 \
+http://saox1p0mlgs02.br.xcd.net.intra:5045/
+
+
+oc logs -n openshift-logging instance-2s7wq -c collector \
+--since=2h 2>&1 | \
+egrep -i 'output_logstash_out_app|saox1p0mlgs02|5045|logstash|error|warn|timeout|refused|retry|connection|proxy' \
+| tail -150
+
+
+oc get cm collector-config -n openshift-logging
+
+
+oc get cm instance-config -n openshift-logging -o yaml | \
+grep -n -B10 -A20 'saox1p0mlgs02'
+
+oc get proxy cluster -o yaml
+
+oc get proxy cluster \
+-o jsonpath='{.spec.httpProxy}{"\n"}{.spec.httpsProxy}{"\n"}{.spec.noProxy}{"\n"}'
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+getent hosts saox1p0mlgs02.br.xcd.net.intra
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+curl -v --connect-timeout 10 \
+http://saox1p0mlgs02.br.xcd.net.intra:5045/
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+curl -v --noproxy '*' --connect-timeout 10 \
+http://saox1p0mlgs02.br.xcd.net.intra:5045/
+
+oc logs -n openshift-logging instance-2s7wq -c collector \
+--since=2h 2>&1 | \
+egrep -i 'output_logstash_out_app|saox1p0mlgs02|5045|logstash|error|warn|timeout|refused|retry|connection|proxy' \
+| tail -150
+
+
+
+echo "===== CONFIGURACION LAAS EN OPENSHIFT ====="
+oc get cm instance-config -n openshift-logging -o yaml | \
+grep -n -B5 -A10 'saox1p0mlgs02.br.xcd.net.intra'
+
+echo
+echo "===== RESOLUCION DNS DEL DESTINO LAAS ====="
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+getent hosts saox1p0mlgs02.br.xcd.net.intra
+
