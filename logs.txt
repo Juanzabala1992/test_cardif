@@ -155,6 +155,19 @@ http://saox1p0mlgs02.br.xcd.net.intra:5045
 que resuelve a 10.170.97.18:5045.
 Al hacer la prueba normalmente desde el pod collector, la conexión está tomando el proxy proxy-lam-ms.br.xcd.net.intra:8080 y recibimos:
 HTTP/1.1 407 Proxy Authentication Required.
+
+
+*********************************
+
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+curl -sv --connect-timeout 5 \
+http://10.170.97.18:5045/ \
+-o /dev/null
+
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+curl -sv --connect-timeout 5 http://10.170.97.18:5045/ -o /dev/null
 Si hacemos exactamente la misma prueba forzando --noproxy '*', conecta directamente a 10.170.97.18:5045 y responde HTTP/1.1 200 OK.
 Adicionalmente, en los logs de Vector vemos 407 Proxy Authentication Required, reintentos agotados y Events dropped.
 ¿Nos ayudas a validar si saox1p0mlgs02.br.xcd.net.intra / 10.170.97.18 debería estar excluido del proxy mediante NO_PROXY, o si existe alguna regla en el proxy que esté obligando este tráfico a autenticarse?
