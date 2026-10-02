@@ -163,3 +163,18 @@ grep -Ei 'no matching MAC|their offer|kex:.*cipher|permission denied'
 Se completó satisfactoriamente la remediación de OpenSSH en los nodos UAT. Se confirmó la presencia del paquete soportado por Red Hat que contiene el backport de CVE-2024-6387 y se aplicó el MachineConfig 99-worker-uat-disable-sha1-macs para deshabilitar hmac-sha1 y hmac-sha1-etm@openssh.com.
 Se validó la configuración en los cinco nodos worker-uat, confirmando sintaxis correcta de sshd y ausencia de los algoritmos SHA-1 en la configuración efectiva. Las pruebas de negociación SSH rechazaron ambos algoritmos SHA-1 mediante no matching MAC found, mientras que hmac-sha2-256-etm@openssh.com negoció correctamente.
 El pool worker-uat finalizó con los 5 nodos actualizados y Ready, sin estado de actualización ni degradación pendiente.
+
+
+
+
+*******************************
+
+for n in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do
+  echo "=================================================="
+  echo "NODE: $n"
+  echo -n "IP: "
+  oc get node "$n" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}'
+  echo
+  echo -n "OPENSSH: "
+  oc debug node/$n --quiet -- chroot /host rpm -q openssh-server 2>/dev/null
+done
