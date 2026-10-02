@@ -1,0 +1,38 @@
+POOL=worker-uat
+ROLE=worker-uat
+MC=99-worker-uat-disable-sha1-macs
+
+echo "POOL=$POOL"
+echo "ROLE=$ROLE"
+echo "MC=$MC"
+
+  oc get clusterversion
+
+oc get co machine-config
+
+  oc get mcp
+
+oc get mcp "$POOL"
+
+  oc get nodes -l node-role.kubernetes.io/$ROLE -o wide
+
+oc get pods -A | egrep -v 'Running|Completed|STATUS'
+
+  oc get pdb -A -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,MIN:.spec.minAvailable,MAX:.spec.maxUnavailable,ALLOWED:.status.disruptionsAllowed,UNHEALTHY:.spec.unhealthyPodEvictionPolicy'
+
+  for n in $(oc get nodes -l node-role.kubernetes.io/$ROLE -o name | cut -d/ -f2); do
+  echo "===== $n ====="
+  oc get pods -A --field-selector spec.nodeName=$n -o wide
+done
+
+for n in $(oc get nodes -l node-role.kubernetes.io/$ROLE -o jsonpath='{.items[*].metadata.name}'); do
+  echo "===== $n ====="
+  oc debug node/$n --quiet -- chroot /host sh -c \
+  "rpm -q openssh-server; rpm -q --changelog openssh-server | grep -m1 -B1 -A1 'CVE-2024-6387'"
+done
+
+
+
+
+oc get machineconfiguration.operator.openshift.io cluster -o yaml | \
+grep -A12 -B3 '49-disable-sha1-macs.conf'
