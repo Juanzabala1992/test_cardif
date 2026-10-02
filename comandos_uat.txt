@@ -105,3 +105,53 @@ for n in $(oc get nodes -l node-role.kubernetes.io/worker-uat -o jsonpath='{.ite
    2>/dev/null
 done
 
+
+****************************************
+
+NODE=$(oc get nodes -l node-role.kubernetes.io/worker-uat \
+-o jsonpath='{.items[0].metadata.name}')
+
+IP=$(oc get node "$NODE" \
+-o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
+
+echo "NODE=$NODE"
+echo "IP=$IP"
+
+
+
+oc debug node/"$NODE" --quiet -- chroot /host timeout 15 \
+ssh -vvv \
+-o BatchMode=yes \
+-o ConnectTimeout=8 \
+-o StrictHostKeyChecking=no \
+-o UserKnownHostsFile=/dev/null \
+-o Ciphers=aes128-ctr \
+-o MACs=hmac-sha1 \
+core@"$IP" true 2>&1 | \
+grep -Ei 'no matching MAC|their offer|kex:.*cipher|permission denied'
+
+
+
+oc debug node/"$NODE" --quiet -- chroot /host timeout 15 \
+ssh -vvv \
+-o BatchMode=yes \
+-o ConnectTimeout=8 \
+-o StrictHostKeyChecking=no \
+-o UserKnownHostsFile=/dev/null \
+-o Ciphers=aes128-ctr \
+-o MACs=hmac-sha1-etm@openssh.com \
+core@"$IP" true 2>&1 | \
+grep -Ei 'no matching MAC|their offer|kex:.*cipher|permission denied'
+
+
+
+oc debug node/"$NODE" --quiet -- chroot /host timeout 15 \
+ssh -vvv \
+-o BatchMode=yes \
+-o ConnectTimeout=8 \
+-o StrictHostKeyChecking=no \
+-o UserKnownHostsFile=/dev/null \
+-o Ciphers=aes128-ctr \
+-o MACs=hmac-sha2-256-etm@openssh.com \
+core@"$IP" true 2>&1 | \
+grep -Ei 'no matching MAC|their offer|kex:.*cipher|permission denied'
