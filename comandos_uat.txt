@@ -36,3 +36,24 @@ done
 
 oc get machineconfiguration.operator.openshift.io cluster -o yaml | \
 grep -A12 -B3 '49-disable-sha1-macs.conf'
+
+*************************************
+
+mkdir -p evidencia-openssh-uat
+
+oc get machineconfiguration.operator.openshift.io cluster -o yaml \
+> evidencia-openssh-uat/machineconfiguration-cluster-before.yaml
+
+oc get mcp worker-uat -o yaml \
+> evidencia-openssh-uat/mcp-worker-uat-before.yaml
+
+oc get nodes -l node-role.kubernetes.io/worker-uat -o wide \
+> evidencia-openssh-uat/nodes-before.txt
+
+oc get pdb -A -o yaml \
+> evidencia-openssh-uat/pdb-before.yaml
+
+
+
+oc get machineconfiguration.operator.openshift.io cluster -o yaml | \
+grep -A12 -B3 '49-disable-sha1-macs.conf'
