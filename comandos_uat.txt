@@ -178,3 +178,36 @@ for n in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do
   echo -n "OPENSSH: "
   oc debug node/$n --quiet -- chroot /host rpm -q openssh-server 2>/dev/null
 done
+
+
+***************************************
+
+
+KEY="keys/ssh/production"
+EXPECTED="openssh-server-8.7p1-45.el9_6.3.x86_64"
+
+printf "%-25s %-16s %-45s %-8s\n" \
+"NODE" "IP" "OPENSSH" "RESULT"
+
+for n in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do
+
+  IP=$(oc get node "$n" \
+    -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
+
+  VER=$(ssh -i "$KEY" \
+    -o BatchMode=yes \
+    -o ConnectTimeout=8 \
+    -o StrictHostKeyChecking=no \
+    core@"$n" \
+    'rpm -q openssh-server' 2>/dev/null)
+
+  if [ "$VER" = "$EXPECTED" ]; then
+    RESULT="OK"
+  else
+    RESULT="REVISAR"
+  fi
+
+  printf "%-25s %-16s %-45s %-8s\n" \
+    "${n%%.*}" "$IP" "$VER" "$RESULT"
+
+done
