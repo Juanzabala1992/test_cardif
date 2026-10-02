@@ -211,3 +211,20 @@ for n in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do
     "${n%%.*}" "$IP" "$VER" "$RESULT"
 
 done
+
+*****************************************
+
+
+Buenas noches, Fernando.
+Comparto el resultado de las validaciones realizadas:
+1. Remediación SHA-1 en UAT:
+   Se completó satisfactoriamente la remediación en los nodos worker-uat, deshabilitando los algoritmos hmac-sha1 y hmac-sha1-etm@openssh.com.
+   Posterior al cambio se validó la configuración efectiva de SSH en los nodos y se realizaron pruebas de negociación, obteniendo los resultados esperados:
+   - hmac-sha1: rechazado.
+   - hmac-sha1-etm@openssh.com: rechazado.
+   - hmac-sha2-256-etm@openssh.com: negociación correcta.
+   El pool worker-uat finalizó actualizado, sin degradación y con todos sus nodos en estado Ready, por lo que el hallazgo relacionado con los MAC SHA-1 queda solventado para UAT.
+2. Validación de versión OpenSSH:
+   Adicionalmente, se realizó la validación de la versión instalada en los nodos relacionados en el reporte. Como se observa en la evidencia adjunta, los nodos consultados reportan:
+   openssh-server-8.7p1-45.el9_6.3.x86_64
+   La validación fue realizada directamente sobre los nodos y todos los registros consultados finalizaron con resultado OK, confirmando que la versión indicada se encuentra instalada en los servidores relacionados.
