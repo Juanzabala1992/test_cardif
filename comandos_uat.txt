@@ -86,3 +86,22 @@ spec:
         contents:
           source: data:text/plain;charset=utf-8;base64,TUFDcyAtaG1hYy1zaGExLGhtYWMtc2hhMS1ldG1Ab3BlbnNzaC5jb20K
 EOF
+
+
+
+**********************************************************
+
+oc get nodes -l node-role.kubernetes.io/worker-uat -o wide
+
+for n in $(oc get nodes -l node-role.kubernetes.io/worker-uat -o jsonpath='{.items[*].metadata.name}'); do
+  echo "===== $n ====="
+  oc debug node/$n --quiet -- chroot /host sh -c \
+  "echo '--- ARCHIVO ---'; \
+   cat /etc/ssh/sshd_config.d/49-disable-sha1-macs.conf; \
+   echo '--- SSHD TEST ---'; \
+   sshd -t && echo 'sshd syntax OK'; \
+   echo '--- MACS EFECTIVOS ---'; \
+   sshd -T -C user=root,host=localhost,addr=127.0.0.1 | grep '^macs '" \
+   2>/dev/null
+done
+
