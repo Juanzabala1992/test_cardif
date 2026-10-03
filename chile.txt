@@ -184,3 +184,263 @@ oc get resourcequota -n chl-c-prd-carboosting
 
 
 oc get is cli -n openshift
+
+*************************************
+
+
+
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cron-restart-carboosting
+  namespace: chl-c-prd-carboosting
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cron-restart-carboosting
+  namespace: chl-c-prd-carboosting
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - delete
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cron-restart-carboosting
+  namespace: chl-c-prd-carboosting
+subjects:
+  - kind: ServiceAccount
+    name: cron-restart-carboosting
+    namespace: chl-c-prd-carboosting
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cron-restart-carboosting
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: restart-car-services
+  namespace: chl-c-prd-carboosting
+spec:
+
+  # Cada 2 horas
+  schedule: "0 */2 * * *"
+
+  # Evita que arranque otro Job si el anterior sigue ejecutándose
+  concurrencyPolicy: Forbid
+
+  # Si por algún motivo no pudo arrancar a la hora programada,
+  # tiene hasta 10 minutos para hacerlo
+  startingDeadlineSeconds: 600
+
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 900
+
+      template:
+        spec:
+          serviceAccountName: cron-restart-carboosting
+          restartPolicy: Never
+
+          containers:
+            - name: restart-services
+
+              # CLI interno del cluster
+              image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+              imagePullPolicy: IfNotPresent
+
+              # Valores bajos debido al ResourceQuota actual
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 32Mi
+                limits:
+                  cpu: 50m
+                  memory: 64Mi
+
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+
+                  NS="chl-c-prd-carboosting"
+
+                  restart_pod() {
+
+                    PREFIX="$1"
+
+                    echo "=================================================="
+                    echo "[$(date)] Reiniciando servicio: ${PREFIX}"
+                    echo "=================================================="
+
+                    POD=$(oc get pods -n "${NS}" -o name \
+                      | sed 's#pod/##' \
+                      | grep "^${PREFIX}-" \
+                      | head -n 1 || true)
+
+                    if [ -z "${POD}" ]; then
+                      echo "ERROR: No se encontro un pod para ${PREFIX}"
+                      return 1
+                    fi
+
+                    echo "Pod actual: ${POD}"
+                    echo "Eliminando pod..."
+
+                    oc delete pod "${POD}" \
+                      -n "${NS}" \
+                      --wait=true
+
+                    echo "Pod ${POD} eliminado."
+                    echo "Esperando que el nuevo pod quede Running/Ready..."
+
+                    i=0
+
+                    while [ ${i} -lt 90 ]; do
+
+                      NEWPOD=$(oc get pods -n "${NS}" \
+                        -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.phase}{" "}{range .status.conditions[?(@.type=="Ready")]}{.status}{end}{"\n"}{end}' \
+                        | awk -v p="${PREFIX}" \
+                          '$1 ~ ("^" p "-") && $2 == "Running" && $3 == "True" {print $1; exit}')
+
+                      if [ -n "${NEWPOD}" ] && [ "${NEWPOD}" != "${POD}" ]; then
+
+                        echo "OK: ${PREFIX} esta nuevamente disponible."
+                        echo "Nuevo pod: ${NEWPOD}"
+                        echo ""
+
+                        return 0
+                      fi
+
+                      i=$((i+1))
+
+                      echo "Esperando ${PREFIX}... intento ${i}/90"
+
+                      sleep 5
+
+                    done
+
+                    echo "ERROR: ${PREFIX} no quedo Ready dentro del tiempo esperado."
+                    return 1
+                  }
+
+
+                  echo ""
+                  echo "Inicio proceso automatico: $(date)"
+                  echo ""
+
+                  restart_pod "cb-car-kafka-quotation"
+
+                  restart_pod "cb-car-homologator"
+
+                  restart_pod "cb-car-quotation"
+
+                  echo ""
+                  echo "=================================================="
+                  echo "Todos los servicios fueron reiniciados correctamente"
+                  echo "Fin: $(date)"
+                  echo "=================================================="
+
+
+
+
+oc apply -f cron-restart-carboosting.yaml
+
+
+oc get cronjob restart-car-services \
+-n chl-c-prd-carboosting
+
+
+
+oc get sa cron-restart-carboosting \
+-n chl-c-prd-carboosting
+
+
+oc get role,rolebinding \
+-n chl-c-prd-carboosting \
+| grep cron-restart
+
+
+
+oc get cronjob restart-car-services \
+-n chl-c-prd-carboosting \
+-o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].image}{"\n"}'
+
+
+oc get cronjob restart-car-services \
+-n chl-c-prd-carboosting \
+-o yaml | grep -A8 resources:
+
+
+oc auth can-i list pods \
+--as=system:serviceaccount:chl-c-prd-carboosting:cron-restart-carboosting \
+-n chl-c-prd-carboosting
+
+oc auth can-i delete pods \
+--as=system:serviceaccount:chl-c-prd-carboosting:cron-restart-carboosting \
+-n chl-c-prd-carboosting
+
+
+oc get pods -n chl-c-prd-carboosting \
+| egrep "cb-car-kafka-quotation|cb-car-homologator|cb-car-quotation"
+
+
+oc delete job restart-car-services-test \
+-n chl-c-prd-carboosting \
+--ignore-not-found
+
+
+oc delete job restart-car-services-test2 \
+-n chl-c-prd-carboosting \
+--ignore-not-found
+
+
+oc create job \
+--from=cronjob/restart-car-services \
+restart-car-services-test \
+-n chl-c-prd-carboosting
+
+
+oc get pods \
+-n chl-c-prd-carboosting \
+-l job-name=restart-car-services-test
+
+
+oc get pods \
+-n chl-c-prd-carboosting \
+-l job-name=restart-car-services-test \
+-w
+
+
+oc logs -f job/restart-car-services-test \
+-n chl-c-prd-carboosting
+
+
+oc get pods -n chl-c-prd-carboosting \
+| egrep "cb-car-kafka-quotation|cb-car-homologator|cb-car-quotation"
+
+
+oc get pods -n chl-c-prd-carboosting \
+-o custom-columns='NAME:.metadata.name,STATUS:.status.phase,START:.status.startTime' \
+| egrep "NAME|cb-car-kafka-quotation|cb-car-homologator|cb-car-quotation"
+
+
+oc get jobs \
+-n chl-c-prd-carboosting \
+| grep restart-car-services
