@@ -23,3 +23,32 @@ keytool -J-Duser.language=en -list -v \
 
 keytool -J-Duser.language=en -list -v \
 -keystore /deployments/cert/kafka_broker.truststore.jks
+
+
+if [ -n "$KAFKA_SSL_KEYSTORE_PASSWORD" ]; then
+  echo "KAFKA_SSL_KEYSTORE_PASSWORD está cargada"
+else
+  echo "NO está cargada"
+fi
+
+
+keytool -list -v \
+-keystore /deployments/cert/kafka_client.keystore.jks \
+-storepass:env KAFKA_SSL_KEYSTORE_PASSWORD
+
+
+keytool -list -v \
+-storetype PKCS12 \
+-keystore /deployments/cert/kafka_client.keystore.jks \
+-storepass:env KAFKA_SSL_KEYSTORE_PASSWORD
+
+keytool -list -v \
+-storetype PKCS12 \
+-keystore /deployments/cert/kafka_client.keystore.jks \
+-storepass:env KAFKA_SSL_KEYSTORE_PASSWORD \
+| egrep -i "Alias name|Entry type|Owner:|Issuer:|Valid from|Certificate chain length"
+
+
+oc get deploy cb-car-kafka-quotation \
+-n chl-c-prd-carboosting -o yaml \
+| grep -A5 -B3 -E "KAFKA_SSL_KEYSTORE_PASSWORD|KAFKA_SSL_TRUSTSTORE_PASSWORD"
