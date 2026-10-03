@@ -62,3 +62,8 @@ keytool -list -v \
 oc get deploy cb-car-kafka-quotation \
 -n chl-c-prd-carboosting -o yaml \
 | grep -A8 -B3 -E "secretRef|secretName|KAFKA_SSL"
+
+
+*****************************************************
+
+Equipo, revisando el incidente de Kafka encontramos que el certificado cliente kafka-carboosting-cl-assurance.is.echonet venció el 27/08/2026. Esto coincide con los errores certificate_unknown y Failed re-authentication que presenta la aplicación. El Root CA sigue vigente hasta 2044. Necesitamos apoyo para renovar el certificado cliente y actualizar el kafka.client.keystore.jks.
