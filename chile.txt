@@ -67,3 +67,76 @@ oc get deploy cb-car-kafka-quotation \
 *****************************************************
 
 Equipo, revisando el incidente de Kafka encontramos que el certificado cliente kafka-carboosting-cl-assurance.is.echonet venció el 27/08/2026. Esto coincide con los errores certificate_unknown y Failed re-authentication que presenta la aplicación. El Root CA sigue vigente hasta 2044. Necesitamos apoyo para renovar el certificado cliente y actualizar el kafka.client.keystore.jks.
+******************************************************
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cron-restart-carboosting
+  namespace: chl-c-prd-carboosting
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cron-restart-carboosting
+  namespace: chl-c-prd-carboosting
+rules:
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    verbs:
+      - get
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cron-restart-carboosting
+  namespace: chl-c-prd-carboosting
+subjects:
+  - kind: ServiceAccount
+    name: cron-restart-carboosting
+    namespace: chl-c-prd-carboosting
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cron-restart-carboosting
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: restart-car-services
+  namespace: chl-c-prd-carboosting
+spec:
+  schedule: "0 */2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: cron-restart-carboosting
+          restartPolicy: Never
+
+          containers:
+            - name: restart-services
+              image: registry.redhat.io/openshift4/ose-cli-rhel9:v4.18
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  echo "Inicio reinicio: $(date)"
+
+                  oc rollout restart deployment/cb-car-kafka-quotation \
+                    -n chl-c-prd-carboosting
+
+                  oc rollout restart deployment/cb-car-homologator \
+                    -n chl-c-prd-carboosting
+
+                  oc rollout restart deployment/cb-car-quotation \
+                    -n chl-c-prd-carboosting
+
+                  echo "Reinicio solicitado correctamente: $(date)"
