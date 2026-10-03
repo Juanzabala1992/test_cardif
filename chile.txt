@@ -14,3 +14,12 @@ oc get pods -n chl-c-prd-carboosting | grep kafka-quotation
   keytool -list -v \
 -keystore kafka_broker.truststore.jks \
 | egrep -i "Alias name|Entry type|Owner:|Issuer:|Valid from"
+
+
+
+keytool -J-Duser.language=en -list -v \
+-keystore /deployments/cert/kafka_client.keystore.jks
+
+
+keytool -J-Duser.language=en -list -v \
+-keystore /deployments/cert/kafka_broker.truststore.jks
