@@ -1,0 +1,16 @@
+oc get pods -n chl-c-prd-carboosting | grep kafka-quotation
+
+  oc logs -n chl-c-prd-carboosting <POD> --since=30m \
+| egrep -i "ERROR|Exception|Kafka|SSL|handshake|certificate|PKIX|keystore|truststore"
+
+  oc logs -n chl-c-prd-carboosting <POD> --since=1h \
+| grep -A20 -B20 "00:37:17"
+
+
+  keytool -list -v \
+-keystore kafka_client.keystore.jks \
+| egrep -i "Alias name|Entry type|Owner:|Issuer:|Valid from"
+
+  keytool -list -v \
+-keystore kafka_broker.truststore.jks \
+| egrep -i "Alias name|Entry type|Owner:|Issuer:|Valid from"
