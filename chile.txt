@@ -52,3 +52,13 @@ keytool -list -v \
 oc get deploy cb-car-kafka-quotation \
 -n chl-c-prd-carboosting -o yaml \
 | grep -A5 -B3 -E "KAFKA_SSL_KEYSTORE_PASSWORD|KAFKA_SSL_TRUSTSTORE_PASSWORD"
+*******************************
+
+keytool -list -v \
+-storetype PKCS12 \
+-keystore /deployments/cert/kafka.client.keystore.jks
+
+
+oc get deploy cb-car-kafka-quotation \
+-n chl-c-prd-carboosting -o yaml \
+| grep -A8 -B3 -E "secretRef|secretName|KAFKA_SSL"
