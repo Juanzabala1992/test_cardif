@@ -140,3 +140,26 @@ spec:
                     -n chl-c-prd-carboosting
 
                   echo "Reinicio solicitado correctamente: $(date)"
+
+
+
+vi cron-restart-carboosting.yaml
+
+oc apply -f cron-restart-carboosting.yaml
+
+oc get cronjob -n chl-c-prd-carboosting
+
+
+oc create job \
+  --from=cronjob/restart-car-services \
+  restart-car-services-test \
+  -n chl-c-prd-carboosting
+
+
+oc get jobs -n chl-c-prd-carboosting
+
+
+oc logs job/restart-car-services-test \
+  -n chl-c-prd-carboosting
+
+oc get pods -n chl-c-prd-carboosting
