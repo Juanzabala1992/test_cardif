@@ -131,3 +131,45 @@ openssl verify \
 -CAfile root.cer \
 -untrusted intermediate.cer \
 autogestion-certificate-cardif-co-assurance.staging.echonet1.crt
+
+*****************************
+
+
+oc cp intermediate.cer $POD:/tmp/intermediate.cer
+oc cp root.cer $POD:/tmp/root.cer
+
+oc rsh $POD
+
+
+openssl x509 \
+-in /opt/app-root/certs/server.crt \
+-noout -subject -issuer -dates
+
+
+openssl x509 \
+-in /tmp/intermediate.cer \
+-noout -subject -issuer
+
+openssl x509 \
+-in /tmp/root.cer \
+-noout -subject -issuer
+
+openssl verify \
+-CAfile /tmp/root.cer \
+-untrusted /tmp/intermediate.cer \
+/opt/app-root/certs/server.crt
+
+
+echo "===== SERVER ====="
+openssl x509 -in /opt/app-root/certs/server.crt \
+-noout -subject -issuer
+
+echo
+echo "===== INTERMEDIATE ====="
+openssl x509 -in /tmp/intermediate.cer \
+-noout -subject -issuer
+
+echo
+echo "===== ROOT ====="
+openssl x509 -in /tmp/root.cer \
+-noout -subject -issuer
