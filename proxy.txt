@@ -48,6 +48,15 @@ curl -sv --noproxy '*' --connect-timeout 5 \
 -d '{"message":"test-openshift-laas"}' \
 http://saox1p0mlgs02.br.xcd.net.intra:5045/
 
+********************************************
 
 
-Es el endpoint que OpenShift tiene configurado como salida output_logstash_out_app para LaaS. Desde OpenShift podemos confirmar que enviamos a saox1p0mlgs02.br.xcd.net.intra:5045; necesitaríamos que el equipo de LaaS confirme si ese host corresponde directamente a Logstash o si hay algún componente intermedio.
+oc get cm instance-config -n openshift-logging -o yaml | \
+grep -n -A35 -B5 'output_logstash_out_app'
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+du -sh /var/lib/vector 2>/dev/null
+
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+find /var/lib/vector -maxdepth 3 -type f -ls 2>/dev/null | head -50
