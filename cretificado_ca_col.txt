@@ -259,3 +259,42 @@ openssl x509 -in /tmp/ca-tyc.pem \
 diff /tmp/ca-autogestion.pem /tmp/ca-tyc.pem
 
 
+
+***********************************************************
+
+
+oc get endpoints route-aquamarine-macaw 2>/dev/null
+
+oc get route route-aquamarine-macaw \
+-o jsonpath='{.spec.to.name}{"\n"}'
+
+oc get endpoints webview-tyc -o wide
+
+openssl s_client \
+-connect <IP_ENDPOINT_TYC>:8443 \
+-showcerts </dev/null 2>/dev/null \echo "=== SERVER KEY ==="
+openssl pkey \
+-in /opt/app-root/certs/server.key \
+-pubout 2>/dev/null |
+openssl sha256
+
+for f in /tmp/autogestion*.crt /tmp/autogestion*.cer
+do
+  [ -f "$f" ] || continue
+
+  echo
+  echo "=== $f ==="
+
+  openssl x509 \
+  -in "$f" \
+  -pubkey -noout 2>/dev/null |
+  openssl sha256
+
+  openssl x509 \
+  -in "$f" \
+  -noout -subject -issuer -ext subjectAltName
+done
+| openssl x509 -noout -subject -issuer -fingerprint -sha256
+
+
+
