@@ -482,3 +482,19 @@ keytool -list -v \
 -storetype PKCS12 \
 -keystore /tmp/kafka.client.keystore.jks \
 | egrep -i "Alias name|Entry type|Owner:|Issuer:|Valid from|Certificate chain length"
+
+
+**********************************************
+
+
+oc get cronjob -A | grep restart-car-services
+
+oc delete cronjob restart-car-services -n <NAMESPACE>
+
+
+oc delete cronjob restart-car-services \
+-n chl-c-prd-carboosting
+
+oc get cronjob -n chl-c-prd-carboosting
+
+oc get jobs -n chl-c-prd-carboosting | grep restart-car-services
