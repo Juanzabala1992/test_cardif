@@ -1,0 +1,62 @@
+echo "===== API EXTERNA ====="
+oc get infrastructure cluster \
+  -o jsonpath='{.status.apiServerURL}{"\n"}'
+
+echo "===== API INTERNA ====="
+oc get infrastructure cluster \
+  -o jsonpath='{.status.apiServerInternalURI}{"\n"}'
+
+echo "===== CONSOLE ====="
+oc -n openshift-console get route console \
+  -o jsonpath='{.spec.host}{"\n"}'
+
+echo "===== INGRESS DOMAIN ====="
+oc -n openshift-ingress-operator get ingresscontroller default \
+  -o jsonpath='{.status.domain}{"\n"}'
+
+
+API=$(oc get infrastructure cluster \
+  -o jsonpath='{.status.apiServerURL}' \
+  | sed -E 's#https://([^:/]+).*#\1#')
+
+API_INT=$(oc get infrastructure cluster \
+  -o jsonpath='{.status.apiServerInternalURI}' \
+  | sed -E 's#https://([^:/]+).*#\1#')
+
+CONSOLE=$(oc -n openshift-console get route console \
+  -o jsonpath='{.spec.host}')
+
+echo "===== API ====="
+echo "$API"
+getent ahostsv4 "$API" | awk '{print $1}' | sort -u
+
+echo "===== API INTERNA ====="
+echo "$API_INT"
+getent ahostsv4 "$API_INT" | awk '{print $1}' | sort -u
+
+echo "===== CONSOLE / INGRESS ====="
+echo "$CONSOLE"
+getent ahostsv4 "$CONSOLE" | awk '{print $1}' | sort -u
+
+
+for ip in \
+10.171.189.2 \
+10.171.98.194 \
+10.171.98.202 \
+10.171.199.2
+do
+  echo
+  echo "===== $ip ====="
+  getent hosts "$ip"
+done
+
+
+for ip in 10.171.189.2 10.171.98.194 10.171.98.202 10.171.199.2
+do
+  echo "===== $ip ====="
+  nslookup "$ip"
+done
+
+
+oc get nodes -o wide | \
+egrep 'NAME|10\.171\.98\.|10\.171\.199\.|10\.171\.189\.'
