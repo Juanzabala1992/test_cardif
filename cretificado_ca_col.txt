@@ -119,3 +119,15 @@ do
   -untrusted BNPP-Applications-intermediate.cer \
   "$f"
 done
+
+
+***************************
+
+openssl x509 -in intermediate.cer -noout -subject -issuer
+openssl x509 -in root.cer -noout -subject -issuer
+
+
+openssl verify \
+-CAfile root.cer \
+-untrusted intermediate.cer \
+autogestion-certificate-cardif-co-assurance.staging.echonet1.crt
