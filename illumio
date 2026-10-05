@@ -146,3 +146,84 @@ grep -n -B5 -A10 -E '10\.171\.98\.202|10\.171\.199\.2'
 
 oc get egressnetworkpolicy -A -o yaml 2>/dev/null | \
 grep -n -B5 -A10 -E '10\.171\.98\.202|10\.171\.199\.2'
+
+
+************************************
+
+echo "=== DNS REVERSO ==="
+getent hosts 10.171.199.2
+
+echo "=== DNS DIRECTO ==="
+getent ahostsv4 saox1t0mocpb01.br.xcd.net.intra
+
+echo "=== RUTA ==="
+ip route get 10.171.199.2
+
+ip neigh show | grep 10.171.199.2
+arp -an 2>/dev/null | grep 10.171.199.2
+
+for p in 22 80 443 6443 22623 8443 8080
+do
+  echo -n "$p: "
+  timeout 3 bash -c "echo >/dev/tcp/10.171.199.2/$p" 2>/dev/null \
+    && echo OPEN \
+    || echo CLOSED/TIMEOUT
+done
+
+
+timeout 5 nc -v 10.171.199.2 22
+
+
+echo | openssl s_client \
+  -connect 10.171.199.2:443 \
+  -showcerts 2>/dev/null \
+| openssl x509 -noout -subject -issuer -ext subjectAltName
+
+
+curl -vkI --connect-timeout 5 https://10.171.199.2/
+
+
+curl -vI --connect-timeout 5 http://10.171.199.2/
+
+
+hostname -f
+hostname -I
+ip -br addr
+
+sudo ss -lntp
+
+
+sudo systemctl --type=service --state=running | \
+egrep -i 'haproxy|keepalived|nginx|httpd|dnsmasq|named'
+
+
+ps -ef | egrep -i 'haproxy|keepalived|nginx|httpd' | grep -v grep
+
+ssh saox1t0mocpb01.br.xcd.net.intra
+
+hostname -f
+hostname -I
+ip -br addr
+sudo ss -lntp
+sudo systemctl --type=service --state=running | \
+egrep -i 'haproxy|keepalived|nginx|httpd'
+
+
+getent hosts 10.171.199.2
+getent ahostsv4 saox1t0mocpb01.br.xcd.net.intra
+ip route get 10.171.199.2
+
+
+for p in 22 80 443 6443 22623 8443 8080
+do
+  echo -n "$p: "
+  timeout 3 bash -c "echo >/dev/tcp/10.171.199.2/$p" 2>/dev/null \
+    && echo OPEN || echo CLOSED/TIMEOUT
+done
+
+
+hostname -f
+hostname -I
+sudo ss -lntp | head -50
+sudo systemctl --type=service --state=running | \
+egrep -i 'haproxy|keepalived|nginx|httpd'
