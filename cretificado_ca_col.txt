@@ -509,3 +509,43 @@ done
 openssl verify \
 -CAfile /tmp/destination-ca.pem \
 <RUTA_CERTIFICADO_QUE_COINCIDIO>
+
+
+*******************************************************************
+
+
+
+KEY_HASH='df3611d2f4101914db8dfaaa40d5f9c589943a3f928e9ab92f4c85b99415911e'
+
+find /home/tech80299 -maxdepth 1 -type f -name 'autogestion*.crt' -print |
+while IFS= read -r f
+do
+  CERT_HASH=$(openssl x509 -in "$f" -pubkey -noout 2>/dev/null | openssl sha256 | awk '{print $2}')
+
+  echo
+  echo "============================================================"
+  echo "ARCHIVO: $f"
+  echo "CERT HASH : $CERT_HASH"
+  echo "SERVER KEY: $KEY_HASH"
+
+  if [ "$CERT_HASH" = "$KEY_HASH" ]; then
+    echo "*** COINCIDE CON server.key ***"
+  else
+    echo "*** NO COINCIDE ***"
+  fi
+
+  openssl x509 -in "$f" -noout -subject -issuer -ext subjectAltName
+
+  echo "--- VALIDACION CONTRA destinationCA ---"
+  openssl verify -CAfile /tmp/destination-ca.pem "$f"
+done
+
+
+
+
+
+POD=$(oc -n col-c-uat-self-management-ext get pods -o name | grep '^pod/autogestion-web-app-' | head -1 | cut -d/ -f2)
+
+oc -n col-c-uat-self-management-ext exec "$POD" -c autogestion-web-app-qa -- sh -c \
+'openssl x509 -in /opt/app-root/certs/server.crt -pubkey -noout 2>/dev/null' |
+openssl sha256
