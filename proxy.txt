@@ -38,5 +38,16 @@ Adicionalmente, los logs del propio Vector muestran para output_logstash_out_app
 Con esto, el tráfico desde OpenShift sí está saliendo y el 429 se reproduce incluso sin pasar por el proxy. Sería necesario revisar del lado de LaaS/Logstash si existe algún rate limit, saturación, cola o restricción en el endpoint 5045.
 
 
+******************************************
+
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+curl -sv --noproxy '*' --connect-timeout 5 \
+-X POST \
+-H 'Content-Type: application/json' \
+-d '{"message":"test-openshift-laas"}' \
+http://saox1p0mlgs02.br.xcd.net.intra:5045/
+
+
 
 Es el endpoint que OpenShift tiene configurado como salida output_logstash_out_app para LaaS. Desde OpenShift podemos confirmar que enviamos a saox1p0mlgs02.br.xcd.net.intra:5045; necesitaríamos que el equipo de LaaS confirme si ese host corresponde directamente a Logstash o si hay algún componente intermedio.
