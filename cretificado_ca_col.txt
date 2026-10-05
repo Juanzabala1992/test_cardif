@@ -1,0 +1,52 @@
+cretificado ca col
+
+for f in autogestion*.crt
+do
+  echo
+  echo "======================================"
+  echo "$f"
+  echo "======================================"
+
+  openssl x509 -in "$f" \
+    -noout \
+    -subject \
+    -issuer \
+    -dates \
+    -ext subjectAltName
+done
+
+for f in autogestion*.crt
+do
+  echo -n "$f -> "
+  grep -c "BEGIN CERTIFICATE" "$f"
+done
+
+
+openssl s_client \
+-connect 127.0.0.1:8443 \
+-servername webview-uat.cardif.com.co \
+-showcerts </dev/null
+
+
+openssl s_client \
+-connect 127.0.0.1:8443 \
+-servername webview-uat.cardif.com.co \
+-showcerts </dev/null 2>/dev/null \
+| grep -c "BEGIN CERTIFICATE"
+
+
+for f in autogestion*.crt; do
+  echo "===== $f ====="
+  openssl x509 -in "$f" -noout -subject -issuer -ext subjectAltName
+done
+
+
+for f in autogestion*.crt; do
+  echo -n "$f -> "
+  grep -c "BEGIN CERTIFICATE" "$f"
+done
+
+openssl s_client \
+-connect 127.0.0.1:8443 \
+-servername webview-uat.cardif.com.co \
+-showcerts </dev/null
