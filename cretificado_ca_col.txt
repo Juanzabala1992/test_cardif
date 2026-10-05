@@ -349,5 +349,47 @@ do
   -noout -subject -issuer -ext subjectAltName
 done
 
+************************************************
 
+***********************************************
+
+
+oc get endpoints webview-tyc \
+-o jsonpath='{.subsets[0].addresses[0].targetRef.name}{"\n"}'
+
+
+
+TYC_POD=$(oc get endpoints webview-tyc \
+-o jsonpath='{.subsets[0].addresses[0].targetRef.name}')
+
+oc exec "$TYC_POD" -- sh -c '
+openssl s_client \
+-connect 127.0.0.1:8443 \
+-showcerts </dev/null 2>/dev/null |
+openssl x509 -noout -subject -issuer -fingerprint -sha256
+'
+
+for r in autogestion-web-app route-aquamarine-macaw
+do
+  echo "===== $r ====="
+
+  oc get route "$r" \
+  -o jsonpath='{.spec.tls.destinationCACertificate}' |
+  openssl x509 -noout \
+  -subject -issuer -fingerprint -sha256
+
+  echo
+done
+
+
+for r in autogestion-web-app route-aquamarine-macaw
+do
+  echo -n "$r -> "
+
+  oc get route "$r" \
+  -o jsonpath='{.spec.tls.destinationCACertificate}' |
+  grep -c 'BEGIN CERTIFICATE'
+done
+
+echo "$TYC_POD"
 
