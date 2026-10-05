@@ -95,3 +95,27 @@ openssl verify \
 -CAfile /opt/app-root/certs/root.crt \
 -untrusted /opt/app-root/certs/intermediate.crt \
 /opt/app-root/certs/server.crt
+
+************************
+
+openssl x509 -in BNPP-Applications-intermediate.cer \
+-noout -subject -issuer
+
+
+openssl x509 -in BNPP-Root.cer \
+-noout -subject -issuer
+
+
+openssl verify \
+-CAfile BNPP-Root.cer \
+-untrusted BNPP-Applications-intermediate.cer \
+autogestion-certificate-cardif-co-assurance.staging.echonet1.crt
+
+
+for f in autogestion-*.crt
+do
+  openssl verify \
+  -CAfile BNPP-Root.cer \
+  -untrusted BNPP-Applications-intermediate.cer \
+  "$f"
+done
