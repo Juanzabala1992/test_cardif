@@ -213,3 +213,49 @@ echo
 echo "===== ROOT ====="
 openssl x509 -in /tmp/root.cer \
 -noout -subject -issuer
+
+
+******************************
+
+
+
+
+
+
+oc get route autogestion-web-app -o yaml
+
+oc get route route-aquamarine-macaw -o yaml
+
+oc get route autogestion-web-app \
+-o jsonpath='{.spec.tls}' | jq
+
+oc get route route-aquamarine-macaw \
+-o jsonpath='{.spec.tls}' | jq
+
+oc get route autogestion-web-app -o yaml | \
+grep -A30 '^  tls:'
+
+oc get route route-aquamarine-macaw -o yaml | \
+grep -A30 '^  tls:'
+
+oc get svc autogestion-web-app -o yaml
+
+oc get endpoints autogestion-web-app -o wide
+
+oc get route autogestion-web-app \
+-o jsonpath='{.spec.tls.destinationCACertificate}' \
+> /tmp/ca-autogestion.pem
+
+oc get route route-aquamarine-macaw \
+-o jsonpath='{.spec.tls.destinationCACertificate}' \
+> /tmp/ca-tyc.pem
+
+openssl x509 -in /tmp/ca-autogestion.pem \
+-noout -subject -issuer -fingerprint -sha256
+
+openssl x509 -in /tmp/ca-tyc.pem \
+-noout -subject -issuer -fingerprint -sha256
+
+diff /tmp/ca-autogestion.pem /tmp/ca-tyc.pem
+
+
