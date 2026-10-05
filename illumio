@@ -60,3 +60,28 @@ done
 
 oc get nodes -o wide | \
 egrep 'NAME|10\.171\.98\.|10\.171\.199\.|10\.171\.189\.'
+
+***************************************************
+
+
+REG=regional-registry.apps.saox1p0mocpc02.isz-latam-assurance.ocpdomain
+
+echo "=== DNS ==="
+getent ahostsv4 "$REG"
+
+echo "=== HTTPS ==="
+curl -k -I --connect-timeout 10 "https://$REG/v2/"
+
+
+
+oc get pods -A \
+-o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{range .spec.containers[*]}{.image}{" "}{end}{"\n"}{end}' \
+| grep -i 'regional-registry'
+
+
+oc get imagedigestmirrorset -o yaml 2>/dev/null | \
+grep -i -B5 -A15 'regional-registry'
+
+
+oc get imagecontentsourcepolicy -o yaml 2>/dev/null | \
+grep -i -B5 -A15 'regional-registry'  
