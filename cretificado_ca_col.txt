@@ -393,3 +393,52 @@ done
 
 echo "$TYC_POD"
 
+
+**********************************************
+
+
+oc project col-c-uat-self-management-ext
+
+POD=$(oc get pods -o name | \
+grep 'pod/autogestion-web-app-' | head -1 | cut -d/ -f2)
+
+echo "$POD"
+
+
+
+oc exec "$POD" -- sh -c '
+openssl pkey \
+-in /opt/app-root/certs/server.key \
+-pubout 2>/dev/null
+' | openssl sha256
+
+
+
+
+for f in autogestion*.crt
+do
+  echo "===== $f ====="
+
+  openssl x509 \
+  -in "$f" \
+  -pubkey -noout |
+  openssl sha256
+
+  openssl x509 \
+  -in "$f" \
+  -noout -subject -issuer -ext subjectAltName
+
+
+
+oc project col-c-uat-digitalsales
+
+oc get route autogestion-web-app \
+-o jsonpath='{.spec.tls.destinationCACertificate}' \
+> /tmp/destination-ca.pem
+
+
+openssl verify \
+-CAfile /tmp/destination-ca.pem \
+CERTIFICADO_AUTOGESTION_CORRECTO.crt
+  echo
+done
