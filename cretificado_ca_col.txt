@@ -549,3 +549,64 @@ POD=$(oc -n col-c-uat-self-management-ext get pods -o name | grep '^pod/autogest
 oc -n col-c-uat-self-management-ext exec "$POD" -c autogestion-web-app-qa -- sh -c \
 'openssl x509 -in /opt/app-root/certs/server.crt -pubkey -noout 2>/dev/null' |
 openssl sha256
+
+
+*******************************************************
+
+
+oc project col-c-uat-digitalsales
+
+TYC_POD=$(oc get endpoints webview-tyc \
+-o jsonpath='{.subsets[0].addresses[0].targetRef.name}')
+
+echo "$TYC_POD"
+
+
+oc get pod "$TYC_POD" \
+-o jsonpath='{.spec.containers[*].name}{"\n"}'
+
+oc exec "$TYC_POD" -- sh -c \
+'nginx -T 2>&1 | grep -E "ssl_certificate(_key)?"'
+
+
+oc exec "$TYC_POD" -- sh -c '
+openssl pkey \
+-in /opt/app-root/certs/server.key \
+-pubout 2>/dev/null
+' | openssl sha256
+
+
+find /home/tech80299 -maxdepth 1 \
+-type f -name 'autogestion*.crt' -print |
+while IFS= read -r f
+do
+  echo "===== $f ====="
+
+  openssl x509 \
+  -in "$f" \
+  -pubkey -noout 2>/dev/null |
+  openssl sha256
+done
+
+
+oc exec "$TYC_POD" -- sh -c '
+openssl x509 \
+-in /opt/app-root/certs/server.crt \
+-noout -subject -issuer -fingerprint -sha256
+'
+
+
+oc exec "$TYC_POD" -- sh -c '
+openssl x509 \
+-in /opt/app-root/certs/server.crt \
+-pubkey -noout 2>/dev/null
+' | openssl sha256
+
+
+
+oc get pod "$TYC_POD" -o yaml | \
+grep -B5 -A10 -E 'server.key|certs|secretName'
+
+
+oc get deploy -o yaml | \
+grep -B10 -A15 -E 'webview-tyc|secretName|certs'
