@@ -50,3 +50,40 @@ openssl s_client \
 -connect 127.0.0.1:8443 \
 -servername webview-uat.cardif.com.co \
 -showcerts </dev/null
+
+
+******************************
+
+
+find /opt/app-root/certs \
+-type f \( -name "*.crt" -o -name "*.pem" -o -name "*.cer" \) \
+-print
+
+
+for f in /opt/app-root/certs/*.crt /opt/app-root/certs/*.pem
+do
+  [ -f "$f" ] || continue
+  echo
+  echo "========== $f =========="
+  openssl x509 -in "$f" -noout -subject -issuer -dates 2>/dev/null
+done
+
+grep -c "BEGIN CERTIFICATE" /opt/app-root/certs/server.crt
+
+
+openssl s_client \
+-connect 127.0.0.1:8443 \
+-servername webview-uat.cardif.com.co \
+-showcerts </dev/null
+
+openssl s_client \
+-connect 127.0.0.1:8443 \
+-servername webview-uat.cardif.com.co \
+-showcerts </dev/null 2>/dev/null \
+| grep -c "BEGIN CERTIFICATE"
+
+
+openssl verify \
+-CAfile /opt/app-root/certs/root.crt \
+-untrusted /opt/app-root/certs/intermediate.crt \
+/opt/app-root/certs/server.crt
