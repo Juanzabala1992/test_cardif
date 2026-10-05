@@ -452,6 +452,27 @@ keytool -list -v \
 -storetype PKCS12 \
 -keystore /deployments/cert/kafka.client.keystore.jks
 
+
+*********************
+oc get secret cb-car-kafka-quotation-file \
+-n chl-c-prd-carboosting \
+-o yaml > cb-car-kafka-quotation-file-backup.yaml
+
+
+oc get secret cb-car-kafka-quotation-file \
+-n chl-c-prd-carboosting \
+-o jsonpath='{.data}' | jq 'keys'
+
+
+oc set data secret/cb-car-kafka-quotation-file \
+-n chl-c-prd-carboosting \
+--from-file=kafka.client.keystore.jks=./kafka.client.keystore.jks
+
+oc get secret cb-car-kafka-quotation-file \
+-n chl-c-prd-carboosting \
+-o jsonpath='{.data}' | jq 'keys'
+
+
 oc cp -n chl-c-prd-carboosting \
 <NOMBRE_DEL_POD>:/deployments/cert/kafka.client.keystore.jks \
 ./kafka.client.keystore.jks
