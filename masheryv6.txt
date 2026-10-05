@@ -1,0 +1,19 @@
+oc get pods -o wide
+
+oc get deploy,statefulset,daemonset
+
+oc get events --sort-by=.lastTimestamp | tail -50
+
+oc get pods | grep -v Running
+
+oc get pods \
+-o custom-columns='NAME:.metadata.name,STATUS:.status.phase,RESTARTS:.status.containerStatuses[*].restartCount'
+
+oc get pods \
+-o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .spec.containers[*]}{"  "}{.name}{" -> "}{.image}{"\n"}{end}{end}'
+
+grep -RniE 'image:|repository:|tag:|resources:|limits:|requests:' overrides/
+
+grep -RniE 'image:|repository:|tag:' deploy/
+
+helm list -A | grep -i mashery
