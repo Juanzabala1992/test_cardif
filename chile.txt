@@ -476,3 +476,9 @@ oc get secret cb-car-kafka-quotation-file \
 oc cp -n chl-c-prd-carboosting \
 <NOMBRE_DEL_POD>:/deployments/cert/kafka.client.keystore.jks \
 ./kafka.client.keystore.jks
+
+
+keytool -list -v \
+-storetype PKCS12 \
+-keystore /tmp/kafka.client.keystore.jks \
+| egrep -i "Alias name|Entry type|Owner:|Issuer:|Valid from|Certificate chain length"
