@@ -1,0 +1,28 @@
+oc get proxy cluster -o yaml
+
+oc get proxy cluster \
+-o jsonpath='HTTP_PROXY={.spec.httpProxy}{"\n"}HTTPS_PROXY={.spec.httpsProxy}{"\n"}NO_PROXY={.spec.noProxy}{"\n\n"}STATUS_NO_PROXY={.status.noProxy}{"\n"}'
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+sh -c 'env | grep -i proxy'
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+curl -sv --connect-timeout 5 \
+http://saox1p0mlgs02.br.xcd.net.intra:5045/ \
+-o /dev/null
+
+oc exec -n openshift-logging instance-2s7wq -c collector -- \
+curl -sv --noproxy '*' --connect-timeout 5 \
+http://saox1p0mlgs02.br.xcd.net.intra:5045/ \
+-o /dev/null
+
+oc logs -n openshift-logging instance-2s7wq -c collector \
+--since=30m 2>&1 | \
+egrep -i 'output_logstash_out_app|407|Proxy Authentication|Events dropped|request failed' \
+| tail -100
+
+oc get proxy cluster -o jsonpath='{range .metadata.managedFields[*]}{.time}{"  "}{.manager}{"  "}{.operation}{"\n"}{end}'
+
+oc get cm instance-config -n openshift-logging \
+-o jsonpath='{range .metadata.managedFields[*]}{.time}{"  "}{.manager}{"  "}{.operation}{"\n"}{end}'
+
