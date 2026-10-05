@@ -227,3 +227,12 @@ hostname -I
 sudo ss -lntp | head -50
 sudo systemctl --type=service --state=running | \
 egrep -i 'haproxy|keepalived|nginx|httpd'
+
+
+################################################
+
+
+IP destino	Estado	Justificación
+10.171.189.2	Justificada	Comunicación requerida por infraestructura OpenShift. La IP 10.171.189.2 corresponde al host saox1p0mocpb01 y al endpoint interno api-int del cluster OpenShift interno saox1p0mocpc01. Se confirmó además la ejecución de HAProxy en dicha infraestructura. Los pools DEV, UAT y PRD forman parte del mismo cluster y requieren comunicación con los componentes compartidos de control y balanceo de la plataforma. No corresponde a una comunicación entre aplicaciones de ambientes diferentes.
+10.171.98.194	Justificada	Comunicación requerida con infraestructura de gestión de imágenes. La IP 10.171.98.194 corresponde al Regional Container Registry regional-registry.apps.saox1p0mocpc02.isz-latam-assurance.ocpdomain. Se validó resolución hacia dicho servicio, respuesta de Registry API v2 y uso de imágenes provenientes de este registry por workloads de OpenShift. La comunicación corresponde a una dependencia de plataforma necesaria para la administración y consumo de imágenes de contenedores.
+10.171.98.202	Identificada / pendiente justificación funcional definitiva	Comunicación hacia infraestructura Ingress OpenShift. Se confirmó mediante el certificado presentado por el destino que 10.171.98.202 corresponde al endpoint de aplicaciones *.apps.saox1p0mocpc02.isz-latam-assurance.ocpdomain, asociado al Ingress de OpenShift del cluster ISZ. La IP funciona como punto de entrada para Routes/aplicaciones publicadas en dicho cluster. Se mantiene pendiente identificar la aplicación/Route específica consumida para completar la justificación funcional.
