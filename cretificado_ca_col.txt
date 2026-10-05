@@ -656,3 +656,73 @@ get secret autogestion-web-app-file \
 -o yaml > ~/autogestion-web-app-file-backup.yaml
 
 chmod 600 ~/autogestion-web-app-file-backup.yaml
+
+
+*********************************************************************
+
+
+
+
+oc project col-c-uat-digitalsales
+
+oc get secret webview-tyc-file -o json | jq -r '.data | keys[]'
+
+
+
+
+TYC_CERT_HASH=$(
+  oc get secret webview-tyc-file \
+  -o jsonpath='{.data.server\.crt}' |
+  base64 -d |
+  openssl x509 -pubkey -noout |
+  openssl sha256 |
+  awk '{print $2}'
+)
+
+TYC_KEY_HASH=$(
+  oc get secret webview-tyc-file \
+  -o jsonpath='{.data.server\.key}' |
+  base64 -d |
+  openssl pkey -pubout 2>/dev/null |
+  openssl sha256 |
+  awk '{print $2}'
+)
+
+echo "TYC CERT = $TYC_CERT_HASH"
+echo "TYC KEY  = $TYC_KEY_HASH"
+
+
+TYC_CERT_HASH=$(
+  oc get secret webview-tyc-file \
+  -o jsonpath='{.data.server\.crt}' |
+  base64 -d |
+  openssl x509 -pubkey -noout |
+  openssl sha256 |
+  awk '{print $2}'
+)
+
+TYC_KEY_HASH=$(
+  oc get secret webview-tyc-file \
+  -o jsonpath='{.data.server\.key}' |
+  base64 -d |
+  openssl pkey -pubout 2>/dev/null |
+  openssl sha256 |
+  awk '{print $2}'
+)
+
+echo "TYC CERT = $TYC_CERT_HASH"
+echo "TYC KEY  = $TYC_KEY_HASH"
+
+
+
+oc get secret webview-tyc-file \
+-o jsonpath='{.data.server\.crt}' |
+base64 -d |
+openssl x509 -noout -subject -issuer -ext subjectAltName
+
+
+oc -n col-c-uat-self-management-ext \
+get secret autogestion-web-app-file \
+-o yaml > ~/autogestion-web-app-file-backup.yaml
+
+chmod 600 ~/autogestion-web-app-file-backup.yaml
