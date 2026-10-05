@@ -82,6 +82,14 @@ openssl s_client \
 -showcerts </dev/null 2>/dev/null \
 | grep -c "BEGIN CERTIFICATE"
 
+****************************
+
+
+openssl s_client \
+-connect 127.0.0.1:8443 \
+-servername webview-uat.cardif.com.co \
+-showcerts </dev/null
+
 
 openssl verify \
 -CAfile /opt/app-root/certs/root.crt \
