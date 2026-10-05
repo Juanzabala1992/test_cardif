@@ -17,3 +17,26 @@ grep -RniE 'image:|repository:|tag:|resources:|limits:|requests:' overrides/
 grep -RniE 'image:|repository:|tag:' deploy/
 
 helm list -A | grep -i mashery
+
+
+********************************************************
+
+
+grep -RniE 'image:|repository:|tag:' deploy/values.yaml overrides/
+
+
+grep -Rni "image" deploy/values.yaml overrides/
+
+cat overrides/camle-v6-overrides.yaml
+
+
+cat overrides/camle-v6-overrides.yaml
+
+oc whoami --show-server
+oc project
+
+oc get pods
+
+oc get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .spec.containers[*]}{"  "}{.image}{"\n"}{end}{end}'
+
+helm list -A | grep -i mashery
