@@ -169,6 +169,46 @@ echo "===== INTERMEDIATE ====="
 openssl x509 -in /tmp/intermediate.cer \
 -noout -subject -issuer
 
+
+
+********************************************
+
+
+oc get deploy,sts,ds,job,cronjob -A -o yaml | \
+grep -nEi -B10 -A15 \
+'autogestion-web-app|172\.33\.151\.50|webview-uat\.cardif\.com\.co'
+
+oc get cm -A -o yaml | \
+grep -nEi -B10 -A15 \
+'autogestion-web-app|172\.33\.151\.50|webview-uat\.cardif\.com\.co'
+
+oc get secret -A -o json | \
+grep -nEi \
+'autogestion-web-app|webview-uat\.cardif\.com\.co'
+
+
+oc get deploy,sts,ds,cm -A -o yaml | \
+grep -nEi -B8 -A12 \
+'autogestion-web-app(\.|:|/|$)|col-c-uat-self-management-ext'
+
+
+oc get endpoints autogestion-web-app -o wide
+
+
+oc get endpointslice \
+-l kubernetes.io/service-name=autogestion-web-app \
+-o yaml
+
+
+ss -tnp | grep ':8443'
+
+netstat -tn 2>/dev/null | grep ':8443'
+
+oc get network.config.openshift.io cluster -o yaml
+
+oc get network.operator.openshift.io cluster -o yaml | \
+grep -nEi -A5 -B5 '100\.64|joinSubnet|internalJoinSubnet'
+
 echo
 echo "===== ROOT ====="
 openssl x509 -in /tmp/root.cer \
