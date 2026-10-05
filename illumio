@@ -124,3 +124,25 @@ oc get svc -A -o wide | egrep '10\.171\.98\.202|10\.171\.199\.2'
 oc get endpoints -A -o wide | egrep '10\.171\.98\.202|10\.171\.199\.2'
 
 oc get nodes -o wide | egrep '10\.171\.98\.202|10\.171\.199\.2'
+
+
+******************************************
+
+for ip in 10.171.98.202 10.171.199.2
+do
+  echo "===== $ip ====="
+  ip route get "$ip"
+done
+
+
+oc get deploy,sts,ds,cronjob,job,cm -A -o yaml 2>/dev/null | \
+grep -n -B5 -A10 -E '10\.171\.98\.202|10\.171\.199\.2'
+
+
+
+oc get egressfirewall -A -o yaml 2>/dev/null | \
+grep -n -B5 -A10 -E '10\.171\.98\.202|10\.171\.199\.2'
+
+
+oc get egressnetworkpolicy -A -o yaml 2>/dev/null | \
+grep -n -B5 -A10 -E '10\.171\.98\.202|10\.171\.199\.2'
