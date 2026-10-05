@@ -442,3 +442,70 @@ openssl verify \
 CERTIFICADO_AUTOGESTION_CORRECTO.crt
   echo
 done
+
+
+**********************************
+
+oc project col-c-uat-digitalsales
+
+oc get route autogestion-web-app \
+-o jsonpath='{.spec.tls.destinationCACertificate}' \
+> /tmp/destination-ca.pem
+
+grep -c "BEGIN CERTIFICATE" /tmp/destination-ca.pem
+
+openssl crl2pkcs7 -nocrl \
+-certfile /tmp/destination-ca.pem |
+openssl pkcs7 -print_certs -noout
+
+
+
+find ~ /tmp -type f \
+\( -iname 'autogestion*.crt' -o -iname 'autogestion*.cer' \) \
+2>/dev/null
+
+
+POD=$(oc -n col-c-uat-self-management-ext get pods -o name \
+| grep 'pod/autogestion-web-app-' \
+| head -1 | cut -d/ -f2)
+
+KEY_HASH=$(oc -n col-c-uat-self-management-ext exec "$POD" -- sh -c '
+openssl pkey \
+-in /opt/app-root/certs/server.key \
+-pubout 2>/dev/null
+' | openssl sha256 | awk '{print $2}')
+
+echo "SERVER KEY = $KEY_HASH"
+
+
+
+
+for f in /ruta/de/los/certificados/autogestion*.crt
+do
+  [ -f "$f" ] || continue
+
+  CERT_HASH=$(openssl x509 \
+    -in "$f" \
+    -pubkey -noout 2>/dev/null |
+    openssl sha256 |
+    awk '{print $2}')
+
+  echo
+  echo "===== $f ====="
+  echo "CERT HASH  = $CERT_HASH"
+  echo "SERVER KEY = $KEY_HASH"
+
+  if [ "$CERT_HASH" = "$KEY_HASH" ]; then
+    echo "*** COINCIDE CON server.key ***"
+  else
+    echo "NO coincide"
+  fi
+
+  openssl x509 -in "$f" \
+    -noout -subject -issuer -ext subjectAltName
+done
+
+
+openssl verify \
+-CAfile /tmp/destination-ca.pem \
+<RUTA_CERTIFICADO_QUE_COINCIDIO>
