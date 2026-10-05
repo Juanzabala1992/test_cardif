@@ -85,3 +85,42 @@ grep -i -B5 -A15 'regional-registry'
 
 oc get imagecontentsourcepolicy -o yaml 2>/dev/null | \
 grep -i -B5 -A15 'regional-registry'  
+
+*******************************
+
+
+for ip in 10.171.98.202 10.171.199.2
+do
+  echo "=============================="
+  echo "IP: $ip"
+  echo "===== DNS ====="
+  getent hosts "$ip"
+
+  echo "===== PUERTOS ====="
+  for port in 443 6443 22623
+  do
+    echo -n "$port: "
+    timeout 3 bash -c "echo >/dev/tcp/$ip/$port" 2>/dev/null \
+      && echo OPEN \
+      || echo CLOSED/TIMEOUT
+  done
+done
+
+
+for ip in 10.171.98.202 10.171.199.2
+do
+  echo
+  echo "===== $ip ====="
+  echo | timeout 8 openssl s_client \
+    -connect ${ip}:443 2>/dev/null \
+    | openssl x509 -noout -subject -issuer -ext subjectAltName 2>/dev/null
+done
+
+
+
+oc get svc -A -o wide | egrep '10\.171\.98\.202|10\.171\.199\.2'
+
+
+oc get endpoints -A -o wide | egrep '10\.171\.98\.202|10\.171\.199\.2'
+
+oc get nodes -o wide | egrep '10\.171\.98\.202|10\.171\.199\.2'
