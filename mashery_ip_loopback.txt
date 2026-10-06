@@ -1,0 +1,25 @@
+ss -lntp | grep 127.0.0.6
+netstat -lntp | grep 127.0.0.6
+
+
+ip route get 127.0.0.6
+
+
+ss -lntp | grep ':24320'
+
+curl -vk https://127.0.0.6:24320
+
+curl -v http://127.0.0.6:24320
+
+nc -vz 127.0.0.6 24320
+
+ss -antp | grep '127.0.0.6'
+
+watch -n 1 "ss -antp | grep 127.0.0.6"
+
+
+while true; do
+  date
+  ss -antp | grep 127.0.0.6
+  sleep 1
+done
