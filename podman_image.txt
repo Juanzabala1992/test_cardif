@@ -5,3 +5,20 @@ podman pull base-images.artifactory-dogen.groupechonet/eradif/libertycore-ibmjav
 
 
 podman images | grep libertycore
+
+
+***********************
+
+nslookup base-images.artifactory-dogen.groupechonet.eu
+
+curl -vk https://base-images.artifactory-dogen.groupechonet.eu/v2/
+
+podman login base-images.artifactory-dogen.groupechonet.eu -u r80299
+
+podman pull base-images.artifactory-dogen.groupechonet.eu/eradif/libertycore-ibmjava8:23.0.0.12-0
+
+podman images | grep libertycore  
+
+nslookup base-images.artifactory-dogen.groupechonet.eu
+
+curl -vk https://base-images.artifactory-dogen.groupechonet.eu/v2/
