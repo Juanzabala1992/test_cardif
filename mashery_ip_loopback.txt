@@ -23,3 +23,27 @@ while true; do
   ss -antp | grep 127.0.0.6
   sleep 1
 done
+
+
+
+***********************
+
+ss -antp | grep 'pid=332'
+
+
+ss -ant | grep ESTAB
+
+
+ls -l /proc/332/fd
+
+
+cat /proc/332/cmdline | tr '\0' ' '
+echo
+
+cat /proc/332/environ | tr '\0' '\n'
+
+
+cat /proc/332/environ | tr '\0' '\n' | grep -Ei 'host|proxy|url|server|port|sbs'
+
+
+watch -n 1 "ss -antp | grep -E '332|24320'"
