@@ -22,3 +22,11 @@ podman images | grep libertycore
 nslookup base-images.artifactory-dogen.groupechonet.eu
 
 curl -vk https://base-images.artifactory-dogen.groupechonet.eu/v2/
+
+
+*****************************
+
+
+podman login base-images.artifactory-dogen.group.echonet \
+  -u h12179
+
