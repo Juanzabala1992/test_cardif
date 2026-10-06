@@ -35,3 +35,105 @@ podman images --no-trunc | grep libertycore
 podman login base-images.artifactory-dogen.group.echonet \
   -u h12179
 
+
+******************************
+
+podman pull registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+
+podman run --rm \
+  registry.access.redhat.com/ubi9/ubi-minimal:latest \
+  sh -c 'microdnf install -y java-1.8.0-openjdk-headless && java -version'
+
+
+ls -lh wlp-core-all-23.0.0.12.jar
+
+
+mkdir -p ~/liberty-image
+cd ~/liberty-image
+
+vi Containerfile
+
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+USER 0
+
+# Red Hat OpenJDK 8
+RUN microdnf install -y \
+      java-1.8.0-openjdk-headless \
+      ca-certificates \
+      tzdata \
+    && microdnf clean all \
+    && rm -rf /var/cache/yum
+
+# Comprobar Java durante el build
+RUN java -version
+
+# Instalador oficial IBM WebSphere Liberty Core 23.0.0.12
+COPY wlp-core-all-23.0.0.12.jar /tmp/
+
+# Instalar Liberty
+RUN mkdir -p /opt/ibm \
+    && java -jar /tmp/wlp-core-all-23.0.0.12.jar \
+       --acceptLicense /opt/ibm \
+    && rm -f /tmp/wlp-core-all-23.0.0.12.jar
+
+ENV WLP_INSTALL_DIR=/opt/ibm/wlp
+ENV PATH=/opt/ibm/wlp/bin:${PATH}
+
+# Crear servidor base
+RUN /opt/ibm/wlp/bin/server create defaultServer
+
+# Preparación para UID arbitrario de OpenShift
+RUN chgrp -R 0 /opt/ibm/wlp \
+    && chmod -R g=u /opt/ibm/wlp
+
+WORKDIR /opt/ibm/wlp
+
+EXPOSE 9080 9443
+
+USER 1001
+
+CMD ["/opt/ibm/wlp/bin/server", "run", "defaultServer"]
+
+
+
+podman build --no-cache \
+  -t libertycore-openjdk8:23.0.0.12-1 \
+  -f Containerfile .
+
+
+
+podman images | grep liberty
+
+
+podman run --rm \
+  libertycore-openjdk8:23.0.0.12-1 \
+  java -version
+
+podman run --rm \
+  --entrypoint /opt/ibm/wlp/bin/productInfo \
+  libertycore-openjdk8:23.0.0.12-1 \
+  version
+
+
+podman run --rm \
+  --user 1001230000:0 \
+  libertycore-openjdk8:23.0.0.12-1 \
+  sh -c 'id && touch /opt/ibm/wlp/usr/prueba && rm /opt/ibm/wlp/usr/prueba && java -version'
+
+
+podman run --rm \
+  --name liberty-prueba \
+  -p 9080:9080 \
+  -p 9443:9443 \
+  libertycore-openjdk8:23.0.0.12-1
+
+
+podman ps
+
+
+podman run --rm \
+  registry.access.redhat.com/ubi9/ubi-minimal:latest \
+  sh -c 'microdnf install -y java-1.8.0-openjdk-headless && java -version'
