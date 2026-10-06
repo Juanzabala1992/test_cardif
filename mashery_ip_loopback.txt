@@ -65,3 +65,11 @@ dig api-services-uat.cardifnet.com
 getent hosts api-services-uat.cardifnet.com
 cat /etc/resolv.conf
 env | grep -iE 'http_proxy|https_proxy|no_proxy'
+
+
+**************************
+
+curl -vk \
+  -x http://proxy-lam-ms.br.xcd.net.intra:8080 \
+  https://api-services-uat.cardifnet.com/ \
+  -o /dev/null
