@@ -73,3 +73,12 @@ curl -vk \
   -x http://proxy-lam-ms.br.xcd.net.intra:8080 \
   https://api-services-uat.cardifnet.com/ \
   -o /dev/null
+
+
+curl -vk \
+  --proxy http://proxy-lam-ms.br.xcd.net.intra:8080 \
+  --connect-timeout 10 \
+  --location \
+  'https://api-services-uat.cardifnet.com/pe/uat/v1/sbs/api/tipocambio/' \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Accept: application/json'
