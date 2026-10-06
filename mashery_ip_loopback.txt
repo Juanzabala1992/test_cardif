@@ -47,3 +47,21 @@ cat /proc/332/environ | tr '\0' '\n' | grep -Ei 'host|proxy|url|server|port|sbs'
 
 
 watch -n 1 "ss -antp | grep -E '332|24320'"
+
+
+**********************************
+
+
+getent hosts api-services-uat.cardifnet.com
+
+cat /etc/resolv.conf
+
+env | grep -iE 'http_proxy|https_proxy|no_proxy'
+
+nslookup api-services-uat.cardifnet.com
+
+dig api-services-uat.cardifnet.com
+
+getent hosts api-services-uat.cardifnet.com
+cat /etc/resolv.conf
+env | grep -iE 'http_proxy|https_proxy|no_proxy'
