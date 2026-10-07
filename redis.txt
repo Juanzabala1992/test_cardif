@@ -190,3 +190,19 @@ oc get rec rec \
 
 oc get pvc -n bra-c-dev-redis
 
+****************************************
+
+
+
+oc get rec rec -n bra-c-dev-redis \
+  -o jsonpath='REC persistente={.spec.persistentSpec.enabled}{"\n"}'
+
+
+oc get redb mydb -n bra-c-dev-redis \
+  -o jsonpath='Persistencia mydb={.spec.persistence}{"\n"}'
+
+
+oc patch rec rec -n bra-c-dev-redis \
+  --type=merge \
+  -p '{"spec":{"clusterRecovery":true}}'
+
