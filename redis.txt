@@ -331,4 +331,16 @@ oc exec -n bra-c-dev-redis rec-0 \
 oc get redb mydb -n bra-c-dev-redis
 
 
+***********************
+
+oc get rec,redb -n bra-c-dev-redis
+
+
+
+oc get rec rec -n bra-c-dev-redis \
+  -o jsonpath='Recovery={.spec.clusterRecovery}{"\n"}'
+
+oc get pods -n bra-c-dev-redis
+
+
 
