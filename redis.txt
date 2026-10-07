@@ -74,8 +74,28 @@ curl -sv --max-time 5 http://127.0.0.1:8787/livez
 grep -i ":2253" /proc/net/tcp /proc/net/tcp6 || true
 '
 
+************************************
+
+
 
 oc get pod rec-0 -o jsonpath='{range .status.containerStatuses[*]}{.name}{" | reinicios="}{.restartCount}{" | motivo="}{.lastState.terminated.reason}{" | exitCode="}{.lastState.terminated.exitCode}{"\n"}{end}'
 
 
+**********************************
 
+
+
+oc logs rec-0 -c redis-enterprise-node \
+  --previous --tail=150 --timestamps
+
+
+
+oc logs rec-0 -c bootstrapper \
+  --previous --tail=150 --timestamps
+
+
+oc get pod rec-0 -o jsonpath='{range .status.containerStatuses[*]}{.name}{" | inicio="}{.lastState.terminated.startedAt}{" | fin="}{.lastState.terminated.finishedAt}{" | exit="}{.lastState.terminated.exitCode}{"\n"}{end}'
+
+
+oc exec rec-0 -c redis-enterprise-node -- \
+  rlcheck --continue-on-error
