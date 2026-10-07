@@ -296,4 +296,17 @@ oc exec -n bra-c-dev-redis rec-0 \
   rladmin status
 
 
+****************************
+
+
+
+oc get rec,redb -n bra-c-dev-redis
+
+oc get secret rec redb-mydb \
+  cert-console-bra-dev cert-rec-bra-dev \
+  -n bra-c-dev-redis
+
+oc exec -n bra-c-dev-redis rec-0 \
+  -c redis-enterprise-node -- rladmin status
+
 
