@@ -21,3 +21,23 @@ oc get events -n bra-c-dev-redis \
 oc get rec rec -o jsonpath='Nodos={.spec.nodes} Persistencia={.spec.persistentSpec.enabled}{"\n"}'
 
 oc describe pod rec-0
+
+
+*****************************
+
+
+oc project bra-c-dev-redis
+
+oc get pod rec-0 -o jsonpath='{range .status.containerStatuses[*]}{.name}{" Reinicios: "}{.restartCount}{" Motivo: "}{.lastState.terminated.reason}{" ExitCode: "}{.lastState.terminated.exitCode}{"\n"}{end}'
+
+
+oc logs rec-0 -c bootstrapper \
+  --previous --tail=200 --timestamps
+
+
+oc adm top pods -n bra-c-dev-redis --containers
+
+
+oc logs deployment/redis-enterprise-operator \
+  -c redis-enterprise-operator \
+  --since=30m --tail=150
