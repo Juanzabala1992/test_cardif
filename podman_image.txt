@@ -228,3 +228,36 @@ podman images | grep -i liberty
 
 
 podman images --format "{{.Repository}}:{{.Tag}}  {{.ID}}" | grep -i liberty
+
+
+********************************
+
+podman inspect "$IMG" \
+  --format 'User={{.Config.User}} Entrypoint={{.Config.Entrypoint}} Cmd={{.Config.Cmd}}'
+
+mkdir -p ~/liberty-image
+cd ~/liberty-image
+
+vi Containerfile
+
+
+FROM base-images.artifactory-dogen.group.echonet/cardif/libertycore-ibmjava8:23.0.0.12-8
+
+LABEL maintainer="OpenShift"
+LABEL base.image="libertycore-ibmjava8:23.0.0.12-8"
+
+# A partir de aquí agregaremos únicamente
+# los cambios necesarios para la nueva imagen.
+
+podman build \
+  -t libertycore-custom:23.0.0.12-1 \
+  -f Containerfile .
+
+podman run --rm \
+  --entrypoint java \
+  libertycore-custom:23.0.0.12-1 \
+  -version
+
+
+podman inspect libertycore-custom:23.0.0.12-1 \
+  --format 'User={{.Config.User}} Entrypoint={{.Config.Entrypoint}} Cmd={{.Config.Cmd}}'
