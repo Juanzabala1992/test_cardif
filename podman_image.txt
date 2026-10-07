@@ -182,3 +182,49 @@ podman run --rm \
   -p 9080:9080 \
   -p 9443:9443 \
   "$IMG"
+****************************
+
+
+podman images --no-trunc | grep -i liberty
+
+
+podman images --format "{{.Repository}}:{{.Tag}}  {{.ID}}" | grep -i liberty
+
+IMG='base-images.artifactory-dogen.group.echonet/cardif/libertycore-ibmjava8:23.0.0.12-8'
+
+echo "$IMG"
+
+
+podman image exists "$IMG"
+echo $?
+
+
+podman inspect "$IMG" \
+  --format 'User={{.Config.User}} Entrypoint={{.Config.Entrypoint}} Cmd={{.Config.Cmd}}'
+
+
+podman inspect "$IMG" \
+  --format 'OS={{.Os}} Arch={{.Architecture}}'
+
+
+podman run --rm \
+  --entrypoint java \
+  "$IMG" \
+  -version
+
+
+podman run --rm \
+  --entrypoint sh \
+  "$IMG" \
+  -c 'find /opt -name productInfo -type f 2>/dev/null | head'
+
+
+ls -lh
+
+
+podman load -i libertycore-ibmjava8.tar
+
+podman images | grep -i liberty
+
+
+podman images --format "{{.Repository}}:{{.Tag}}  {{.ID}}" | grep -i liberty
