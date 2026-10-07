@@ -137,3 +137,48 @@ podman ps
 podman run --rm \
   registry.access.redhat.com/ubi9/ubi-minimal:latest \
   sh -c 'microdnf install -y java-1.8.0-openjdk-headless && java -version'
+
+*********************************
+
+
+
+
+podman images | grep -i liberty
+
+
+IMG="base-images.artifactory-dogen.group.echonet/<ruta>/libertycore-ibmjava8:23.0.0.12-8"
+
+podman inspect "$IMG" | less
+
+podman inspect "$IMG" \
+  --format 'User={{.Config.User}} Entrypoint={{.Config.Entrypoint}} Cmd={{.Config.Cmd}}'
+
+podman inspect "$IMG" \
+  --format 'OS={{.Os}} Arch={{.Architecture}}'
+
+podman run --rm \
+  --entrypoint java \
+  "$IMG" \
+  -version
+
+
+podman run --rm \
+  --entrypoint sh \
+  "$IMG" \
+  -c 'find /opt -name productInfo -type f 2>/dev/null | head'
+
+
+podman run --rm \
+  --entrypoint /opt/ibm/wlp/bin/productInfo \
+  "$IMG" \
+  version
+
+
+podman inspect "$IMG" \
+  --format 'Entrypoint={{.Config.Entrypoint}} Cmd={{.Config.Cmd}}'
+
+podman run --rm \
+  --name liberty-test \
+  -p 9080:9080 \
+  -p 9443:9443 \
+  "$IMG"
