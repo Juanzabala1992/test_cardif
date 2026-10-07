@@ -283,3 +283,17 @@ oc patch rec rec -n bra-c-dev-redis \
 
 oc get pods -n bra-c-dev-redis -w
 
+
+***********************
+
+oc get rec,redb -n bra-c-dev-redis
+
+oc get rec rec -n bra-c-dev-redis \
+  -o jsonpath='Estado={.status.state} Recovery={.spec.clusterRecovery}{"\n"}'
+
+oc exec -n bra-c-dev-redis rec-0 \
+  -c redis-enterprise-node -- \
+  rladmin status
+
+
+
