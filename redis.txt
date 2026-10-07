@@ -314,5 +314,21 @@ oc exec -n bra-c-dev-redis rec-0 \
 oc exec -n bra-c-dev-redis rec-0 \
   -c redis-enterprise-node -- \
   rladmin recover list
+***************************
+
+
+oc exec -n bra-c-dev-redis rec-0 \
+  -c redis-enterprise-node -- \
+  rladmin recover list
+
+oc exec -n bra-c-dev-redis rec-0 \
+  -c redis-enterprise-node -- \
+  rladmin recover db mydb only_configuration
+
+oc exec -n bra-c-dev-redis rec-0 \
+  -c redis-enterprise-node -- rladmin status
+
+oc get redb mydb -n bra-c-dev-redis
+
 
 
