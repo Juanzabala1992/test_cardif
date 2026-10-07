@@ -256,4 +256,15 @@ oc get secrets -n bra-c-dev-redis \
 
 
 
+*****************
+
+for s in cert-console-bra-dev cert-rec-bra-dev; do
+  if grep -Eq "^[[:space:]]*name: $s[[:space:]]*$" \
+    ~/backup-redis-dev/secrets-redis-dev.yaml; then
+    echo "RESPALDADO: $s"
+  else
+    echo "REVISAR: $s"
+  fi
+done
+
 
