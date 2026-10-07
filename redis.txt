@@ -244,4 +244,16 @@ for s in cert-console-bra-c-dev cert-rec-bra-c-dev rec redb-mydb; do
 done
 
 
+******************
+
+oc get secret cert-console-bra-c-dev \
+  cert-rec-bra-c-dev \
+  -n bra-c-dev-redis
+
+oc get secrets -n bra-c-dev-redis \
+  -o custom-columns=NAME:.metadata.name,TYPE:.type \
+  | grep -Ei 'cert|tls|redis|rec'
+
+
+
 
