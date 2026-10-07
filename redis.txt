@@ -268,3 +268,18 @@ for s in cert-console-bra-dev cert-rec-bra-dev; do
 done
 
 
+
+******
+
+
+
+
+
+
+oc patch rec rec -n bra-c-dev-redis \
+  --type=merge \
+  -p '{"spec":{"clusterRecovery":true}}'
+
+
+oc get pods -n bra-c-dev-redis -w
+
