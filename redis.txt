@@ -229,5 +229,19 @@ oc patch rec rec -n bra-c-dev-redis \
 ***************
 
 
+DIR=~/backup-redis-dev
+
+for f in rec-backup.yaml redb-backup.yaml pvc-backup.yaml secrets-redis-dev.yaml; do
+  test -s "$DIR/$f" && echo "OK: $f" || echo "FALTA: $f"
+done
+
+
+for s in cert-console-bra-c-dev cert-rec-bra-c-dev rec redb-mydb; do
+  grep -Eq "^[[:space:]]*name:[[:space:]]*$s[[:space:]]*$" \
+    "$DIR/secrets-redis-dev.yaml" \
+    && echo "RESPALDADO: $s" \
+    || echo "REVISAR: $s"
+done
+
 
 
