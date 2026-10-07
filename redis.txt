@@ -206,3 +206,28 @@ oc patch rec rec -n bra-c-dev-redis \
   --type=merge \
   -p '{"spec":{"clusterRecovery":true}}'
 
+
+umask 077
+
+mkdir -p ~/backup-redis-dev
+chmod 700 ~/backup-redis-dev
+
+oc get secrets -o yaml \
+  > ~/backup-redis-dev/secrets-redis-dev.yaml
+
+
+oc get rec rec -o jsonpath='{.spec.certificates}{"\n"}'
+
+oc get redb mydb -o jsonpath='{.spec.databaseSecretName}{"\n"}'
+
+oc get secrets
+
+oc patch rec rec -n bra-c-dev-redis \
+  --type=merge \
+  -p '{"spec":{"clusterRecovery":true}}'
+
+***************
+
+
+
+
