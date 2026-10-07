@@ -64,3 +64,18 @@ oc exec rec-0 -c bootstrapper -- \
 
 oc exec rec-0 -c redis-enterprise-node -- \
   rladmin status
+
+
+********************************
+
+
+oc exec rec-0 -c bootstrapper -- sh -c '
+curl -sv --max-time 5 http://127.0.0.1:8787/livez
+grep -i ":2253" /proc/net/tcp /proc/net/tcp6 || true
+'
+
+
+oc get pod rec-0 -o jsonpath='{range .status.containerStatuses[*]}{.name}{" | reinicios="}{.restartCount}{" | motivo="}{.lastState.terminated.reason}{" | exitCode="}{.lastState.terminated.exitCode}{"\n"}{end}'
+
+
+
