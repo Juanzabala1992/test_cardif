@@ -99,3 +99,29 @@ oc get pod rec-0 -o jsonpath='{range .status.containerStatuses[*]}{.name}{" | in
 
 oc exec rec-0 -c redis-enterprise-node -- \
   rlcheck --continue-on-error
+
+
+
+********************************
+
+
+oc project bra-c-dev-redis
+
+oc logs deployment/redis-enterprise-operator \
+  -c redis-enterprise-operator \
+  --since=1h --tail=400 | \
+  grep -Ei 'error|fail|bootstrap|init|rec-0|reconcil'
+
+
+oc exec rec-0 -c redis-enterprise-node -- \
+  sh -c 'ls -ltr /var/opt/redislabs/log | tail -25'
+
+oc exec rec-0 -c redis-enterprise-node -- \
+  sh -c 'tail -n 120 /var/opt/redislabs/log/rlcheck.log'
+
+oc get rec rec -o yaml | grep -A 30 '^status:'
+
+oc exec rec-0 -c redis-enterprise-node -- \
+  rladmin cluster running_actions
+
+
