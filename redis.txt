@@ -166,3 +166,27 @@ for f in /var/opt/redislabs/log/*.log; do
 done
 '
 
+******************************************
+
+
+
+oc project bra-c-dev-redis
+
+mkdir -p ~/backup-redis-dev
+cd ~/backup-redis-dev
+
+oc get rec rec -o yaml > rec-backup.yaml
+
+oc get redb -o yaml > redb-backup.yaml
+
+oc get pods -o wide > pods-antes.txt
+
+oc get pvc -o yaml > pvc-backup.yaml
+
+
+oc get rec rec \
+  -o jsonpath='{.spec.persistentSpec.enabled}{"\n"}'
+
+
+oc get pvc -n bra-c-dev-redis
+
