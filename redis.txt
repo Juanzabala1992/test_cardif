@@ -143,4 +143,26 @@ oc exec rec-0 -c redis-enterprise-node -- \
 oc exec rec-0 -c redis-enterprise-node -- \
   rladmin cluster running_actions
 
+*********************************************
+
+
+oc exec rec-0 -c redis-enterprise-node -- \
+  sh -c '
+grep -iE ":(0D0F|2253)" \
+  /proc/net/tcp /proc/net/tcp6 2>/dev/null || true
+'
+
+
+oc exec rec-0 -c redis-enterprise-node -- \
+  sh -c '
+for f in /var/opt/redislabs/log/*.log; do
+  [ -f "$f" ] || continue
+  matches=$(tail -n 100 "$f" 2>/dev/null |
+    grep -Ei "3343|get_init_info|bootstrap|connection refused|traceback")
+  if [ -n "$matches" ]; then
+    echo "===== $f ====="
+    echo "$matches"
+  fi
+done
+'
 
