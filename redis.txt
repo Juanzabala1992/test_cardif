@@ -121,6 +121,25 @@ oc exec rec-0 -c redis-enterprise-node -- \
 
 oc get rec rec -o yaml | grep -A 30 '^status:'
 
+
+
+**************************************
+
+
+oc exec rec-0 -c redis-enterprise-node -- \
+  curl -ksS --max-time 10 \
+  -w '\nHTTP %{http_code}\n' \
+  https://127.0.0.1:9443/v1/bootstrap
+
+
+oc exec rec-0 -c redis-enterprise-node -- \
+  supervisorctl status
+
+oc exec rec-0 -c redis-enterprise-node -- \
+  rlcheck --continue-on-error
+
+
+
 oc exec rec-0 -c redis-enterprise-node -- \
   rladmin cluster running_actions
 
