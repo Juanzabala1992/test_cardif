@@ -514,4 +514,63 @@ section && $1=="memory" {
 }'
 
 
+********
+
+
+oc describe nodes | awk '
+function cpu(v) {
+  if (v ~ /m$/) return (v+0)/1000
+  return v+0
+}
+function mb(v,n) {
+  n=v+0
+  if (v ~ /Ki$/) return n*1024/1000000
+  if (v ~ /Mi$/) return n*1048576/1000000
+  if (v ~ /Gi$/) return n*1073741824/1000000
+  if (v ~ /Ti$/) return n*1099511627776/1000000
+  return n/1000000
+}
+function mostrar() {
+  if (nodo=="") return
+  c=ca-cr
+  m=ma-mr
+  printf "%-60s %15.3f %18.0f\n",nodo,c,m
+  tc+=c
+  tm+=m
+  if (nodo ~ /^worker/ && nodo !~ /mashery/) {
+    twc+=c
+    twm+=m
+  }
+}
+BEGIN {
+  printf "%-60s %15s %18s\n","NODO","CPU_LIBRE_CORES","RAM_LIBRE_MB"
+  print "------------------------------------------------------------------------------------------------"
+}
+/^Name:[[:space:]]/ {
+  mostrar()
+  nodo=$2
+  ca=cr=ma=mr=0
+  seccion=""
+}
+/^Allocatable:/ {
+  seccion="alloc"
+  next
+}
+/^Allocated resources:/ {
+  seccion="requests"
+  next
+}
+seccion=="alloc" && $1=="cpu:" {ca=cpu($2)}
+seccion=="alloc" && $1=="memory:" {ma=mb($2)}
+seccion=="requests" && $1=="cpu" {cr=cpu($2)}
+seccion=="requests" && $1=="memory" {
+  mr=mb($2)
+  seccion=""
+}
+END {
+  mostrar()
+  print "------------------------------------------------------------------------------------------------"
+  printf "%-60s %15.3f %18.0f\n","TOTAL TODOS LOS NODOS",tc,tm
+  printf "%-60s %15.3f %18.0f\n","TOTAL WORKERS SIN MASHERY",twc,twm
+}'
 
