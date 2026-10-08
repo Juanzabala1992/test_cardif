@@ -498,3 +498,20 @@ oc delete cronjob restart-car-services \
 oc get cronjob -n chl-c-prd-carboosting
 
 oc get jobs -n chl-c-prd-carboosting | grep restart-car-services
+
+*****
+oc describe nodes | awk '
+/^Name:/ {node=$2}
+/^Allocated resources:/ {section=1; next}
+section && $1=="cpu" {
+  cpu=$2
+  cpu_pct=$3
+}
+section && $1=="memory" {
+  print node, "CPU:", cpu, cpu_pct, \
+  "RAM:", $2, $3
+  section=0
+}'
+
+
+
