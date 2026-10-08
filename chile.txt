@@ -574,3 +574,78 @@ END {
   printf "%-60s %15.3f %18.0f\n","TOTAL WORKERS SIN MASHERY",twc,twm
 }'
 
+
+———————
+oc describe nodes | awk '
+function cpu(v) {
+  if(v ~ /m$/) return (v+0)/1000
+  return v+0
+}
+function mb(v,n) {
+  n=v+0
+  if(v~/Ki$/) return n*1024/1000000
+  if(v~/Mi$/) return n*1048576/1000000
+  if(v~/Gi$/) return n*1073741824/1000000
+  if(v~/Ti$/) return n*1099511627776/1000000
+  return n/1000000
+}
+function guardar( c,m ) {
+  if(nodo=="" || tolower(nodo)~/mashery/) return
+
+  c=ca-cr
+  m=ma-mr
+
+  if(nodo~/^worker/) {
+    workers=workers sprintf("%-60s %13.3f %15.0f\n",nodo,c,m)
+    wc+=c
+    wm+=m
+  }
+  else if(nodo~/^infra/) {
+    plataforma=plataforma sprintf("%-60s %-8s %13.3f %15.0f\n",nodo,"INFRA",c,m)
+    ic+=c
+    im+=m
+  }
+  else if(nodo~/^master/) {
+    plataforma=plataforma sprintf("%-60s %-8s %13.3f %15.0f\n",nodo,"MASTER",c,m)
+    mc+=c
+    mm+=m
+  }
+}
+/^Name:[[:space:]]/ {
+  guardar()
+  nodo=$2
+  ca=cr=ma=mr=0
+  s=""
+}
+/^Allocatable:/ {s="A";next}
+/^Allocated resources:/ {s="R";next}
+s=="A" && $1=="cpu:" {ca=cpu($2)}
+s=="A" && $1=="memory:" {ma=mb($2)}
+s=="R" && $1=="cpu" {cr=cpu($2)}
+s=="R" && $1=="memory" {
+  mr=mb($2)
+  s=""
+}
+END {
+  guardar()
+
+  print "\n========== TABLA 1: WORKERS =========="
+  printf "%-60s %13s %15s\n","NODO","CPU_CORES","RAM_MB"
+  print "------------------------------------------------------------------------------------------"
+  printf "%s",workers
+  print "------------------------------------------------------------------------------------------"
+  printf "%-60s %13.3f %15.0f\n","TOTAL WORKERS",wc,wm
+
+  print "\n========== TABLA 2: INFRA Y MASTER =========="
+  printf "%-60s %-8s %13s %15s\n","NODO","TIPO","CPU_CORES","RAM_MB"
+  print "---------------------------------------------------------------------------------------------------"
+  printf "%s",plataforma
+  print "---------------------------------------------------------------------------------------------------"
+  printf "%-60s %-8s %13.3f %15.0f\n","TOTAL INFRA","",ic,im
+  printf "%-60s %-8s %13.3f %15.0f\n","TOTAL MASTER","",mc,mm
+  print "---------------------------------------------------------------------------------------------------"
+  printf "%-60s %-8s %13.3f %15.0f\n","TOTAL INFRA + MASTER","",ic+mc,im+mm
+}'
+
+
+
