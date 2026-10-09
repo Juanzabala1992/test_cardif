@@ -941,3 +941,36 @@ openssl verify -show_chain -CAfile /tmp/ca-bundle.pem -untrusted /tmp/intermedia
 
 oc get redb braredisdbprd -n bra-c-prd-redis \
 -o jsonpath='Memory: {.spec.memorySize}{"\n"}Eviction: {.spec.evictionPolicy}{"\n"}Replication: {.spec.replication}{"\n"}Persistence: {.spec.persistence}{"\n"}'
+
+
+
+
+
+
+
+
+**************
+
+
+oc exec -n bra-c-prd-redis rec-0 \
+-c redis-enterprise-node -- \
+/opt/redislabs/bin/rladmin status
+
+
+oc exec -n bra-c-prd-redis rec-0 \
+-c redis-enterprise-node -- \
+/opt/redislabs/bin/rladmin status shards db braredisdbprd
+
+
+oc exec -n bra-c-prd-redis rec-0 \
+-c redis-enterprise-node -- \
+/opt/redislabs/bin/rladmin cluster running_actions
+
+
+
+
+oc exec -n bra-c-prd-redis rec-0 \
+-c redis-enterprise-node -- \
+/opt/redislabs/bin/rladmin restart db braredisdbprd
+
+
