@@ -974,3 +974,28 @@ oc exec -n bra-c-prd-redis rec-0 \
 /opt/redislabs/bin/rladmin restart db braredisdbprd
 
 
+
+
+
+
+
+
+
+@@@@@@@@
+
+
+oc exec -n bra-c-prd-redis rec-0 \
+-c redis-enterprise-node -- \
+/opt/redislabs/bin/rladmin restart db braredisdbprd
+
+
+
+
+oc exec -n bra-c-prd-redis rec-0 \
+-c redis-enterprise-node -- \
+/opt/redislabs/bin/rladmin status
+
+
+
+
+
