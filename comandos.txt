@@ -932,3 +932,12 @@ openssl x509 -in /tmp/intermediate.pem -noout -subject -issuer -dates
 openssl x509 -in /tmp/server2.crt -noout -issuer
 
 openssl verify -show_chain -CAfile /tmp/ca-bundle.pem -untrusted /tmp/intermediate.pem /tmp/server2.crt
+
+
+
+++++++++++
+
+
+
+oc get redb braredisdbprd -n bra-c-prd-redis \
+-o jsonpath='Memory: {.spec.memorySize}{"\n"}Eviction: {.spec.evictionPolicy}{"\n"}Replication: {.spec.replication}{"\n"}Persistence: {.spec.persistence}{"\n"}'
