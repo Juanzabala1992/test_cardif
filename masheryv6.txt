@@ -661,3 +661,11 @@ printf '%s' "$ADMIN_PW" | oc create secret generic mashery-preinstall-admin \
   --from-file=CUSTOM_AREA_ADMIN_PASSWORD=/dev/stdin
 
 unset ADMIN_PW
+
+
+************************
+
+oc get secret mashery-preinstall-admin \
+  -n lam-c-dev-mashery-v6 \
+  -o jsonpath='{.data.CUSTOM_AREA_ADMIN_PASSWORD}' \
+  | base64 -d | wc -c
