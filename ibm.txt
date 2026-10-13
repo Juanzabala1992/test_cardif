@@ -421,3 +421,21 @@ ibmcloud oc worker-pool create vpc-gen2 --help
 ibmcloud oc worker-pool ls --cluster carla-npr-latam-ocw
 
 
+****************
+
+ibmcloud oc worker-pool create vpc-gen2 \
+  --cluster carla-npr-latam-ocw \
+  --name apigee-runtime-rhcos \
+  --flavor mx2.8x64 \
+  --size-per-zone 1 \
+  --operating-system RHCOS \
+  --label migration-pool=runtime-rhcos \
+  --kms-account-id f284a6766c2345e09d255d74e18c67c5 \
+  --kms-instance 0c52fc9e-96a9-4c63-8226-50bdc1612186 \
+  --crk abd7a792-de09-40d4-b8f1-bcf3a688c077
+
+
+
+ibmcloud oc worker-pool ls --cluster carla-npr-latam-ocw
+
+
