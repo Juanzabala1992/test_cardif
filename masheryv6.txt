@@ -171,3 +171,16 @@ grep -nEi 'databaseSchema|initDBUserName|initializeDB|INITIALIZE_DB|MYSQL_DB|MYS
   overrides/camle-v6-overrides.yaml \
   deploy/charts/preInstallDBPrep/values.yaml \
   deploy/charts/preInstallDBPrep/templates/preinstall-job.yaml
+
+
+***********************************
+
+sed -n '75,115p' \
+deploy/charts/preInstallDBPrep/templates/preinstall-job.yaml
+
+
+
+grep -RniE 'initializeDB|INITIALIZE_DB|preInstallDBPrep' \
+deploy/values.yaml \
+overrides/ \
+deploy/charts/preInstallDBPrep/values.yaml
