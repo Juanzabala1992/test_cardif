@@ -239,3 +239,17 @@ oc get pvc -n lam-c-dev-mashery-v6
 oc describe pod mysql-migra-masheryv6-6c89fd8b7d-vmgr4 \
   -n lam-c-dev-mashery-v6
 
+
+******************************
+
+
+oc get pod mysql-migra-masheryv6-6c89fd8b7d-vmgr4 \
+  -n lam-c-dev-mashery-v6 \
+  -o jsonpath='{range .spec.containers[0].volumeMounts[*]}{.name}{" -> "}{.mountPath}{"\n"}{end}'
+
+oc exec -n lam-c-dev-mashery-v6 \
+  mysql-migra-masheryv6-6c89fd8b7d-vmgr4 \
+  -c mysql -- sh -c \
+  'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -Nse "SELECT @@datadir;"'
+
+
