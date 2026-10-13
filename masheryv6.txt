@@ -1075,3 +1075,19 @@ oc describe pod \
   trafficmanager-deploy-56dbdcd8f8-pkh9b \
   -n lam-c-dev-mashery-v6 | tail -n 65
 
+
+********************************************
+
+
+NS=lam-c-dev-mashery-v6
+
+oc get deploy trafficmanager-deploy -n "$NS" \
+-o jsonpath='{range .spec.template.spec.containers[*]}{.name}{"\n"}{range .volumeMounts[*]}{.name}{" -> "}{.mountPath}{"\n"}{end}{end}'
+
+
+
+oc get deploy trafficmanager-deploy -n "$NS" \
+-o jsonpath='{range .spec.template.spec.volumes[*]}{.name}{" | Secret: "}{.secret.secretName}{" | ConfigMap: "}{.configMap.name}{"\n"}{end}'
+
+
+
