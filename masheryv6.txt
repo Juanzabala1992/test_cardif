@@ -669,3 +669,177 @@ oc get secret mashery-preinstall-admin \
   -n lam-c-dev-mashery-v6 \
   -o jsonpath='{.data.CUSTOM_AREA_ADMIN_PASSWORD}' \
   | base64 -d | wc -c
+
+
+**********************************
+
+python3 - <<'PY'
+import json, re, subprocess
+from pathlib import Path
+
+files = [
+    Path("overrides/camle-v6-overrides.yaml"),
+    Path("deploy/values.yaml")
+]
+
+fields = {
+    "CUSTOM_PKG_KEY": "apiKey",
+    "CUSTOM_PKG_KEY_SECRET": "apiSecret",
+    "CUSTOM_AREA_UUID": "localDevOAuthScope",
+    "CUSTOM_AREA_NAME": "areaName",
+    "CUSTOM_DOMAIN_SUFFIX": "domainSuffix",
+    "CUSTOM_AREA_ADMIN_USER": "localDevAdminUser",
+    "APIM_CLUSTER_MODE": "apimClusterMode",
+    "DB_SSL_MODE": "sslMode",
+    "DB_MUTUAL_TLS": "mutualTls"
+}
+
+def find_value(key):
+    pattern = re.compile(
+        r"^\s*" + re.escape(key) + r":\s*(.*?)\s*$"
+    )
+    for path in files:
+        for line in path.read_text().splitlines():
+            match = pattern.match(line)
+            if match:
+                value = match.group(1).split(" #", 1)[0].strip()
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+                    value = value[1:-1]
+                if value and value.lower() not in ("null", "~"):
+                    return value
+    return None
+
+data = {
+    env: value
+    for env, key in fields.items()
+    if (value := find_value(key)) is not None
+}
+
+required = [
+    "CUSTOM_PKG_KEY",
+    "CUSTOM_PKG_KEY_SECRET",
+    "CUSTOM_AREA_UUID",
+    "DB_SSL_MODE"
+]
+
+missing = [k for k in required if k not in data]
+if missing:
+    raise SystemExit("Faltan parametros: " + ", ".join(missing))
+
+if any(
+    "{{" in data[k] or data[k].startswith("<") or
+    "changeme" in data[k].lower()
+    for k in required
+):
+    raise SystemExit("Hay valores de plantilla sin configurar")
+
+obj = {
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {
+        "name": "mashery-preinstall-params",
+        "namespace": "lam-c-dev-mashery-v6"
+    },
+    "type": "Opaque",
+    "stringData": data
+}
+
+subprocess.run(
+    ["oc", "create", "-f", "-"],
+    input=json.dumps(obj),
+    text=True,
+    check=True
+)
+print("Parametros almacenados sin mostrar valores")
+PY
+
+
+
+
+
+
+cat > /tmp/mashery-db-seed.yaml <<'EOF'
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mashery-db-seed
+  namespace: lam-c-dev-mashery-v6
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: db-seed
+          image: regional-registry.apps.saox1p0mocpc02.isz-latam-assurance.ocpdomain/regional/apim-le-toolkit:v6.2.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - /opt/apim/db/prepare-db.sh
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          envFrom:
+            - secretRef:
+                name: mashery-preinstall-params
+          env:
+            - name: INITIALIZE_DB
+              value: "Yes"
+            - name: ACCEPT_EUA
+              value: "YES"
+            - name: MYSQL_SERVICE_HOST
+              value: "mysql84"
+            - name: MYSQL_PORT
+              value: "3306"
+            - name: MYSQL_DB
+              value: "masherysolar"
+            - name: MYSQL_USER
+              value: "mashery"
+            - name: MYSQL_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-mashery
+                  key: MYSQL_PASSWORD
+            - name: CUSTOM_AREA_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mashery-preinstall-admin
+                  key: CUSTOM_AREA_ADMIN_PASSWORD
+            - name: APIMLE_RELEASE_VERSION
+              value: "6.2.1"
+            - name: WAIT_AFTER_EXECUTION
+              value: "0"
+          volumeMounts:
+            - name: dbloadscript
+              mountPath: /opt/apim/db
+              readOnly: true
+      volumes:
+        - name: dbloadscript
+          configMap:
+            name: preinstall-configmap
+            defaultMode: 0444
+EOF
+
+
+
+
+oc apply --dry-run=server -f /tmp/mashery-db-seed.yaml
+
+
+
+oc create -f /tmp/mashery-db-seed.yaml
+
+
+oc get jobs -n lam-c-dev-mashery-v6
+
+
+oc logs -n lam-c-dev-mashery-v6 \
+  job/mashery-db-seed --tail=100
