@@ -984,3 +984,54 @@ oc logs -n lam-c-dev-mashery-v6 \
 grep -RniE \
 'CREATE TABLE.*(token_purge_settings|counter_purge_settings|batch_settings)' \
 scripts/db/
+
+
+*************************************
+
+cd ~/MasheryV6
+
+grep -nEi '^[[:space:]]*(DROP|TRUNCATE|DELETE|UPDATE|INSERT|REPLACE|ALTER|RENAME|GRANT|USE)[[:space:];]' \
+  scripts/db/apim-le-db-{audit,counter,token}-purger-schema_6.2.1.sql
+
+
+
+
+NS=lam-c-dev-mashery-v6
+POD=mysql-migra-masheryv6-6c89fd8b7d-vmgr4
+
+set -o pipefail
+umask 077
+
+B="$HOME/backup-mashery/masherysolar-pre-purgers-$(date +%Y%m%d-%H%M%S).sql.gz"
+
+oc exec -n "$NS" "$POD" -c mysql -- sh -c \
+'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -uroot \
+ --databases masherysolar --single-transaction --quick \
+ --no-tablespaces --set-gtid-purged=OFF' \
+| gzip -1 > "$B" && gzip -t "$B"
+
+
+
+for TIPO in audit counter token; do
+  FILE="scripts/db/apim-le-db-${TIPO}-purger-schema_6.2.1.sql"
+
+  echo "Importando: $FILE"
+
+  oc exec -i -n "$NS" "$POD" -c mysql -- sh -c \
+  'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot masherysolar' \
+  < "$FILE" || break
+done
+
+
+
+oc exec -i -n "$NS" "$POD" -c mysql -- sh -c \
+'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot masherysolar' <<'SQL'
+SELECT TABLE_NAME
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = 'masherysolar'
+AND TABLE_NAME IN (
+  'token_purge_settings',
+  'counter_purge_settings',
+  'batch_settings'
+);
+SQL
