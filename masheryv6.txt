@@ -1179,4 +1179,19 @@ oc get pods -n "$NS" | grep trafficmanager
 oc logs -n "$NS" deployment/trafficmanager-deploy \
   --since=5m --tail=80
 
+************************************
 
+
+oc delete pod trafficmanager-deploy-56dbdcd8f8-pkh9b \
+  -n lam-c-dev-mashery-v6
+
+
+oc get pods -n lam-c-dev-mashery-v6 | grep trafficmanager
+
+
+oc logs -n lam-c-dev-mashery-v6 \
+  deployment/trafficmanager-deploy \
+  -c trafficmanager \
+  --since=5m --tail=500 \
+  | grep -Ei -B 2 -A 3 \
+  'Caused by|Exception|trustStorePassword|loaders NOTREADY|UNHEALTHY'
