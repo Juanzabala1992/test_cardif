@@ -379,3 +379,11 @@ oc get jobs -n apigee -o json | jq -r '
    (.status.succeeded // 0),
    (.status.failed // 0)]
 | @tsv'
+
+
+**********************
+
+
+oc logs -n apigee \
+  job/apigee-cassandra-backup-29864400 \
+  --tail=100 --timestamps
