@@ -99,3 +99,12 @@ ibmcloud oc cluster addon update vpc-block-csi-driver \
   --cluster carla-npr-latam-ocw \
   --version 5.2
 
+******************************
+
+ibmcloud oc cluster addon ls --cluster carla-npr-latam-ocw
+
+oc get pods -n kube-system | grep vpc-block-csi
+
+
+
+
