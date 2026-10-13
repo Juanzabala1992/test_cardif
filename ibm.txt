@@ -298,3 +298,14 @@ oc get volumeattachment -o wide | grep fac3daff
 
 oc get volumesnapshot pvc-test-rg-snapshot -n apigee-tools -o wide
 
+
+****************************
+
+
+oc get volumesnapshot -A --no-headers | wc -l
+
+oc get volumesnapshot -A -o json | jq \
+'[.items[] | select(.status.readyToUse != true)] | length'
+
+
+
