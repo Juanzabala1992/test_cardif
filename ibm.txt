@@ -205,5 +205,9 @@ oc get volumeattachment -o wide | grep fac3daff
 oc get pods -n apigee-tools -o json \
   | jq -r '.items[] | select(any(.spec.volumes[]?; .persistentVolumeClaim.claimName == "pvc-test")) | .metadata.name'
 
+***************************
+
+oc get pv pvc-fac3daff-aa9b-45ba-9e7f-a3527ef9035c -o yaml
+
 
 
