@@ -155,3 +155,19 @@ find deploy/charts/preInstallDBPrep -maxdepth 3 -type f | sort
 grep -nEi '^[[:space:]]*(CREATE DATABASE|CREATE SCHEMA|USE |GRANT )' scripts/db/apim-le-db-schema_6.2.1.sql | head -n 30
 
 cat deploy/charts/preInstallDBPrep/scripts/prepare-db.sh
+
+
+
+**************************
+
+
+grep -Rnl --exclude='*.sql' \
+  'apim-le-db-schema_6.2.1.sql' \
+  deploy scripts overrides
+
+
+grep -nEi 'databaseSchema|initDBUserName|initializeDB|INITIALIZE_DB|MYSQL_DB|MYSQL_USER' \
+  deploy/values.yaml \
+  overrides/camle-v6-overrides.yaml \
+  deploy/charts/preInstallDBPrep/values.yaml \
+  deploy/charts/preInstallDBPrep/templates/preinstall-job.yaml
