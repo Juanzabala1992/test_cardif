@@ -308,4 +308,17 @@ oc get volumesnapshot -A -o json | jq \
 '[.items[] | select(.status.readyToUse != true)] | length'
 
 
+***************************
+
+oc get volumesnapshot -A -o json | jq -r '
+.items
+| group_by(.metadata.namespace)
+| .[]
+| [
+    .[0].metadata.namespace,
+    length,
+    (map(select(.status.readyToUse != true)) | length)
+  ]
+| @tsv'
+
 
