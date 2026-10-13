@@ -67,6 +67,17 @@ oc get pods -n kube-system | grep vpc-block-csi
 oc logs -n kube-system ibm-vpc-block-csi-controller-0 -c csi-snapshotter --since=3h --tail=80
 
 
+********************************************
+
+ibmcloud resource groups --default
+
+ibmcloud resource group CARLA-NPR-WORKLOAD-RG
+
+oc get volumesnapshotclass hybrid-snapshot-v3 -o yaml
+
+
+
+
 
 oc get volumesnapshot -n apigee --sort-by=.metadata.creationTimestamp -o custom-columns='NAME:.metadata.name,READY:.status.readyToUse,ERROR:.status.error.message' | tail -12
 
