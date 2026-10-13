@@ -27,3 +27,13 @@ oc get pods -A -o wide | grep -i cassandra
 oc describe pdb apigee-cassandra-default -n apigee-system
 
 
+**********************************
+
+oc exec -n apigee apigee-cassandra-default-0 -- nodetool status
+
+oc get pdb -n apigee
+
+oc get jobs -n apigee | grep apigee-cassandra-backup | tail -10
+
+
+
