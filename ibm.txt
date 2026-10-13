@@ -36,4 +36,11 @@ oc get pdb -n apigee
 oc get jobs -n apigee | grep apigee-cassandra-backup | tail -10
 
 
+***********************************
+
+oc exec -n apigee apigee-cassandra-default-0 -c apigee-cassandra -- sh -c 'nodetool -u "$APIGEE_JMX_USER" -pw "$APIGEE_JMX_PASSWORD" status'
+
+
+oc logs -n apigee job/apigee-cassandra-backup-29864400 --tail=80
+
 
