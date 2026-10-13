@@ -1090,4 +1090,12 @@ oc get deploy trafficmanager-deploy -n "$NS" \
 -o jsonpath='{range .spec.template.spec.volumes[*]}{.name}{" | Secret: "}{.secret.secretName}{" | ConfigMap: "}{.configMap.name}{"\n"}{end}'
 
 
+*******************************************************
 
+oc get secret trafficmanager-truststore-secret \
+  -n lam-c-dev-mashery-v6 \
+  -o go-template='{{range $k,$v := .data}}{{printf "%s\n" $k}}{{end}}'
+
+oc get deploy trafficmanager-deploy \
+  -n lam-c-dev-mashery-v6 -o yaml \
+  | grep -A 12 -B 3 'name: trafficmanager-truststore-vol'
