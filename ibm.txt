@@ -198,4 +198,12 @@ oc logs -n openshift-cluster-storage-operator \
   | grep -Ei -C 3 'pvc-test-rg-snapshot|apigee-tools|error|failed'
 
 
+**********************
+
+oc get volumeattachment -o wide | grep fac3daff
+
+oc get pods -n apigee-tools -o json \
+  | jq -r '.items[] | select(any(.spec.volumes[]?; .persistentVolumeClaim.claimName == "pvc-test")) | .metadata.name'
+
+
 
