@@ -646,3 +646,18 @@ done
 
 
 
+
+************
+
+
+
+NS=lam-c-dev-mashery-v6
+
+read -rsp "Contraseña del administrador local Mashery: " ADMIN_PW
+echo
+
+printf '%s' "$ADMIN_PW" | oc create secret generic mashery-preinstall-admin \
+  -n "$NS" \
+  --from-file=CUSTOM_AREA_ADMIN_PASSWORD=/dev/stdin
+
+unset ADMIN_PW
