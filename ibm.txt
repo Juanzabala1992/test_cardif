@@ -152,3 +152,11 @@ EOF
 
 oc get volumesnapshot pvc-test-rg-snapshot -n apigee-tools -w
 
+************************************
+
+
+oc get volumesnapshotclass vpc-snap-carla-rg-test -o yaml
+
+
+oc describe volumesnapshot pvc-test-rg-snapshot -n apigee-tools
+
