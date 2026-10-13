@@ -367,3 +367,15 @@ oc patch cronjob apigee-cassandra-backup \
 
 
 oc get cronjob apigee-cassandra-backup -n apigee
+
+
+***************************
+
+oc get jobs -n apigee -o json | jq -r '
+.items[]
+| select(.metadata.name | startswith("apigee-cassandra-backup-"))
+| select((.status.active // 0) > 0)
+| [.metadata.name, (.status.active // 0),
+   (.status.succeeded // 0),
+   (.status.failed // 0)]
+| @tsv'
