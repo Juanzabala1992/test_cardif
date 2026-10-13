@@ -49,3 +49,10 @@ oc logs -n apigee job/apigee-cassandra-backup-29864400 --tail=80
 
 oc get volumesnapshot -n apigee --sort-by=.metadata.creationTimestamp | tail -12
 
+
+************************************************
+
+oc get volumesnapshot -n apigee --sort-by=.metadata.creationTimestamp -o custom-columns='NAME:.metadata.name,READY:.status.readyToUse,ERROR:.status.error.message' | tail -12
+
+SNAP=$(oc get volumesnapshot -n apigee --sort-by=.metadata.creationTimestamp -o name | tail -4 | head -1); oc describe -n apigee "$SNAP"
+
