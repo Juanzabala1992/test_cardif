@@ -351,3 +351,76 @@ oc get deploy mysql-migra-masheryv6 \
   -o jsonpath='{range .spec.template.spec.containers[*]}{.name}{": "}{range .volumeMounts[*]}{.name}{" -> "}{.mountPath}{" "}{end}{"\n"}{end}'
 
 
+************************
+
+NS=lam-c-dev-mashery-v6
+DBPOD=mysql-migra-masheryv6-6c89fd8b7d-vmgr4
+
+IMAGE=$(oc get pod "$DBPOD" -n "$NS" \
+  -o jsonpath='{.spec.containers[?(@.name=="mysql")].image}')
+
+NODE=$(oc get pod "$DBPOD" -n "$NS" \
+  -o jsonpath='{.spec.nodeName}')
+
+echo "Imagen: $IMAGE"
+echo "Nodo: $NODE"
+
+
+
+
+
+cat > /tmp/mysql-pvc-inspect.yaml <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mysql-pvc-inspect
+  namespace: lam-c-dev-mashery-v6
+spec:
+  nodeName: "$NODE"
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: inspector
+      image: "$IMAGE"
+      imagePullPolicy: IfNotPresent
+      command: ["/bin/sh", "-c"]
+      args: ["sleep 3600"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: mysql-data
+          mountPath: /mnt/mysql-pvc
+          readOnly: true
+  volumes:
+    - name: mysql-data
+      persistentVolumeClaim:
+        claimName: mysql-mashery-migra-pvc
+        readOnly: true
+EOF
+
+
+
+
+oc apply -f /tmp/mysql-pvc-inspect.yaml
+
+
+oc get pod mysql-pvc-inspect -n "$NS" -o wide
+
+
+oc describe pod mysql-pvc-inspect -n "$NS"
+
+
+oc exec -n "$NS" mysql-pvc-inspect \
+  -c inspector -- ls -lah /mnt/mysql-pvc
+
+
+oc exec -n "$NS" mysql-pvc-inspect \
+  -c inspector -- du -sh /mnt/mysql-pvc
+
