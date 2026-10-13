@@ -125,3 +125,18 @@ ls -lah scripts/
 
 find . -maxdepth 6 -type f \
   | grep -Ei '\.sql$|mysql|database|schema|migration|init|bootstrap|create'
+
+
+***********************
+
+
+head -n 60 scripts/db/apim-le-db-schema_6.2.1.sql
+
+
+grep -nEi 'CREATE DATABASE|CREATE SCHEMA|USE |CREATE TABLE|masherysolar|GRANT' scripts/db/apim-le-db-schema_6.2.1.sql | head -n 40
+
+
+ls -lah deploy/charts/preInstallDBPrep/
+
+
+find deploy/charts/preInstallDBPrep -maxdepth 3 -type f | sort
