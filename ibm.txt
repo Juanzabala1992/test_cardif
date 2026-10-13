@@ -387,3 +387,27 @@ oc get jobs -n apigee -o json | jq -r '
 oc logs -n apigee \
   job/apigee-cassandra-backup-29864400 \
   --tail=100 --timestamps
+
+
+
+**********************
+
+ibmcloud oc worker-pool create vpc-gen2 \
+  --cluster carla-npr-latam-ocw \
+  --name apigee-runtime-rhcos \
+  --flavor mx2.8x64 \
+  --size-per-zone 1 \
+  --operating-system RHCOS \
+  --label apigee-nodepool=apigee-runtime \
+  --kms-account-id <KMS_ACCOUNT_ID> \
+  --kms-instance <KMS_INSTANCE_ID> \
+  --crk <CRK_ID>
+
+
+
+ibmcloud oc worker-pool taint set \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-runtime-rhcos \
+  --taint migration=hold:NoSchedule
+
+
