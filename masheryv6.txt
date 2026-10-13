@@ -308,3 +308,13 @@ then
 else
   echo "ERROR: exportación fallida. No utilizar este respaldo."
 fi
+
+************************************
+
+ls -lh "$BACKUP"
+
+gzip -t "$BACKUP" && echo "BACKUP INTEGRO"
+
+sha256sum "$BACKUP"
+
+
