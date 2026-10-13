@@ -602,4 +602,22 @@ grep -nE '^[[:space:]]*(image|tag):' \
   deploy/charts/preInstallDBPrep/values.yaml
 
 
+******************************
+
+
+NS=lam-c-dev-mashery-v6
+D="$HOME/MasheryV6/deploy/charts/preInstallDBPrep/scripts"
+
+oc create configmap preinstall-configmap \
+  -n "$NS" \
+  --from-file="$D/prepare-db.sh" \
+  --from-file="$D/functions.sh" \
+  --from-file="$D/customize-papi-properties.sh" \
+  --from-file="$D/generate_seed_data.sh" \
+  --from-file="$D/apim-le-papi-properties-default.json" \
+  --from-file="$D/db"
+
+oc get configmap preinstall-configmap \
+  -n lam-c-dev-mashery-v6
+
 
