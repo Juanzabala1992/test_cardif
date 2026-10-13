@@ -424,3 +424,34 @@ oc exec -n "$NS" mysql-pvc-inspect \
 oc exec -n "$NS" mysql-pvc-inspect \
   -c inspector -- du -sh /mnt/mysql-pvc
 
+
+****************************************************
+
+
+sed -i '/imagePullPolicy: IfNotPresent/a\
+      resources:\
+        requests:\
+          cpu: "25m"\
+          memory: "64Mi"\
+        limits:\
+          cpu: "100m"\
+          memory: "128Mi"' /tmp/mysql-pvc-inspect.yaml
+
+
+
+oc apply --dry-run=server -f /tmp/mysql-pvc-inspect.yaml
+
+oc apply -f /tmp/mysql-pvc-inspect.yaml
+
+oc get pod mysql-pvc-inspect \
+  -n lam-c-dev-mashery-v6 -o wide
+
+oc exec -n lam-c-dev-mashery-v6 \
+  mysql-pvc-inspect -c inspector -- \
+  ls -lah /mnt/mysql-pvc
+
+
+
+oc exec -n lam-c-dev-mashery-v6 \
+  mysql-pvc-inspect -c inspector -- \
+  du -sh /mnt/mysql-pvc
