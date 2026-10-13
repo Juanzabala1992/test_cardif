@@ -331,3 +331,13 @@ grep -i -B5 -A15 'regional-registry'
 
 oc get imagecontentsourcepolicy -o yaml 2>/dev/null | \
 grep -i -B5 -A15 'regional-registry'
+
+
+
+##########################################
+
+Policy 4
+Comunicación requerida por infraestructura OpenShift. Los nodos UAT pertenecen al cluster OpenShift externo saox1p0mocpc03 y requieren comunicación con componentes compartidos de la plataforma. La IP 10.171.96.2 corresponde a infraestructura asociada al Ingress/Console/Bastion del cluster, utilizada como punto de acceso a servicios publicados mediante la plataforma. Adicionalmente, la IP 10.171.98.194 corresponde al Regional Container Registry utilizado por el cluster para la gestión y consumo de imágenes de contenedores. Se verificó directamente que workloads del cluster externo utilizan imágenes almacenadas en dicho registry. Estas comunicaciones corresponden a dependencias técnicas de infraestructura de OpenShift y no representan un consumo directo de aplicaciones UAT hacia aplicaciones PROD. Por lo anterior, se requiere mantener la comunicación.
+
+Policy 7
+Comunicación requerida por infraestructura OpenShift. Los nodos Master del cluster externo saox1p0mocpc03 requieren comunicación con componentes compartidos de la plataforma para soportar la operación y administración del cluster. La IP 10.171.96.2 corresponde a infraestructura asociada al Ingress/Console/Bastion del mismo entorno OpenShift, mientras que la IP 10.171.98.194 corresponde al Regional Container Registry utilizado para la gestión y consumo de imágenes de contenedores. Se verificó que el cluster externo utiliza activamente imágenes alojadas en dicho registry. Estas comunicaciones corresponden a dependencias técnicas necesarias para la operación de la plataforma y no a comunicaciones directas entre aplicaciones de ambientes diferentes. Por lo anterior, se requiere mantener la comunicación.
