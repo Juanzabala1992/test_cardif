@@ -565,3 +565,11 @@ gzip -t "$HOME/backup-mashery/masherysolar-post-import.sql.gz" \
   && echo "Respaldo comprimido íntegro"
 
 
+****************************************
+
+
+sed -n '110,210p' \
+deploy/charts/preInstallDBPrep/templates/preinstall-job.yaml
+
+
+
