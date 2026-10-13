@@ -537,4 +537,31 @@ oc exec -n "$NS" "$POD" -c mysql -- sh -c \
 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -Nse "SHOW TABLES FROM masherysolar;"' | wc -l
 
 
+*****************************
+
+oc exec -n lam-c-dev-mashery-v6 \
+  mysql-migra-masheryv6-6c89fd8b7d-vmgr4 \
+  -c mysql -- sh -c \
+  'MYSQL_PWD="$MYSQL_PASSWORD" mysql \
+  -h "$MYSQL84_SERVICE_HOST" \
+  -P "$MYSQL84_SERVICE_PORT" \
+  -u "$MYSQL_USER" \
+  masherysolar \
+  -e "SELECT COUNT(*) AS total_areas FROM areas;"'
+
+set -o pipefail
+umask 077
+
+oc exec -n lam-c-dev-mashery-v6 \
+  mysql-migra-masheryv6-6c89fd8b7d-vmgr4 \
+  -c mysql -- sh -c \
+  'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump \
+  -uroot --databases masherysolar \
+  --single-transaction --quick \
+  --no-tablespaces --set-gtid-purged=OFF' \
+  | gzip -1 > "$HOME/backup-mashery/masherysolar-post-import.sql.gz"
+
+gzip -t "$HOME/backup-mashery/masherysolar-post-import.sql.gz" \
+  && echo "Respaldo comprimido íntegro"
+
 
