@@ -98,3 +98,21 @@ GROUP BY TABLE_SCHEMA;
 SHOW DATABASES LIKE 'masherysolar';
 
 SHOW GRANTS FOR 'mashery'@'%';
+
+
+**********************
+
+
+MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root
+
+
+SHOW DATABASES LIKE 'mashery%';
+
+
+SELECT TABLE_SCHEMA, COUNT(*) AS TOTAL_TABLAS
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA IN ('mashery', 'masherysolar')
+GROUP BY TABLE_SCHEMA;
+
+
+SHOW GRANTS FOR 'mashery'@'%';
