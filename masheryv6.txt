@@ -489,3 +489,52 @@ oc describe pod mysql-pvc-inspect \
   -n lam-c-dev-mashery-v6 | tail -n 45
 
 
+***********************************************
+
+
+oc exec -n lam-c-dev-mashery-v6 \
+  mysql-pvc-inspect -c inspector -- sh -c '
+echo "CONTEXTO DEL PROCESO:"
+cat /proc/self/attr/current
+
+echo "CONTEXTO DEL PVC:"
+ls -ldZ /mnt/mysql-pvc
+
+echo "PRUEBA DE LECTURA:"
+ls -la /mnt/mysql-pvc
+'
+
+*****************************
+
+
+oc delete pod mysql-pvc-inspect \
+  -n lam-c-dev-mashery-v6
+
+NS=lam-c-dev-mashery-v6
+POD=mysql-migra-masheryv6-6c89fd8b7d-vmgr4
+
+oc exec -i -n "$NS" "$POD" -c mysql -- sh -c \
+'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot' <<'SQL'
+CREATE DATABASE masherysolar
+CHARACTER SET utf8mb3
+COLLATE utf8mb3_unicode_ci;
+
+GRANT ALL PRIVILEGES ON masherysolar.*
+TO 'mashery'@'%';
+SQL
+
+
+
+cd ~/MasheryV6
+
+oc exec -i -n "$NS" "$POD" -c mysql -- sh -c \
+'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot masherysolar' \
+< scripts/db/apim-le-db-schema_6.2.1.sql
+
+
+
+oc exec -n "$NS" "$POD" -c mysql -- sh -c \
+'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -Nse "SHOW TABLES FROM masherysolar;"' | wc -l
+
+
+
