@@ -291,3 +291,10 @@ oc get pod pvc-snapshot-test -n apigee-tools -o wide
 
 
 
+****************
+
+
+oc get volumeattachment -o wide | grep fac3daff
+
+oc get volumesnapshot pvc-test-rg-snapshot -n apigee-tools -o wide
+
