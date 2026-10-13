@@ -253,3 +253,18 @@ oc exec -n lam-c-dev-mashery-v6 \
   'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -Nse "SELECT @@datadir;"'
 
 
+************************************
+
+oc exec -n lam-c-dev-mashery-v6 \
+  mysql-migra-masheryv6-6c89fd8b7d-vmgr4 \
+  -c mysql -- sh -c '
+    echo "Ruta real:"
+    readlink -f /var/lib/mysql/data
+    echo "Sistema de archivos:"
+    df -h /var/lib/mysql/data
+    echo "Herramienta de respaldo:"
+    command -v mysqldump || true
+  '
+
+
+
