@@ -576,3 +576,9 @@ deploy/charts/preInstallDBPrep/templates/preinstall-job.yaml
 oc get configmap preinstall-configmap \
   -n lam-c-dev-mashery-v6
 
+****************************
+
+cat deploy/charts/preInstallDBPrep/templates/preinstall-configmap.yaml
+
+
+
