@@ -83,3 +83,7 @@ oc get volumesnapshot -n apigee --sort-by=.metadata.creationTimestamp -o custom-
 
 SNAP=$(oc get volumesnapshot -n apigee --sort-by=.metadata.creationTimestamp -o name | tail -4 | head -1); oc describe -n apigee "$SNAP"
 
+
+****************************
+
+ibmcloud oc cluster addon ls --cluster carla-npr-latam-ocw
