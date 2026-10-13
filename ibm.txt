@@ -190,5 +190,12 @@ oc logs -n openshift-cluster-storage-operator \
   csi-snapshot-controller-84964fddb9-qjqh6 \
   --since=30m --tail=100
 
+************************
+
+oc logs -n openshift-cluster-storage-operator \
+  deployment/csi-snapshot-controller \
+  --since=2h --tail=5000 \
+  | grep -Ei -C 3 'pvc-test-rg-snapshot|apigee-tools|error|failed'
+
 
 
