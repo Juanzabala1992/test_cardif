@@ -277,4 +277,34 @@ df -h .
 
 
 
+***********************************
 
+
+set -o pipefail
+umask 077
+
+BACKUP=$(mktemp "/tmp/mysql-mashery-$(date +%Y%m%d-%H%M%S)-XXXXXX.sql.gz")
+
+echo "$BACKUP"
+
+
+
+if oc exec -n lam-c-dev-mashery-v6 \
+  mysql-migra-masheryv6-6c89fd8b7d-vmgr4 \
+  -c mysql -- sh -c '
+  MYSQL_PWD="$MYSQL_ROOT_PASSWORD" \
+  mysqldump -uroot \
+    --all-databases \
+    --single-transaction \
+    --quick \
+    --routines \
+    --triggers \
+    --events \
+    --no-tablespaces \
+    --set-gtid-purged=OFF
+  ' | gzip -1 > "$BACKUP"
+then
+  echo "Exportación finalizada"
+else
+  echo "ERROR: exportación fallida. No utilizar este respaldo."
+fi
