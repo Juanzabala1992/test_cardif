@@ -621,3 +621,14 @@ oc get configmap preinstall-configmap \
   -n lam-c-dev-mashery-v6
 
 
+
+****************************************
+
+
+grep -nE 'apimImageRegistry:|^[[:space:]]*(image|tag):' \
+  deploy/values.yaml \
+  overrides/camle-v6-overrides.yaml \
+  deploy/charts/preInstallDBPrep/values.yaml
+
+
+
