@@ -90,3 +90,11 @@ SELECT TABLE_SCHEMA, COUNT(*) AS TOTAL_TABLAS
 FROM information_schema.TABLES
 WHERE TABLE_SCHEMA IN ('mashery', 'masherysolar')
 GROUP BY TABLE_SCHEMA;
+
+
+*********************
+
+
+SHOW DATABASES LIKE 'masherysolar';
+
+SHOW GRANTS FOR 'mashery'@'%';
