@@ -60,6 +60,14 @@ SNAP=$(oc get volumesnapshot -n apigee --sort-by=.metadata.creationTimestamp -o 
 **************************************************
 
 
+oc get volumesnapshotclass hybrid-snapshot-v3
+
+oc get pods -n kube-system | grep vpc-block-csi
+
+oc logs -n kube-system ibm-vpc-block-csi-controller-0 -c csi-snapshotter --since=3h --tail=80
+
+
+
 oc get volumesnapshot -n apigee --sort-by=.metadata.creationTimestamp -o custom-columns='NAME:.metadata.name,READY:.status.readyToUse,ERROR:.status.error.message' | tail -12
 
 SNAP=$(oc get volumesnapshot -n apigee --sort-by=.metadata.creationTimestamp -o name | tail -4 | head -1); oc describe -n apigee "$SNAP"
