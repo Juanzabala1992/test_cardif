@@ -231,3 +231,11 @@ tail -n 50 \
 scripts/db/apim-le-db-schema_6.2.1.sql
 
 
+*************************
+
+
+oc get pvc -n lam-c-dev-mashery-v6
+
+oc describe pod mysql-migra-masheryv6-6c89fd8b7d-vmgr4 \
+  -n lam-c-dev-mashery-v6
+
