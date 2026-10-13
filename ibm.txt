@@ -87,3 +87,15 @@ SNAP=$(oc get volumesnapshot -n apigee --sort-by=.metadata.creationTimestamp -o 
 ****************************
 
 ibmcloud oc cluster addon ls --cluster carla-npr-latam-ocw
+
+
+*****************************
+
+
+ibmcloud oc cluster addon versions --addon vpc-block-csi-driver --offering openshift
+
+
+ibmcloud oc cluster addon update vpc-block-csi-driver \
+  --cluster carla-npr-latam-ocw \
+  --version 5.2
+
