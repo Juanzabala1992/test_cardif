@@ -455,3 +455,18 @@ oc exec -n lam-c-dev-mashery-v6 \
 oc exec -n lam-c-dev-mashery-v6 \
   mysql-pvc-inspect -c inspector -- \
   du -sh /mnt/mysql-pvc
+
+
+********************************
+
+oc exec -n lam-c-dev-mashery-v6 \
+  mysql-pvc-inspect -c inspector -- sh -c '
+id
+ls -ldn /mnt/mysql-pvc
+stat -c "Permisos: %A UID: %u GID: %g" /mnt/mysql-pvc
+'
+
+oc exec -n lam-c-dev-mashery-v6 \
+  mysql-migra-masheryv6-6c89fd8b7d-vmgr4 \
+  -c mysql -- id
+
