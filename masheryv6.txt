@@ -954,3 +954,26 @@ oc get pods -n lam-c-dev-mashery-v6 \
 
 oc describe pod -n lam-c-dev-mashery-v6 \
   -l job-name=mashery-db-seed | tail -n 65
+
+
+
+**********************************
+
+oc get pods -n lam-c-dev-mashery-v6 \
+  -l job-name=mashery-db-seed -o wide
+
+oc delete job mashery-db-seed \
+  -n lam-c-dev-mashery-v6
+
+sed -i 's/cpu: "250m"/cpu: "50m"/' \
+  /tmp/mashery-db-seed.yaml
+
+oc create -f /tmp/mashery-db-seed.yaml
+
+oc get pods -n lam-c-dev-mashery-v6 \
+  -l job-name=mashery-db-seed -w
+
+
+
+oc logs -n lam-c-dev-mashery-v6 \
+  job/mashery-db-seed -c db-seed --tail=100
