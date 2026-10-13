@@ -40,3 +40,21 @@ oc get pods
 oc get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .spec.containers[*]}{"  "}{.image}{"\n"}{end}{end}'
 
 helm list -A | grep -i mashery
+
+
+**********************************
+
+
+echo "Usuario: $MYSQL_USER"
+echo "Base de datos: $MYSQL_DATABASE"
+echo "Host: $MYSQL84_SERVICE_HOST"
+echo "Puerto: $MYSQL84_SERVICE_PORT"
+
+
+command -v mysql || command -v mariadb
+
+
+command -v mysqld
+
+
+ps -ef | grep -E '[m]ysqld|[m]ariadbd'
