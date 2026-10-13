@@ -116,3 +116,12 @@ GROUP BY TABLE_SCHEMA;
 
 
 SHOW GRANTS FOR 'mashery'@'%';
+
+
+*******************
+
+
+ls -lah scripts/
+
+find . -maxdepth 6 -type f \
+  | grep -Ei '\.sql$|mysql|database|schema|migration|init|bootstrap|create'
