@@ -977,3 +977,10 @@ oc get pods -n lam-c-dev-mashery-v6 \
 
 oc logs -n lam-c-dev-mashery-v6 \
   job/mashery-db-seed -c db-seed --tail=100
+
+
+**************************************
+
+grep -RniE \
+'CREATE TABLE.*(token_purge_settings|counter_purge_settings|batch_settings)' \
+scripts/db/
