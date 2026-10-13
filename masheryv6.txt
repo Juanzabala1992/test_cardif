@@ -1035,3 +1035,30 @@ AND TABLE_NAME IN (
   'batch_settings'
 );
 SQL
+
+
+*****************************
+
+
+grep -nEi '^[[:space:]]*(DROP|TRUNCATE|ALTER)[[:space:]]' \
+deploy/charts/preInstallDBPrep/scripts/db/apim-le-db-{token,counter}-purger-data_6.2.0.sql
+
+
+
+NS=lam-c-dev-mashery-v6
+POD=mysql-migra-masheryv6-6c89fd8b7d-vmgr4
+
+for TIPO in token counter; do
+  FILE="deploy/charts/preInstallDBPrep/scripts/db/apim-le-db-${TIPO}-purger-data_6.2.0.sql"
+
+  echo "Cargando datos: $TIPO"
+
+  oc exec -i -n "$NS" "$POD" -c mysql -- sh -c \
+  'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u"$MYSQL_USER" masherysolar' \
+  < "$FILE" || break
+done
+
+
+oc get pods -n lam-c-dev-mashery-v6 | \
+grep -E 'platformapi|trafficmanager|loader|configui|mysql'
+
