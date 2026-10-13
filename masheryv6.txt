@@ -58,3 +58,24 @@ command -v mysqld
 
 
 ps -ef | grep -E '[m]ysqld|[m]ariadbd'
+
+
+****************************
+
+
+MYSQL_PWD="$MYSQL_PASSWORD" mysql \
+  -h "$MYSQL84_SERVICE_HOST" \
+  -P "$MYSQL84_SERVICE_PORT" \
+  -u "$MYSQL_USER"
+
+
+SHOW DATABASES LIKE 'mashery%';
+
+
+SELECT USER(), CURRENT_USER();
+
+
+SHOW GRANTS;
+
+
+USE masherysolar;
