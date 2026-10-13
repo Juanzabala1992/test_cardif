@@ -172,6 +172,12 @@ oc get volumesnapshotcontent | grep pvc-test-rg-snapshot
 
 oc get pods -A | grep -Ei 'snapshot-controller|snapshotter'
 
+**********************
+
+
+oc get pods -A | grep -Ei 'snapshot-controller|snapshotter'
+
+
 
 
 
