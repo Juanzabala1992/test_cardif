@@ -210,3 +210,16 @@ oc get jobs -n lam-c-dev-mashery-v6
 sed -n '1,74p' \
 deploy/charts/preInstallDBPrep/templates/preinstall-job.yaml
 
+
+**********************************
+
+
+grep -nEi 'hookDeletePolicy|ttlSecondsAfterFinished|populateSeedData' \
+deploy/charts/preInstallDBPrep/values.yaml \
+overrides/camle-v6-overrides.yaml
+
+
+cat deploy/Chart.yaml
+
+
+
