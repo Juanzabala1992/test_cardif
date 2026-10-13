@@ -254,3 +254,40 @@ oc get volumeattachment -o wide | grep fac3daff
 oc get volumesnapshot pvc-test-rg-snapshot -n apigee-tools
 
 
+******************
+
+
+cat <<'EOF' | oc apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pvc-snapshot-test
+  namespace: apigee-tools
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    topology.kubernetes.io/zone: br-sao-3
+  containers:
+    - name: test
+      image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+      command: ["/bin/sh", "-c", "sleep 3600"]
+      volumeMounts:
+        - name: test-volume
+          mountPath: /mnt/test
+          readOnly: true
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+  volumes:
+    - name: test-volume
+      persistentVolumeClaim:
+        claimName: pvc-test
+        readOnly: true
+EOF
+
+oc get pod pvc-snapshot-test -n apigee-tools -o wide
+
+
+
+
