@@ -106,5 +106,7 @@ ibmcloud oc cluster addon ls --cluster carla-npr-latam-ocw
 oc get pods -n kube-system | grep vpc-block-csi
 
 
+************************
 
+ibmcloud oc cluster addon ls --cluster carla-npr-latam-ocw
 
