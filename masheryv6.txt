@@ -179,6 +179,24 @@ sed -n '75,115p' \
 deploy/charts/preInstallDBPrep/templates/preinstall-job.yaml
 
 
+**************************************
+
+
+grep -nEi 'populateSeedData:|preInstallDBPrep:|databaseSchema:|initDBUserName:' \
+deploy/values.yaml \
+overrides/camle-v6-overrides.yaml \
+deploy/charts/preInstallDBPrep/values.yaml
+
+
+oc project lam-c-dev-mashery-v6
+
+oc get jobs | grep -Ei 'preinstall|dbprep|seed|database'
+
+helm list -n lam-c-dev-mashery-v6 -a
+
+
+
+
 
 grep -RniE 'initializeDB|INITIALIZE_DB|preInstallDBPrep' \
 deploy/values.yaml \
