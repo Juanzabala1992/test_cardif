@@ -265,6 +265,16 @@ oc exec -n lam-c-dev-mashery-v6 \
     echo "Herramienta de respaldo:"
     command -v mysqldump || true
   '
+*******************************************
+
+oc exec -n lam-c-dev-mashery-v6 \
+  mysql-migra-masheryv6-6c89fd8b7d-vmgr4 \
+  -c mysql -- du -sh /var/lib/mysql/data
+
+
+pwd
+df -h .
+
 
 
 
