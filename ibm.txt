@@ -17,3 +17,13 @@ oc get nodes -L apigee-nodepool,topology.kubernetes.io/zone
 oc get pvc -A
 
 oc get pdb -A
+
+
+***********************************
+
+oc get pods -A -o wide | grep -i cassandra
+
+
+oc describe pdb apigee-cassandra-default -n apigee-system
+
+
