@@ -222,4 +222,12 @@ overrides/camle-v6-overrides.yaml
 cat deploy/Chart.yaml
 
 
+******************************
+
+grep -ci 'CREATE TABLE' \
+scripts/db/apim-le-db-schema_6.2.1.sql
+
+tail -n 50 \
+scripts/db/apim-le-db-schema_6.2.1.sql
+
 
