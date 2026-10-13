@@ -411,3 +411,13 @@ ibmcloud oc worker-pool taint set \
   --taint migration=hold:NoSchedule
 
 
+**********************
+
+
+ibmcloud oc worker-pool create vpc-gen2 --help
+
+
+
+ibmcloud oc worker-pool ls --cluster carla-npr-latam-ocw
+
+
