@@ -5,3 +5,15 @@ ibmcloud oc worker-pool get --cluster carla-npr-latam-ocw --worker-pool apigee-r
 ibmcloud oc worker-pool zones --cluster carla-npr-latam-ocw --worker-pool apigee-data
 
 ibmcloud oc worker-pool zones --cluster carla-npr-latam-ocw --worker-pool apigee-runtime
+
+
+
+****************************
+
+ibmcloud oc cluster config --cluster carla-npr-latam-ocw --admin
+
+oc get nodes -L apigee-nodepool,topology.kubernetes.io/zone
+
+oc get pvc -A
+
+oc get pdb -A
