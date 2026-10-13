@@ -338,3 +338,12 @@ ls -lh "$DEST"
 gzip -t "$DEST" && echo "BACKUP INTEGRO"
 sha256sum "$BACKUP" "$DEST"
 
+
+***************************
+
+oc get deploy mysql-migra-masheryv6 \
+  -n lam-c-dev-mashery-v6 \
+  -o yaml | grep -n -A 15 -B 8 -E 'mysql-data|mysql-mashery-migra-pvc|volumeMounts'
+
+
+
