@@ -321,4 +321,17 @@ oc get volumesnapshot -A -o json | jq -r '
   ]
 | @tsv'
 
+**********************
 
+oc get cronjobs -n apigee | grep -i cassandra
+
+oc get volumesnapshot -n apigee -o json | jq -r '
+.items
+| group_by(.metadata.creationTimestamp[0:7])
+| .[]
+| [
+    .[0].metadata.creationTimestamp[0:7],
+    length,
+    (map(select(.status.readyToUse != true)) | length)
+  ]
+| @tsv'
