@@ -632,3 +632,17 @@ grep -nE 'apimImageRegistry:|^[[:space:]]*(image|tag):' \
 
 
 
+**************
+
+
+for k in apiKey apiSecret localDevOAuthScope localDevAdminPassword; do
+  if grep -qE "^[[:space:]]*$k:[[:space:]]*[^#[:space:]]" \
+    overrides/camle-v6-overrides.yaml deploy/values.yaml; then
+    echo "$k: DEFINIDO"
+  else
+    echo "$k: NO LOCALIZADO"
+  fi
+done
+
+
+
