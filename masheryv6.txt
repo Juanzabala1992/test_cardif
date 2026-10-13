@@ -1062,3 +1062,16 @@ done
 oc get pods -n lam-c-dev-mashery-v6 | \
 grep -E 'platformapi|trafficmanager|loader|configui|mysql'
 
+
+*****************************************
+
+
+oc logs -n lam-c-dev-mashery-v6 \
+  deployment/trafficmanager-deploy \
+  --previous --tail=120
+
+
+oc describe pod \
+  trafficmanager-deploy-56dbdcd8f8-pkh9b \
+  -n lam-c-dev-mashery-v6 | tail -n 65
+
