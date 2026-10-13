@@ -318,3 +318,9 @@ gzip -t "$BACKUP" && echo "BACKUP INTEGRO"
 sha256sum "$BACKUP"
 
 
+**************************************
+
+gzip -cd "$BACKUP" | grep -E '^-- Current Database:' | sort -u
+
+
+
