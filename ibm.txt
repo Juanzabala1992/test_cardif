@@ -354,3 +354,16 @@ oc patch cronjob apigee-cassandra-backup \
   -n apigee \
   --type=merge \
   -p '{"spec":{"suspend":false}}'
+
+
+********************************
+
+
+oc patch cronjob apigee-cassandra-backup \
+  -n apigee \
+  --type=merge \
+  -p '{"spec":{"suspend":true}}'
+
+
+
+oc get cronjob apigee-cassandra-backup -n apigee
