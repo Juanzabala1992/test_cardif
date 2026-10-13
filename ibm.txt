@@ -117,4 +117,38 @@ ibmcloud oc cluster addon get \
 
 oc get pvc pvc-test -n apigee-tools
 
+***********************************
+
+oc get pod ibm-vpc-block-csi-controller-0 -n kube-system -o jsonpath='{range .spec.containers[*]}{.name}{" -> "}{.image}{"\n"}{end}'
+
+oc get pods -n apigee-tools -o jsonpath='{range .items[*]}{.metadata.name}{" : "}{range .spec.volumes[*]}{.persistentVolumeClaim.claimName}{" "}{end}{"\n"}{end}' | grep -w pvc-test
+
+
+RG_ID=$(ibmcloud resource group CARLA-NPR-WORKLOAD-RG --id)
+
+cat <<EOF | oc create -f -
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: vpc-snap-carla-rg-test
+driver: vpc.block.csi.ibm.io
+deletionPolicy: Delete
+parameters:
+  resourceGroup: "${RG_ID}"
+EOF
+
+cat <<'EOF' | oc create -f -
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: pvc-test-rg-snapshot
+  namespace: apigee-tools
+spec:
+  volumeSnapshotClassName: vpc-snap-carla-rg-test
+  source:
+    persistentVolumeClaimName: pvc-test
+EOF
+
+
+oc get volumesnapshot pvc-test-rg-snapshot -n apigee-tools -w
 
