@@ -843,3 +843,91 @@ oc get jobs -n lam-c-dev-mashery-v6
 
 oc logs -n lam-c-dev-mashery-v6 \
   job/mashery-db-seed --tail=100
+
+
+********************************************
+
+
+python3 - <<'PY'
+import json
+import re
+import subprocess
+from pathlib import Path
+
+files = [
+    Path("overrides/camle-v6-overrides.yaml"),
+    Path("deploy/values.yaml")
+]
+
+fields = {
+    "CUSTOM_PKG_KEY": "apiKey",
+    "CUSTOM_PKG_KEY_SECRET": "apiSecret",
+    "CUSTOM_AREA_UUID": "localDevOAuthScope",
+    "CUSTOM_AREA_NAME": "areaName",
+    "CUSTOM_DOMAIN_SUFFIX": "domainSuffix",
+    "CUSTOM_AREA_ADMIN_USER": "localDevAdminUser",
+    "APIM_CLUSTER_MODE": "apimClusterMode",
+    "DB_SSL_MODE": "sslMode",
+    "DB_MUTUAL_TLS": "mutualTls"
+}
+
+def find_value(key):
+    pattern = re.compile(
+        r"^\s*" + re.escape(key) + r":\s*(.*?)\s*$"
+    )
+    for path in files:
+        for line in path.read_text().splitlines():
+            match = pattern.match(line)
+            if match:
+                value = match.group(1).split(" #", 1)[0].strip()
+                value = value.strip("'\"")
+                if value and value.lower() not in ("null", "~"):
+                    return value
+    return None
+
+data = {}
+
+for env, key in fields.items():
+    value = find_value(key)
+    if value is not None:
+        data[env] = value
+
+required = [
+    "CUSTOM_PKG_KEY",
+    "CUSTOM_PKG_KEY_SECRET",
+    "CUSTOM_AREA_UUID",
+    "DB_SSL_MODE"
+]
+
+missing = [k for k in required if k not in data]
+
+if missing:
+    raise SystemExit(
+        "Faltan parametros: " + ", ".join(missing)
+    )
+
+for key in required:
+    value = data[key]
+    if "{{" in value or value.startswith("<") or "changeme" in value.lower():
+        raise SystemExit("Valor sin configurar: " + key)
+
+obj = {
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {
+        "name": "mashery-preinstall-params",
+        "namespace": "lam-c-dev-mashery-v6"
+    },
+    "type": "Opaque",
+    "stringData": data
+}
+
+subprocess.run(
+    ["oc", "create", "-f", "-"],
+    input=json.dumps(obj),
+    universal_newlines=True,
+    check=True
+)
+
+print("Parametros almacenados correctamente")
+PY
