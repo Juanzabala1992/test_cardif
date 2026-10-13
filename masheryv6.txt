@@ -324,3 +324,17 @@ gzip -cd "$BACKUP" | grep -E '^-- Current Database:' | sort -u
 
 
 
+**********************
+
+mkdir -p "$HOME/backup-mashery"
+chmod 700 "$HOME/backup-mashery"
+
+DEST="$HOME/backup-mashery/$(basename "$BACKUP")"
+install -m 600 "$BACKUP" "$DEST"
+
+
+
+ls -lh "$DEST"
+gzip -t "$DEST" && echo "BACKUP INTEGRO"
+sha256sum "$BACKUP" "$DEST"
+
