@@ -109,4 +109,12 @@ oc get pods -n kube-system | grep vpc-block-csi
 ************************
 
 ibmcloud oc cluster addon ls --cluster carla-npr-latam-ocw
+***********************
+
+ibmcloud oc cluster addon get \
+  --addon vpc-block-csi-driver \
+  --cluster carla-npr-latam-ocw
+
+oc get pvc pvc-test -n apigee-tools
+
 
