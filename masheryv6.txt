@@ -1146,3 +1146,37 @@ oc get pods -n "$NS" | grep trafficmanager
 ' \
 | oc patch secret trafficmanager-truststore-secret \
     -n "$NS" --type=merge --patch-file=/dev/stdin
+
+
+**********************************************
+
+NS=lam-c-dev-mashery-v6
+set -o pipefail
+
+oc get secret trafficmanager-truststore-secret \
+  -n "$NS" \
+  -o go-template='{{index .data ".ssl.password"}}' \
+| python3 -c '
+import sys,json
+v=sys.stdin.read().strip()
+if not v:
+    sys.exit("ERROR: clave vacia")
+print(json.dumps({"data":{".trustStorePassword":v}}))
+' \
+| oc patch secret trafficmanager-truststore-secret \
+    -n "$NS" \
+    --type=merge \
+    --patch-file=/dev/stdin
+
+
+
+oc get secret trafficmanager-truststore-secret \
+  -n "$NS" \
+  -o go-template='{{range $k,$v := .data}}{{printf "%s\n" $k}}{{end}}'
+
+oc get pods -n "$NS" | grep trafficmanager
+
+oc logs -n "$NS" deployment/trafficmanager-deploy \
+  --since=5m --tail=80
+
+
