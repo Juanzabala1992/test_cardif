@@ -245,6 +245,89 @@ Comunicación requerida por infraestructura OpenShift. Los nodos Mashery DEV req
 
 
 
-10.171.189.2	Justificada	Comunicación requerida por infraestructura OpenShift. La IP 10.171.189.2 corresponde al host saox1p0mocpb01 y al endpoint interno api-int del cluster OpenShift interno saox1p0mocpc01. Se confirmó además la ejecución de HAProxy en dicha infraestructura. Los pools DEV, UAT y PRD forman parte del mismo cluster y requieren comunicación con los componentes compartidos de control y balanceo de la plataforma. No corresponde a una comunicación entre aplicaciones de ambientes diferentes.
-10.171.98.194	Justificada	Comunicación requerida con infraestructura de gestión de imágenes. La IP 10.171.98.194 corresponde al Regional Container Registry regional-registry.apps.saox1p0mocpc02.isz-latam-assurance.ocpdomain. Se validó resolución hacia dicho servicio, respuesta de Registry API v2 y uso de imágenes provenientes de este registry por workloads de OpenShift. La comunicación corresponde a una dependencia de plataforma necesaria para la administración y consumo de imágenes de contenedores.
-10.171.98.202	Identificada / pendiente justificación funcional definitiva	Comunicación hacia infraestructura Ingress OpenShift. Se confirmó mediante el certificado presentado por el destino que 10.171.98.202 corresponde al endpoint de aplicaciones *.apps.saox1p0mocpc02.isz-latam-assurance.ocpdomain, asociado al Ingress de OpenShift del cluster ISZ. La IP funciona como punto de entrada para Routes/aplicaciones publicadas en dicho cluster. Se mantiene pendiente identificar la aplicación/Route específica consumida para completar la justificación funcional.
+
+****************************************************
+oc whoami --show-server
+
+echo "===== NODOS ====="
+oc get nodes -o wide
+
+
+
+oc get nodes -o name | grep saox1p0mocpc03
+
+
+
+echo "===== API EXTERNA ====="
+oc get infrastructure cluster \
+  -o jsonpath='{.status.apiServerURL}{"\n"}'
+
+echo
+echo "===== API INTERNA ====="
+oc get infrastructure cluster \
+  -o jsonpath='{.status.apiServerInternalURI}{"\n"}'
+
+echo
+echo "===== CONSOLE ====="
+oc -n openshift-console get route console \
+  -o jsonpath='{.spec.host}{"\n"}'
+
+echo
+echo "===== INGRESS DOMAIN ====="
+oc -n openshift-ingress-operator get ingresscontroller default \
+  -o jsonpath='{.status.domain}{"\n"}'
+
+
+API=$(oc get infrastructure cluster \
+  -o jsonpath='{.status.apiServerURL}' \
+  | sed -E 's#https://([^:/]+).*#\1#')
+
+API_INT=$(oc get infrastructure cluster \
+  -o jsonpath='{.status.apiServerInternalURI}' \
+  | sed -E 's#https://([^:/]+).*#\1#')
+
+CONSOLE=$(oc -n openshift-console get route console \
+  -o jsonpath='{.spec.host}')
+
+echo "===== API EXTERNA ====="
+echo "$API"
+getent ahostsv4 "$API" | awk '{print $1}' | sort -u
+
+echo
+echo "===== API INTERNA ====="
+echo "$API_INT"
+getent ahostsv4 "$API_INT" | awk '{print $1}' | sort -u
+
+echo
+echo "===== CONSOLE / INGRESS ====="
+echo "$CONSOLE"
+getent ahostsv4 "$CONSOLE" | awk '{print $1}' | sort -u
+
+
+
+echo "===== 10.171.96.2 ====="
+getent hosts 10.171.96.2
+nslookup 10.171.96.2
+
+echo
+echo "===== 10.171.98.194 ====="
+getent hosts 10.171.98.194
+nslookup 10.171.98.194
+
+
+oc get nodes -o wide | \
+egrep 'NAME|10\.171\.96\.'
+
+
+
+oc get pods -A \
+-o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{range .spec.containers[*]}{.image}{" "}{end}{"\n"}{end}' \
+| grep -i 'regional-registry'
+
+
+oc get imagedigestmirrorset -o yaml 2>/dev/null | \
+grep -i -B5 -A15 'regional-registry'
+
+
+oc get imagecontentsourcepolicy -o yaml 2>/dev/null | \
+grep -i -B5 -A15 'regional-registry'
