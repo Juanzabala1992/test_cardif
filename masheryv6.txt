@@ -1195,3 +1195,13 @@ oc logs -n lam-c-dev-mashery-v6 \
   --since=5m --tail=500 \
   | grep -Ei -B 2 -A 3 \
   'Caused by|Exception|trustStorePassword|loaders NOTREADY|UNHEALTHY'
+
+
+**************************************
+
+oc logs -n lam-c-dev-mashery-v6 \
+trafficmanager-deploy-56dbdcd8f8-mg8fk \
+-c trafficmanager --previous --tail=500 \
+| grep -Ei -B 3 -A 6 \
+'Caused by|Exception|ERROR|trustStore|loaders NOTREADY|UNHEALTHY|failed' \
+| tail -n 120
