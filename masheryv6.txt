@@ -931,3 +931,14 @@ subprocess.run(
 
 print("Parametros almacenados correctamente")
 PY
+
+
+********************************************
+
+
+oc logs -n lam-c-dev-mashery-v6 \
+  job/mashery-db-seed --tail=150
+
+
+oc get job mashery-db-seed \
+  -n lam-c-dev-mashery-v6
