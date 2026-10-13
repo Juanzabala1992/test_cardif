@@ -942,3 +942,15 @@ oc logs -n lam-c-dev-mashery-v6 \
 
 oc get job mashery-db-seed \
   -n lam-c-dev-mashery-v6
+
+
+****************************************
+
+
+oc get pods -n lam-c-dev-mashery-v6 \
+  -l job-name=mashery-db-seed -o wide
+
+
+
+oc describe pod -n lam-c-dev-mashery-v6 \
+  -l job-name=mashery-db-seed | tail -n 65
