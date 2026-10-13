@@ -202,3 +202,11 @@ grep -RniE 'initializeDB|INITIALIZE_DB|preInstallDBPrep' \
 deploy/values.yaml \
 overrides/ \
 deploy/charts/preInstallDBPrep/values.yaml
+
+**********************************************
+
+oc get jobs -n lam-c-dev-mashery-v6
+
+sed -n '1,74p' \
+deploy/charts/preInstallDBPrep/templates/preinstall-job.yaml
+
