@@ -13,3 +13,36 @@ echo "=== Pods Pending de Apigee ==="
 oc get pods -n apigee -o json \
   | jq '[.items[] |
     select(.status.phase=="Pending")] | length'
+
+
+*******************************
+
+
+echo "=== NODOS ==="
+oc get nodes
+
+echo "=== PODS APIGEE CON PROBLEMAS ==="
+oc get pods -n apigee -o json | jq -r '
+.items[]
+| select(
+    .status.phase=="Pending" or
+    .status.phase=="Failed" or
+    (.status.phase=="Running" and
+      ([.status.containerStatuses[]? |
+        select(.ready!=true)] | length)>0)
+  )
+| [.metadata.name,.status.phase,
+   (.spec.nodeName//"-")] | @tsv' | head -30
+
+echo "=== AFINIDADES OBLIGATORIAS RUNTIME ==="
+oc get pods -n apigee -o json | jq -r '
+[.items[]
+| select(.metadata.name |
+    startswith("apigee-runtime-"))
+| .spec.affinity.nodeAffinity
+  .requiredDuringSchedulingIgnoredDuringExecution
+  .nodeSelectorTerms[]?.matchExpressions[]?
+| select(.key=="ibm-cloud.kubernetes.io/worker-pool-name"
+    or .key=="apigee-nodepool")
+| "\(.key)=\(.values|join(","))"
+] | unique[]'
