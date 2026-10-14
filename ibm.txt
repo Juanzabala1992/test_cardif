@@ -605,4 +605,19 @@ oc get pods -n apigee \
 
 oc get deployment -n apigee | grep -E 'dev-br-mtls|qa-br-mtls'
 
+****
+
+
+oc get rs -n apigee -o json | jq -r '
+.items[]
+| select(.metadata.name | test("dev-br-mtls|qa-br-mtls"))
+| [
+    .metadata.name,
+    (.spec.replicas | tostring),
+    (.status.readyReplicas // 0 | tostring),
+    ((.metadata.ownerReferences // [])
+      | map(.kind + ":" + .name)
+      | join(","))
+  ]
+| @tsv'
 
