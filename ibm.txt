@@ -1,48 +1,32 @@
 CL=carla-npr-latam-ocw
+POOL=apigee-data-rhcos
 
-for P in apigee-data apigee-data-rhcos; do
-  echo "===== POOL: $P ====="
-
-  ibmcloud oc worker-pool get \
-    --cluster "$CL" \
-    --worker-pool "$P" | grep -Ei \
-    'Name:|Flavor:|Operating System:|KMS:|CRK:|KMS Account ID:|Labels:|Workers:'
-
-  ibmcloud oc worker-pool zones \
-    --cluster "$CL" \
-    --worker-pool "$P"
-done
-
-echo "===== CASSANDRA ====="
-oc get pods -n apigee -o wide | grep 'apigee-cassandra-default-'
-
-
-****************************
-
-
-CL=carla-npr-latam-ocw
-
-ibmcloud oc worker-pool rm \
+ibmcloud oc zone add vpc-gen2 \
   --cluster "$CL" \
-  --worker-pool apigee-data-rhcos
+  --worker-pool "$POOL" \
+  --zone br-sao-1 \
+  --subnet-id 02t7-278e7fdc-405d-43eb-b79b-f511538dbd3a
 
-
-
-
-ibmcloud oc worker-pool create vpc-gen2 \
+ibmcloud oc zone add vpc-gen2 \
   --cluster "$CL" \
-  --name apigee-data-rhcos \
-  --flavor bx2.4x16 \
-  --size-per-zone 1 \
-  --operating-system RHCOS \
-  --label apigee-nodepool=apigee-data \
-  --kms-instance 0c52fc9e-96a9-4c63-8226-50bdc1612186 \
-  --crk abd7a792-de09-40d4-b8f1-bcf3a688c077 \
-  --kms-account-id f284a6766c2345e09d255d74e18c67c5
+  --worker-pool "$POOL" \
+  --zone br-sao-2 \
+  --subnet-id 02u7-2746940b-947d-4b83-a5be-0d314dee191f
+
+ibmcloud oc zone add vpc-gen2 \
+  --cluster "$CL" \
+  --worker-pool "$POOL" \
+  --zone br-sao-3 \
+  --subnet-id 02v7-be3d40cc-6089-4b08-84b1-834761e9b9a8
+
+
 
 
 ibmcloud oc worker-pool get \
   --cluster "$CL" \
-  --worker-pool apigee-data-rhcos
+  --worker-pool "$POOL"
 
+ibmcloud oc worker ls --cluster "$CL"
+
+oc get nodes -o wide
 
