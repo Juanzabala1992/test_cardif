@@ -86,3 +86,72 @@ oc get secrets -n apigee -o json | jq -r '
 | select(.data["client_secret.json"] != null)
 | .metadata.name
 ' | sort
+
+
+
+*************************
+
+
+(
+set -euo pipefail
+cd ~/apigee-migration-1151
+umask 077
+
+SECRETS=(
+  apigee-watcher-apigee-latam-np-968192c-svc-account
+  apigee-mart-apigee-latam-np-968192c-svc-account
+  apigee-connect-agent-apigee-latam-np-968192c-svc-account
+)
+
+HASHES=()
+
+for S in "${SECRETS[@]}"; do
+  DATA=$(oc get secret "$S" -n apigee \
+    -o jsonpath='{.data.client_secret\.json}')
+
+  test -n "$DATA" || {
+    echo "ERROR: falta credencial en $S"
+    exit 1
+  }
+
+  HASHES+=("$(printf '%s' "$DATA" |
+    base64 -d | sha256sum | awk '{print $1}')")
+done
+
+if [[ "${HASHES[0]}" != "${HASHES[1]}" ||
+      "${HASHES[1]}" != "${HASHES[2]}" ]]; then
+  echo "DETENIDO: las credenciales son diferentes"
+  exit 1
+fi
+
+FILE=apigee-org/apigee-latam-npr-apigee-non-prod.json
+
+if [ -e "$FILE" ]; then
+  echo "DETENIDO: el archivo ya existe"
+  exit 1
+fi
+
+trap 'rm -f "$FILE"' EXIT
+
+oc get secret "${SECRETS[0]}" -n apigee \
+  -o jsonpath='{.data.client_secret\.json}' |
+  base64 -d > "$FILE"
+
+jq -e 'type == "object"' "$FILE" >/dev/null
+
+if helm upgrade apigee-latam-npr ./apigee-org \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+  --dry-run=server \
+  --hide-secret > dryrun-org.txt 2>&1; then
+
+  echo "DRY-RUN OK: configuración validada"
+else
+  echo "DRY-RUN FALLÓ:"
+  grep -Ei 'Error:|FAILED|missing|required|invalid' \
+    dryrun-org.txt | tail -5 || true
+  exit 1
+fi
+)
