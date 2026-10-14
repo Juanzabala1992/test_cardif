@@ -574,3 +574,14 @@ oc get sts apigee-redis-default -n apigee -o json | jq '{
 }'
 
 oc get pods -n apigee -o wide | grep 'apigee-redis-default'
+
+
+***********************************
+
+oc describe node kube-clqa7haz0od58enpugng-carlanprlat-apigeer-00004a16 | grep -A 3 '^Taints:'
+
+ibmcloud oc worker-pool taint rm \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-runtime-rhcos
+
+oc describe node kube-clqa7haz0od58enpugng-carlanprlat-apigeer-00004a16 | grep -A 3 '^Taints:'
