@@ -330,3 +330,102 @@ jq '{env, runtimeSelector:.nodeSelector.apigeeRuntime}'
 helm history dev-env -n apigee -o json |
 jq -r '[.[] | select(.status=="failed")] |
 last | .description[0:1200]'
+
+
+
+***********************************************
+
+
+
+(
+set -euo pipefail
+cd ~/apigee-migration-1151
+umask 077
+
+ENV=apigee-latam-np-dev-3abd4b8
+FILE=apigee-env/apigee-latam-npr-apigee-non-prod.json
+BACKUP=backup-dev-env-rev8.yaml
+
+test -f apigee-env/Chart.yaml || {
+  echo "Falta el chart apigee-env"
+  exit 1
+}
+
+STATE=$(oc get apigeeenv "$ENV" -n apigee \
+  -o jsonpath='{.status.state}')
+
+[ "$STATE" = "running" ] || {
+  echo "DETENIDO: ApigeeEnv está en $STATE"
+  exit 1
+}
+
+helm history dev-env -n apigee -o json |
+jq -e 'any(.[]; .revision==8 and .status=="deployed")' >/dev/null
+
+helm get values dev-env -n apigee \
+  --revision 8 -o yaml > "$BACKUP"
+
+test ! -e "$FILE" || {
+  echo "DETENIDO: archivo de credenciales ya existe"
+  exit 1
+}
+
+trap 'rm -f "$FILE"' EXIT
+
+REF=""
+for TYPE in runtime synchronizer udca; do
+  S="apigee-${TYPE}-${ENV}-svc-account"
+  DATA=$(oc get secret "$S" -n apigee -o json |
+    jq -er '.data["client_secret.json"]')
+  HASH=$(printf '%s' "$DATA" | base64 -d |
+    sha256sum | awk '{print $1}')
+
+  [ -z "$REF" ] || [ "$HASH" = "$REF" ] || {
+    echo "DETENIDO: credenciales diferentes"
+    exit 1
+  }
+  REF="$HASH"
+
+  if [ "$TYPE" = "udca" ]; then
+    printf '%s' "$DATA" | base64 -d > "$FILE"
+  fi
+done
+
+jq -e 'type=="object"' "$FILE" >/dev/null
+
+ARGS=(
+  -n apigee
+  --reset-values
+  -f "$BACKUP"
+  --set-string env=dev
+  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime
+)
+
+helm upgrade dev-env ./apigee-env \
+  "${ARGS[@]}" --dry-run=server --hide-secret \
+  > dryrun-dev-env.txt 2>&1 || {
+    echo "DRY-RUN FALLÓ"
+    grep -Ei 'error|failed|forbidden' \
+      dryrun-dev-env.txt | tail -5 || true
+    exit 1
+  }
+
+echo "DRY-RUN OK"
+read -r -p "Escribe APLICAR para actualizar DEV: " OK
+[ "$OK" = "APLICAR" ] || exit 0
+
+helm upgrade dev-env ./apigee-env \
+  "${ARGS[@]}" \
+  --rollback-on-failure --timeout 15m
+
+echo "HELM DEV-ENV ACTUALIZADO"
+)
+
+
+
+
+
+helm status dev-env -n apigee | grep -E 'STATUS:|REVISION:'
+
+oc get apigeeenv apigee-latam-np-dev-3abd4b8 -n apigee
