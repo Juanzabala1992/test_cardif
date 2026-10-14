@@ -40,3 +40,28 @@ oc get apigeeenv \
 
 
 oc get pods -n apigee -o wide | grep dev-cl-mtls
+
+
+*********************
+
+
+ENV=apigee-latam-np-dev-cl-mtls-4c21055
+
+echo "=== ESTADO DEL ENTORNO ==="
+oc get apigeeenv "$ENV" -n apigee -o json |
+jq '{
+  state: .status.state,
+  nestedState: .status.nestedState,
+  conditions: .status.conditions
+}'
+
+echo "=== COMPONENTES DEL ENTORNO ==="
+oc get apigeedeployments -n apigee -o json |
+jq --arg env "$ENV" '
+.items[]
+| select(.metadata.name | contains($env))
+| {
+    name: .metadata.name,
+    state: .status.state,
+    replicas: .status.replicas
+  }'
