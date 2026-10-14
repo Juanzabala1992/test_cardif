@@ -548,3 +548,29 @@ oc get pod apigee-redis-default-1 -n apigee \
   -o jsonpath='{.metadata.ownerReferences[*].kind}{" "}{.metadata.ownerReferences[*].name}{"\n"}'
 
 oc get pvc -n apigee
+
+
+*************************************
+
+
+
+oc get sts apigee-redis-default -n apigee -o json | jq '{
+  replicas: .spec.replicas,
+  readyReplicas: .status.readyReplicas,
+  volumeClaims: [.spec.volumeClaimTemplates[]?.metadata.name],
+  volumes: [
+    .spec.template.spec.volumes[]? |
+    {
+      name: .name,
+      type: (
+        if has("emptyDir") then "emptyDir"
+        elif has("persistentVolumeClaim") then "PVC"
+        else "other"
+        end
+      )
+    }
+  ],
+  nodeSelector: .spec.template.spec.nodeSelector
+}'
+
+oc get pods -n apigee -o wide | grep 'apigee-redis-default'
