@@ -447,3 +447,18 @@ ibmcloud oc worker-pool taint set \
   --taint migration=hold:NoSchedule
 
 
+**************************
+
+
+ibmcloud oc zone add vpc-gen2 \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-runtime-rhcos \
+  --zone br-sao-1 \
+  --subnet-id 02t7-278e7fdc-405d-43eb-b79b-f511538dbd3a
+
+
+ibmcloud oc worker-pool ls --cluster carla-npr-latam-ocw
+
+
+ibmcloud oc worker ls --cluster carla-npr-latam-ocw
+
