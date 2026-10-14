@@ -166,36 +166,21 @@ echo 'LOTE REANUDADO COMPLETO. FALTA: dev-env (failed), ingress-manager y retiro
 
 
 
+echo "=== REDIS ==="
+oc get apigeeredis default -n apigee
 
+echo "=== ESTRATEGIA DE ACTUALIZACION ==="
+oc get sts apigee-redis-default -n apigee -o json |
+jq '{
+  replicas: .spec.replicas,
+  ready: .status.readyReplicas,
+  strategy: .spec.updateStrategy.type,
+  podManagement: .spec.podManagementPolicy
+}'
 
-(
-set -euo pipefail
-umask 077
+echo "=== WORKERS RHCOS ==="
+oc get nodes -l apigee-nodepool=apigee-runtime
 
-mkdir -p ~/apigee-migration-1151
-cd ~/apigee-migration-1151
-
-if [ ! -f apigee-redis/Chart.yaml ]; then
-  helm pull \
-    oci://us-docker.pkg.dev/apigee-release/apigee-hybrid-helm-charts/apigee-redis \
-    --version 1.15.1 --untar
-fi
-
-helm get values redis -n apigee -o yaml \
-  > backup-redis.yaml
-
-if helm upgrade redis ./apigee-redis \
-  -n apigee \
-  --reuse-values \
-  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
-  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
-  --dry-run=server --hide-secret \
-  > dryrun-redis.txt 2>&1; then
-
-  echo "REDIS DRY-RUN OK"
-else
-  echo "REDIS DRY-RUN FALLÓ"
-  grep -Ei 'Error:|FAILED|required|invalid' \
-    dryrun-redis.txt | tail -5 || true
-fi
-)
+echo "=== CAPACIDAD ==="
+oc describe nodes -l apigee-nodepool=apigee-runtime |
+grep -A 7 'Allocated resources:'
