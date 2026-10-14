@@ -25,3 +25,14 @@ ibmcloud oc zone add vpc-gen2 \
 ibmcloud oc worker ls --cluster carla-npr-latam-ocw
 
 oc get nodes -o wide
+
+
+*******************
+
+
+oc adm cordon 10.30.28.6
+
+oc get pods -A \
+  --field-selector spec.nodeName=10.30.28.6 \
+  -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,OWNER:.metadata.ownerReferences[0].kind,STATUS:.status.phase'
+
