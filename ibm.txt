@@ -496,3 +496,11 @@ oc describe node 10.30.12.8 | grep -i taints
 
 oc get node 10.30.12.8 \
   -o jsonpath='{.status.nodeInfo.osImage}{"\n"}'
+
+
+**************************
+
+
+ibmcloud oc worker get \
+  --cluster carla-npr-latam-ocw \
+  --worker WORKER_ID_COMPLETO
