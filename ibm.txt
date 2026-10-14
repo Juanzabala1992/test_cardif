@@ -51,3 +51,29 @@ grep -nEi 'Error:|UPGRADE FAILED|failed|forbidden|not found|template:|invalid|de
 
 test -s backup-apigee-latam-npr.yaml && echo "Backup OK" || echo "Revisar backup"
 
+******************
+
+
+cd ~/apigee-migration-1151
+
+echo "=== Plantilla que falla ==="
+nl -ba apigee-org/templates/watcher-gsa-secret.yaml \
+  | sed -n '1,35p'
+
+echo "=== Referencias a credenciales ==="
+helm get values apigee-latam-npr -n apigee -o json \
+  | jq '{
+      watcher: {
+        path: .watcher.serviceAccountPath,
+        ref: .watcher.serviceAccountRef
+      },
+      mart: {
+        path: .mart.serviceAccountPath,
+        ref: .mart.serviceAccountRef
+      },
+      connectAgent: {
+        path: .connectAgent.serviceAccountPath,
+        ref: .connectAgent.serviceAccountRef
+      }
+    }'
+
