@@ -74,5 +74,23 @@ for r in apigee-latam-npr operator ingress-manager dev-cl-mtls-env; do
   }'
 done
 
+************************
+
+echo "=== Directorio actual ==="
+pwd
+
+echo "=== Repositorios Helm ==="
+helm repo list
+
+echo "=== Charts de Apigee disponibles ==="
+find "$HOME" -maxdepth 4 -type d \
+  \( -name apigee-org -o -name apigee-env \
+     -o -name apigee-ingress-manager \) 2>/dev/null
+
+echo "=== Archivos overrides ==="
+find "$HOME" -maxdepth 4 -type f \
+  \( -iname '*override*.yaml' \
+     -o -iname '*override*.yml' \) 2>/dev/null
+
 
 
