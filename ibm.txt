@@ -1,91 +1,17 @@
-ibmcloud oc worker-pool ls --cluster carla-npr-latam-ocw
+oc get co dns ingress network -o json | jq -r '
+.items[] |
+.metadata.name as $name |
+.status.conditions[] |
+select(.type=="Progressing") |
+[$name, .status, .message] | @tsv'
 
-oc get nodes
 
-oc get co
+oc get pods -A | grep -E \
+'Pending|CrashLoopBackOff|ImagePullBackOff|ContainerCreating'
 
-*****
-ibmcloud oc zone add vpc-gen2 \
+
+ibmcloud oc zone rm \
   --cluster carla-npr-latam-ocw \
-  --worker-pool apigee-runtime-rhcos \
-  --zone br-sao-2 \
-  --subnet-id 02u7-2746940b-947d-4b83-a5be-0d314dee191f
-
-
-ibmcloud oc zone add vpc-gen2 \
-  --cluster carla-npr-latam-ocw \
-  --worker-pool apigee-runtime-rhcos \
-  --zone br-sao-3 \
-  --subnet-id 02v7-be3d40cc-6089-4b08-84b1-834761e9b9a8
-
-
-
-****************************
-
-ibmcloud oc worker ls --cluster carla-npr-latam-ocw
-
-oc get nodes -o wide
-
-
-*******************
-
-
-oc adm cordon 10.30.28.6
-
-oc get pods -A \
-  --field-selector spec.nodeName=10.30.28.6 \
-  -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,OWNER:.metadata.ownerReferences[0].kind,STATUS:.status.phase'
-
-
-*************************
-
-
-oc get pdb -n apigee
-
-oc get apigeeredis default -n apigee
-
-oc get co
-
-
-***************************
-
-
-oc get pods -A \
-  --field-selector spec.nodeName=10.30.28.6 -o json \
-  | jq -r '.items[]
-    | select(any(.spec.volumes[]?; has("persistentVolumeClaim")))
-    | [.metadata.namespace,.metadata.name,
-       ([.spec.volumes[]?
-       | select(has("persistentVolumeClaim"))
-       | .persistentVolumeClaim.claimName] | join(","))]
-    | @tsv'
-
-
-oc adm drain 10.30.28.6 \
-  --ignore-daemonsets \
-  --delete-emptydir-data \
-  --dry-run=client
-
-oc adm drain 10.30.28.6 \
-  --ignore-daemonsets \
-  --delete-emptydir-data \
-  --timeout=20m
-
-oc get co
-
-oc get apigeeredis default -n apigee
-
-oc get pods -A \
-  --field-selector spec.nodeName=10.30.28.6
-
-
-*************************
-
-
-oc get pods -A \
-  --field-selector spec.nodeName=10.30.28.6 \
-  -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase,DELETING:.metadata.deletionTimestamp'
-
-
-oc get co
+  --worker-pool apigee-runtime \
+  --zone br-sao-2
 
