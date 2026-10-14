@@ -30,3 +30,14 @@ ibmcloud oc worker ls --cluster "$CL"
 
 oc get nodes -o wide
 
+
+**************************
+
+
+ibmcloud oc worker ls \
+  --cluster carla-npr-latam-ocw
+
+
+
+oc get nodes -o wide
+
