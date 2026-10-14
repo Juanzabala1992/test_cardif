@@ -1,96 +1,19 @@
-oc get co dns ingress network -o json | jq -r '
-.items[] |
-.metadata.name as $name |
-.status.conditions[] |
-select(.type=="Progressing") |
-[$name, .status, .message] | @tsv'
+mkdir -p ~/apigee-migration-1151
+cd ~/apigee-migration-1151
+
+export CHART_REPO=oci://us-docker.pkg.dev/apigee-release/apigee-hybrid-helm-charts
+
+helm pull $CHART_REPO/apigee-operator \
+  --version 1.15.1 --untar
+
+helm pull $CHART_REPO/apigee-org \
+  --version 1.15.1 --untar
+
+helm pull $CHART_REPO/apigee-env \
+  --version 1.15.1 --untar
+
+helm pull $CHART_REPO/apigee-ingress-manager \
+  --version 1.15.1 --untar
 
 
-oc get pods -A | grep -E \
-'Pending|CrashLoopBackOff|ImagePullBackOff|ContainerCreating'
-
-
-ibmcloud oc zone rm \
-  --cluster carla-npr-latam-ocw \
-  --worker-pool apigee-runtime \
-  --zone br-sao-2
-
-*********************
-
-
-oc get events -n apigee \
-  --field-selector reason=FailedScheduling \
-  --sort-by=.lastTimestamp | tail -20
-
-
-************************
-
-
-POD=$(oc get pods -n apigee \
-  --field-selector=status.phase=Pending -o name \
-  | grep '^pod/apigee-runtime-' | head -1)
-
-if [ -n "$POD" ]; then
-  oc get -n apigee "$POD" -o json | jq '{
-    pod: .metadata.name,
-    nodeSelector: .spec.nodeSelector,
-    nodeAffinity: .spec.affinity.nodeAffinity,
-    cpuRequests: [.spec.containers[] |
-      {name: .name, cpu: .resources.requests.cpu}]
-  }'
-else
-  echo "No quedan pods Runtime Pending"
-fi
-
-
-*****************
-
-
-oc adm uncordon 10.30.28.6
-
-
-
-oc get nodes -L ibm-cloud.kubernetes.io/worker-pool-name,apigee-nodepool
-
-helm list -n apigee
-
-
-**************************
-
-oc get node 10.30.44.8 -o json | jq -r '
-.status.conditions[]
-| select(.type=="Ready")
-| [.status,.reason,.message]
-| @tsv'
-
-
-
-for r in apigee-latam-npr operator ingress-manager dev-cl-mtls-env; do
-  echo "=== $r ==="
-  helm get values "$r" -n apigee -o json | jq '{
-    nodeSelector,
-    runtimeSelector: .runtime.nodeSelector,
-    synchronizerSelector: .synchronizer.nodeSelector
-  }'
-done
-
-************************
-
-echo "=== Directorio actual ==="
-pwd
-
-echo "=== Repositorios Helm ==="
-helm repo list
-
-echo "=== Charts de Apigee disponibles ==="
-find "$HOME" -maxdepth 4 -type d \
-  \( -name apigee-org -o -name apigee-env \
-     -o -name apigee-ingress-manager \) 2>/dev/null
-
-echo "=== Archivos overrides ==="
-find "$HOME" -maxdepth 4 -type f \
-  \( -iname '*override*.yaml' \
-     -o -iname '*override*.yml' \) 2>/dev/null
-
-
-
+ls -la ~/apigee-migration-1151
