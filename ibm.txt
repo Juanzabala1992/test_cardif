@@ -77,3 +77,12 @@ helm get values apigee-latam-npr -n apigee -o json \
       }
     }'
 
+
+****************************
+
+
+oc get secrets -n apigee -o json | jq -r '
+.items[]
+| select(.data["client_secret.json"] != null)
+| .metadata.name
+' | sort
