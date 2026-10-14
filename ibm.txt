@@ -46,3 +46,28 @@ oc get pods -n apigee -o json | jq -r '
     or .key=="apigee-nodepool")
 | "\(.key)=\(.values|join(","))"
 ] | unique[]'
+
+
+******************
+
+
+echo "=== RELEASES APIGEE ENV ==="
+
+helm list -n apigee -o json |
+  jq -r '.[] |
+    select(.chart | startswith("apigee-env-")) |
+    .name' > /tmp/apigee-env-releases.txt
+
+echo "Total:"
+wc -l < /tmp/apigee-env-releases.txt
+
+echo "=== EJEMPLO DE CONFIGURACION ==="
+
+helm get values dev-cl-mtls-env \
+  -n apigee -o json |
+  jq '{
+    env,
+    nodeSelector,
+    runtimePath: .runtime.serviceAccountPath,
+    synchronizerPath: .synchronizer.serviceAccountPath
+  }'
