@@ -64,3 +64,54 @@ helm upgrade datastore ./apigee-datastore \
   --timeout 30m
 
 watch -n 15 'oc get pods -n apigee -o wide | grep apigee-cassandra-default'
+
+
+
+***********************
+
+
+cd ~/migracion-cassandra || exit 1
+umask 077
+
+SA="apigee-latam-npr-apigee-non-prod.json"
+DEST="./apigee-datastore/$SA"
+
+if [ ! -s "$DEST" ]; then
+  SOURCE=$(find "$HOME" -type f -name "$SA" \
+    ! -path "$PWD/$DEST" -print -quit 2>/dev/null)
+
+  if [ -n "$SOURCE" ]; then
+    cp "$SOURCE" "$DEST"
+  else
+    echo "Buscando en el release Helm anterior..."
+
+    oc get secret sh.helm.release.v1.datastore.v16 \
+      -n apigee -o jsonpath='{.data.release}' \
+      | base64 -d | base64 -d | gzip -dc \
+      | jq -er --arg f "$SA" \
+        '.chart.files[]? | select(.name == $f) | .data' \
+      | base64 -d > "$DEST"
+  fi
+fi
+
+if [ -s "$DEST" ] && jq -e 'type=="object"' "$DEST" >/dev/null 2>&1; then
+  echo "JSON RECUPERADO CORRECTAMENTE"
+else
+  rm -f "$DEST"
+  echo "NO SE RECUPERO EL JSON"
+fi
+
+
+
+
+
+
+helm upgrade datastore ./apigee-datastore \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
+  --dry-run=server > /dev/null \
+  && echo "SIMULACION OK"
+
+
+
