@@ -35,3 +35,24 @@ oc get rs -n apigee -o json | jq -r '
       | "\(.key)=\((.values // []) | join(","))"
     ] | join(";"))
   ] | @tsv'
+
+
+***************************************
+
+
+oc get node 10.30.44.8 -o json |
+jq '{
+  pool: .metadata.labels["ibm-cloud.kubernetes.io/worker-pool-name"],
+  unschedulable: .spec.unschedulable
+}'
+
+oc adm uncordon 10.30.44.8
+
+
+
+oc get pods -n apigee -o wide |
+grep -E 'apigee-metrics-adapter|apigee-metrics-apigee-telemetry-app'
+
+oc get ad -n apigee | grep '^apigee-metrics-'
+
+oc get apigeetelemetry -n apigee
