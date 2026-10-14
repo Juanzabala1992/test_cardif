@@ -751,3 +751,73 @@ for R in operator telemetry; do
     metrics: .metrics.nodeSelector
   }'
 done
+
+************************************
+
+
+
+
+(
+set -euo pipefail
+umask 077
+mkdir -p ~/apigee-migration-1151
+cd ~/apigee-migration-1151
+
+REPO=oci://us-docker.pkg.dev/apigee-release/apigee-hybrid-helm-charts
+
+for R in operator telemetry; do
+  CHART="apigee-$R"
+
+  if [ ! -f "$CHART/Chart.yaml" ]; then
+    helm pull "$REPO/$CHART" \
+      --version 1.15.1 --untar
+  fi
+
+  helm get values "$R" -n apigee -o yaml \
+    > "backup-$R-$(date +%Y%m%d%H%M%S).yaml"
+
+  if helm upgrade "$R" "./$CHART" \
+    -n apigee --reuse-values \
+    --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+    --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+    --dry-run=server --hide-secret \
+    > "dryrun-$R.txt" 2>&1; then
+    echo "$R: DRY-RUN OK"
+  else
+    echo "$R: DRY-RUN FALLÓ"
+    grep -Ei 'error|failed|required|unreachable|invalid' \
+      "dryrun-$R.txt" | tail -6 || true
+    exit 1
+  fi
+done
+)
+
+
+
+
+
+
+cd ~/apigee-migration-1151
+
+helm upgrade operator ./apigee-operator \
+  -n apigee --reuse-values \
+  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+  --rollback-on-failure --wait --timeout=15m &&
+
+oc rollout status deployment/apigee-controller-manager \
+  -n apigee --timeout=15m &&
+
+helm upgrade telemetry ./apigee-telemetry \
+  -n apigee --reuse-values \
+  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+  --rollback-on-failure --wait --timeout=15m
+
+
+
+
+oc get pods -n apigee -o wide |
+grep -E 'apigee-controller-manager|apigee-metrics-adapter|apigee-metrics-apigee-telemetry-app'
+
+oc get apigeetelemetry -n apigee
