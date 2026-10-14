@@ -585,3 +585,18 @@ ibmcloud oc worker-pool taint rm \
   --worker-pool apigee-runtime-rhcos
 
 oc describe node kube-clqa7haz0od58enpugng-carlanprlat-apigeer-00004a16 | grep -A 3 '^Taints:'
+
+*********************
+
+oc adm cordon 10.30.12.11
+
+oc get nodes
+
+
+
+oc get pods -n apigee \
+  --field-selector spec.nodeName=10.30.12.11 \
+  -o custom-columns='NAME:.metadata.name,OWNER:.metadata.ownerReferences[0].kind,STATUS:.status.phase' \
+  | grep -E 'NAME|apigee-runtime|redis|cassandra-backup'
+
+
