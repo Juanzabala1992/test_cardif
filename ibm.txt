@@ -1,168 +1,18 @@
-echo "=== APIGEE DEPLOYMENTS ==="
+echo "=== WORKERS IBM ==="
+ibmcloud oc worker ls \
+  --cluster carla-npr-latam-ocw
 
-for A in \
-  apigee-metrics-adapter-apigee-telemetry \
-  apigee-metrics-apigee-telemetry-app
-do
-  echo "=== $A ==="
-  oc get ad "$A" -n apigee -o json | jq '{
-    state: .status.state,
-    replicas: .status.replicas,
-    affinity: [
-      .spec | .. | objects |
-      select(
-        .key? == "apigee-nodepool" or
-        .key? == "ibm-cloud.kubernetes.io/worker-pool-name"
-      ) | {key, values}
-    ]
-  }'
-done
+echo "=== POOLS IBM ==="
+ibmcloud oc worker-pool ls \
+  --cluster carla-npr-latam-ocw
 
-echo "=== REPLICASETS METRICS ==="
+echo "=== NODOS ==="
+oc get nodes
 
-oc get rs -n apigee -o json | jq -r '
-.items[]
-| select(.metadata.name |
-    test("^apigee-metrics-(adapter|apigee-telemetry-app)"))
-| [
-    .metadata.name,
-    (.spec.replicas // 0),
-    (.status.readyReplicas // 0),
-    ([
-      .spec.template.spec.affinity.nodeAffinity
-      .requiredDuringSchedulingIgnoredDuringExecution
-      .nodeSelectorTerms[]?.matchExpressions[]?
-      | "\(.key)=\((.values // []) | join(","))"
-    ] | join(";"))
-  ] | @tsv'
-
-
-***************************************
-
-
-oc get node 10.30.44.8 -o json |
-jq '{
-  pool: .metadata.labels["ibm-cloud.kubernetes.io/worker-pool-name"],
-  unschedulable: .spec.unschedulable
-}'
-
-oc adm uncordon 10.30.44.8
-
-
-
-oc get pods -n apigee -o wide |
-grep -E 'apigee-metrics-adapter|apigee-metrics-apigee-telemetry-app'
-
-oc get ad -n apigee | grep '^apigee-metrics-'
-
-oc get apigeetelemetry -n apigee
-
-
-
-**********************************
-
-
-oc adm cordon 10.30.44.8
-
-
-
-echo "=== REPLICASETS METRICS ==="
-
-oc get rs -n apigee -o json | jq -r '
-.items[]
-| select(.metadata.name |
-    test("^apigee-metrics-(adapter|apigee-telemetry-app)"))
-| [
-    .metadata.name,
-    (.spec.replicas // 0),
-    (.status.readyReplicas // 0),
-    ([
-      .spec.template.spec.affinity.nodeAffinity
-      .requiredDuringSchedulingIgnoredDuringExecution
-      .nodeSelectorTerms[]?.matchExpressions[]?
-      | "\(.key)=\((.values // []) | join(","))"
-    ] | join(";"))
-  ] | @tsv'
-
-echo "=== ESTADO TELEMETRY ==="
-oc get apigeetelemetry -n apigee
-
-
-*************************
-
-echo "=== METRICS ==="
-oc get pods -n apigee -o wide |
-grep -E 'apigee-metrics-adapter|apigee-metrics-apigee-telemetry-app'
-
-echo "=== PODS RESTANTES EN RHEL 8 ==="
-oc get pods -A \
-  --field-selector spec.nodeName=10.30.44.8 -o json |
-jq -r '.items[]
-| select(.status.phase != "Succeeded" and .status.phase != "Failed")
-| select(([.metadata.ownerReferences[]?.kind] | index("DaemonSet")) == null)
-| [.metadata.namespace,.metadata.name,.status.phase] | @tsv'
-
-
-
-****************************
-
-oc get pdb -n apigee | grep -E 'NAME|metrics'
-
-
-
-oc adm drain 10.30.44.8 \
-  --ignore-daemonsets \
-  --delete-emptydir-data \
-  --timeout=25m
-
-
-******************************
-
-
-echo "=== METRICS ==="
-oc get pods -n apigee -o wide |
-grep -E '^apigee-metrics-(adapter|apigee-telemetry-app)'
-
-echo "=== TELEMETRY ==="
-oc get apigeetelemetry -n apigee
-
-echo "=== CASSANDRA ==="
-oc get pods -n apigee -o wide |
-grep '^apigee-cassandra-default-'
-
-echo "=== JOB CASSANDRA ==="
-oc get jobs -n apigee |
-grep 'cassandra-schema' || true
-
-echo "=== PODS NO READY ==="
-oc get pods -n apigee -o json |
-jq -r '.items[]
-| select(.metadata.deletionTimestamp == null)
-| select(.status.phase != "Succeeded" and .status.phase != "Failed")
-| select(.status.phase != "Running" or
-  ([.status.conditions[]? |
-  select(.type=="Ready" and .status=="True")] | length)==0)
-| [.metadata.name,.status.phase] | @tsv'
-
-echo "=== OPERADORES ==="
+echo "=== OPERADORES PENDIENTES ==="
 oc get co |
 awk 'NR==1 || $3!="True" || $4!="False" || $5!="False"'
 
-
-
-***********************************
-
-
-ibmcloud oc worker ls \
-  --cluster carla-npr-latam-ocw \
-  --worker-pool apigee-runtime
-
-ibmcloud oc worker-pool rm \
-  --cluster carla-npr-latam-ocw \
-  --worker-pool apigee-runtime
-
-
-ibmcloud oc worker-pool ls --cluster carla-npr-latam-ocw
-ibmcloud oc worker ls --cluster carla-npr-latam-ocw
-oc get nodes
-oc get co
+echo "=== APIGEE ==="
+oc get apigeeorg,apigeeenv,apigeeredis,apigeetelemetry \
+  -n apigee
