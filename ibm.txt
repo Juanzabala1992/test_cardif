@@ -184,3 +184,73 @@ oc get nodes -l apigee-nodepool=apigee-runtime
 echo "=== CAPACIDAD ==="
 oc describe nodes -l apigee-nodepool=apigee-runtime |
 grep -A 7 'Allocated resources:'
+
+
+*****************************
+
+
+(
+set -euo pipefail
+cd ~/apigee-migration-1151
+umask 077
+
+oc get sts apigee-redis-default -n apigee -o json |
+jq -e '
+  .spec.replicas == 2 and
+  .status.readyReplicas == 2 and
+  .spec.updateStrategy.type == "RollingUpdate" and
+  ((.spec.updateStrategy.rollingUpdate.partition // 0) == 0) and
+  ((.spec.updateStrategy.rollingUpdate.maxUnavailable // 1) == 1)
+' >/dev/null || {
+  echo "DETENIDO: revisar estrategia Redis"
+  exit 1
+}
+
+READY=$(oc get nodes \
+  -l ibm-cloud.kubernetes.io/worker-pool-name=apigee-runtime-rhcos \
+  -o json |
+  jq '[.items[] |
+    select(.spec.unschedulable != true) |
+    select(any(.status.conditions[]?;
+      .type=="Ready" and .status=="True"))] | length')
+
+[ "$READY" -eq 3 ] || {
+  echo "DETENIDO: no hay 3 RHCOS Ready"
+  exit 1
+}
+
+helm get values redis -n apigee -o yaml \
+  > "backup-redis-$(date +%Y%m%d%H%M%S).yaml"
+
+ARGS=(
+  --reuse-values
+  --set-string nodeSelector.apigeeRuntime.key=ibm-cloud.kubernetes.io/worker-pool-name
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime-rhcos
+)
+
+helm upgrade redis ./apigee-redis -n apigee \
+  "${ARGS[@]}" --dry-run=server --hide-secret \
+  > dryrun-redis-rhcos.txt 2>&1 || {
+    echo "DRY-RUN FALLÓ. No se aplicaron cambios."
+    exit 1
+  }
+
+echo "DRY-RUN OK"
+read -r -p "Escribe APLICAR para migrar Redis: " OK
+[ "$OK" = "APLICAR" ] || exit 0
+
+helm upgrade redis ./apigee-redis -n apigee \
+  "${ARGS[@]}" --atomic --timeout 15m
+)
+
+
+
+
+
+oc rollout status sts/apigee-redis-default \
+  -n apigee --timeout=20m
+
+oc get pods -n apigee -o wide |
+  grep '^apigee-redis-default-'
+
+oc get apigeeredis default -n apigee
