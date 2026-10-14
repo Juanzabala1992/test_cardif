@@ -43,3 +43,15 @@ else
 fi
 
 
+*****************
+
+
+oc adm uncordon 10.30.28.6
+
+
+
+oc get nodes -L ibm-cloud.kubernetes.io/worker-pool-name,apigee-nodepool
+
+helm list -n apigee
+
+
