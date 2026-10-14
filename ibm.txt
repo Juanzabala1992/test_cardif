@@ -1,77 +1,8 @@
-oc get pods -n apigee \
-  --field-selector spec.nodeName=10.30.12.11 \
-  -o name | grep 'apigee-runtime.*dev-br-mtls'
-
-
-oc get pdb -n apigee | grep 'dev-br-mtls'
-
-
-*******************
-
-POD=$(oc get pods -n apigee \
-  --field-selector spec.nodeName=10.30.12.11 \
-  -o name | grep '^pod/apigee-runtime-.*dev-br-mtls' \
-  | sed 's#pod/##')
-
-echo "Pod a migrar: $POD"
-
-PDB=apigee-runtime-apigee-latam-np-dev-br-mtls-b6acbd2
-
-ALLOWED=$(oc get pdb "$PDB" -n apigee \
-  -o jsonpath='{.status.disruptionsAllowed}')
-
-if [ "$(printf '%s\n' "$POD" | grep -c .)" -ne 1 ] || \
-   [ "$ALLOWED" != "1" ]; then
-  echo "No se ejecuta: revisar pod o PDB"
-else
-  printf '{"apiVersion":"policy/v1","kind":"Eviction","metadata":{"name":"%s","namespace":"apigee"}}' "$POD" \
-  | oc create --raw "/api/v1/namespaces/apigee/pods/$POD/eviction" -f -
-fi
-
-
-
-oc get pods -n apigee -o wide | grep 'dev-br-mtls'
-
-oc get rs -n apigee | grep 'dev-br-mtls'
-
-****************************
-
-
-oc get pods -n apigee -o wide | grep 'dev-br-mtls'
-
-
-oc get rs -n apigee | grep 'dev-br-mtls'
-
-
-***********************************
-
-
-POD=$(oc get pods -n apigee \
-  --field-selector spec.nodeName=10.30.12.11 \
-  -o name | grep '^pod/apigee-runtime-.*qa-br-mtls' \
-  | sed 's#pod/##')
-
-PDB=apigee-runtime-apigee-latam-np-qa-br-mtls-7e4c7fc
-
-ALLOWED=$(oc get pdb "$PDB" -n apigee \
-  -o jsonpath='{.status.disruptionsAllowed}')
-
-echo "Pod: $POD"
-echo "Interrupciones permitidas: $ALLOWED"
-
-if [ "$(printf '%s\n' "$POD" | grep -c .)" -eq 1 ] && \
-   [ "${ALLOWED:-0}" -ge 1 ] 2>/dev/null; then
-  printf '{"apiVersion":"policy/v1","kind":"Eviction","metadata":{"name":"%s","namespace":"apigee"}}' "$POD" \
-  | oc create --raw "/api/v1/namespaces/apigee/pods/$POD/eviction" -f -
-else
-  echo "NO SE EJECUTA: revisar pod o PDB"
-fi
-
-
-
 oc get pods -n apigee -o wide | grep 'qa-br-mtls'
 
 oc get rs -n apigee | grep 'qa-br-mtls'
 
-
+oc get pods -n apigee \
+  --field-selector spec.nodeName=10.30.12.11 \
+  -o custom-columns='NAME:.metadata.name,STATUS:.status.phase'
 
