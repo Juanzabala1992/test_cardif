@@ -706,3 +706,30 @@ grep -E 'apigee-controller-manager|apigee-metrics-adapter|apigee-metrics-apigee-
 echo "=== EVENTOS ==="
 oc get events -n apigee \
   --sort-by=.lastTimestamp | tail -15
+
+
+
+****************************
+
+
+for P in $(oc get pods -n apigee \
+  --field-selector=status.phase=Pending \
+  -o jsonpath='{.items[*].metadata.name}'); do
+
+  echo "===== $P ====="
+
+  oc get pod "$P" -n apigee -o json |
+  jq '{
+    nodeSelector: .spec.nodeSelector,
+    requiredAffinity: .spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution,
+    requests: [.spec.containers[] |
+      {name, resources: .resources.requests}]
+  }'
+
+  oc describe pod "$P" -n apigee |
+    sed -n '/^Events:/,$p' | tail -12
+
+done
+
+echo "=== ETIQUETAS DE WORKERS ==="
+oc get nodes -L ibm-cloud.kubernetes.io/worker-pool-name,apigee-nodepool
