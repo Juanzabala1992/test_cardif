@@ -258,3 +258,11 @@ echo "=========================="
 echo "SELECTOR NUEVO: $NUEVOS"
 echo "PENDIENTES: $PENDIENTES"
 echo "REVISAR: $REVISAR"
+
+
+*********************
+
+oc get apigeeenv -n apigee -o json |
+jq -r '.items[] |
+  select(.status.state != "running") |
+  "\(.metadata.name): \(.status.state // "sin estado")"'
