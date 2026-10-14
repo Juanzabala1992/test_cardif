@@ -280,3 +280,21 @@ oc rollout status deployment/apigee-ingressgateway-manager \
 
 echo "INGRESS MANAGER ACTUALIZADO"
 )
+
+
+
+******************************************
+
+
+echo "=== ERROR DEV-ENV ==="
+helm history dev-env -n apigee -o json |
+jq -r '.[] | select(.status=="failed") |
+.description' | tail -1
+
+echo "=== ESTADO APIGEE DEV ==="
+oc get apigeeenv apigee-latam-np-dev-3abd4b8 \
+-n apigee
+
+echo "=== INGRESS GATEWAYS ==="
+oc get pods -n apigee -o wide |
+grep 'apigee-ingressgateway'
