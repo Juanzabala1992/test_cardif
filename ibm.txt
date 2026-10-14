@@ -21,3 +21,46 @@ jq '{
   nodeSelector: .nodeSelector,
   cassandraNodeSelector: .cassandra.nodeSelector
 }'
+
+
+
+*************************
+
+
+oc get nodes \
+  -l ibm-cloud.kubernetes.io/worker-pool-name=apigee-data-rhcos
+
+mkdir -p ~/migracion-cassandra
+cd ~/migracion-cassandra
+
+helm get values datastore -n apigee -o yaml \
+  > datastore-backup.yaml
+
+helm pull \
+  oci://us-docker.pkg.dev/apigee-release/apigee-hybrid-helm-charts/apigee-datastore \
+  --version 1.15.1 --untar
+
+
+
+helm upgrade datastore ./apigee-datastore \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
+  --dry-run=server > helm-preview.txt \
+  && echo "SIMULACION OK"
+
+
+
+oc exec -n apigee apigee-cassandra-default-0 \
+  -c apigee-cassandra -- \
+  bash -c 'nodetool -u cassandra -pw "$CASS_PASSWORD" status'
+
+
+helm upgrade datastore ./apigee-datastore \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
+  --atomic \
+  --timeout 30m
+
+watch -n 15 'oc get pods -n apigee -o wide | grep apigee-cassandra-default'
