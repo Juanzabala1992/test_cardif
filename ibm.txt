@@ -429,3 +429,35 @@ echo "HELM DEV-ENV ACTUALIZADO"
 helm status dev-env -n apigee | grep -E 'STATUS:|REVISION:'
 
 oc get apigeeenv apigee-latam-np-dev-3abd4b8 -n apigee
+
+
+*************************************************
+
+
+
+echo "=== SELECTOR DEV ==="
+helm get values dev-env -n apigee -o json |
+jq '.nodeSelector.apigeeRuntime'
+
+echo "=== PODS EN NODOS ANTIGUOS ==="
+
+for N in 10.30.28.6 10.30.44.8; do
+  echo "===== $N ====="
+
+  oc get pods -A \
+    --field-selector spec.nodeName="$N" -o json |
+  jq -r '
+    .items[]
+    | select(.status.phase != "Succeeded")
+    | select(.status.phase != "Failed")
+    | select(
+        ([.metadata.ownerReferences[]?.kind]
+        | index("DaemonSet")) == null
+      )
+    | [.metadata.namespace,
+       .metadata.name,
+       .status.phase] | @tsv'
+done
+
+echo "=== PDB APIGEE ==="
+oc get pdb -n apigee
