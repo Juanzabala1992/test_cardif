@@ -266,3 +266,20 @@ oc get apigeeenv -n apigee -o json |
 jq -r '.items[] |
   select(.status.state != "running") |
   "\(.metadata.name): \(.status.state // "sin estado")"'
+
+
+*******************
+
+
+helm list -n apigee -o json |
+jq -r '.[] |
+  select(.chart | startswith("apigee-env-")) |
+  [.name,.status] | @tsv' |
+while IFS=$'\t' read -r R ST; do
+  KEY=$(helm get values "$R" -n apigee -o json |
+    jq -r '.nodeSelector.apigeeRuntime.key // "-"')
+
+  if [ "$KEY" != "apigee-nodepool" ]; then
+    echo "$R | $ST"
+  fi
+done
