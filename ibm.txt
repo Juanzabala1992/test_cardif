@@ -70,3 +70,35 @@ jq '.metrics.nodeSelector'
 
 oc get pods -n apigee -o wide |
 grep -E 'apigee-controller-manager|apigee-metrics-adapter|apigee-metrics-apigee-telemetry-app'
+
+
+**********************************************
+
+
+
+echo "=== ESTADO TELEMETRY ==="
+oc get apigeetelemetry -n apigee
+
+echo "=== CONTROLADORES METRICS ==="
+oc get deploy -n apigee -o json | jq '
+.items[]
+| select(.metadata.name | contains("apigee-metrics"))
+| {
+    name: .metadata.name,
+    ready: .status.readyReplicas,
+    affinity: .spec.template.spec.affinity.nodeAffinity
+  }'
+
+echo "=== PODS PENDING Y SUS CONTROLADORES ==="
+oc get pods -n apigee -o json | jq '
+.items[]
+| select(.metadata.name |
+    test("^apigee-metrics-(adapter|apigee-telemetry-app)"))
+| {
+    name: .metadata.name,
+    phase: .status.phase,
+    owner: .metadata.ownerReferences,
+    affinity: .spec.affinity.nodeAffinity
+  }'
+
+
