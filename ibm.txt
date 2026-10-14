@@ -126,3 +126,12 @@ oc get pods -A \
   --field-selector spec.nodeName=10.30.12.11 \
   -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,OWNER:.metadata.ownerReferences[0].kind,STATUS:.status.phase'
 
+
+****************
+
+
+oc adm drain 10.30.12.11 \
+  --ignore-daemonsets \
+  --delete-emptydir-data \
+  --dry-run=client
+
