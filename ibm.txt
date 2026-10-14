@@ -168,50 +168,34 @@ echo 'LOTE REANUDADO COMPLETO. FALTA: dev-env (failed), ingress-manager y retiro
 
 
 
-
-
-echo "=== REDIS Y UBICACION ==="
-oc get pods -n apigee -o wide | grep -E '^apigee-redis-default-[01][[:space:]]'
-
-echo "=== REDIS STATEFULSET ==="
-oc get sts apigee-redis-default -n apigee -o json |
-jq '{replicas:.spec.replicas,ready:.status.readyReplicas,
-      nodeSelector:.spec.template.spec.nodeSelector,
-      nodeAffinity:.spec.template.spec.affinity.nodeAffinity}'
-
-echo "=== PDB REDIS ==="
-oc get pdb -n apigee | grep -i redis || true
-
-echo "=== HISTORIAL DEV-ENV ==="
-helm history dev-env -n apigee -o json |
-jq -r '.[-4:][] |
-[.revision,.status,((.description // "")[:100])] | @tsv'
-
-echo "=== INGRESS MANAGER: DRY RUN ==="
-DIR="$HOME/apigee-migration-1151"
-mkdir -p "$DIR"
+(
+set -euo pipefail
 umask 077
 
-if [ ! -f "$DIR/apigee-ingress-manager/Chart.yaml" ]; then
-  helm pull oci://us-docker.pkg.dev/apigee-release/apigee-hybrid-helm-charts/apigee-ingress-manager \
-    --version 1.15.1 --untar --untardir "$DIR"
+mkdir -p ~/apigee-migration-1151
+cd ~/apigee-migration-1151
+
+if [ ! -f apigee-redis/Chart.yaml ]; then
+  helm pull \
+    oci://us-docker.pkg.dev/apigee-release/apigee-hybrid-helm-charts/apigee-redis \
+    --version 1.15.1 --untar
 fi
 
-if [ -f "$DIR/apigee-ingress-manager/Chart.yaml" ]; then
-  helm get values ingress-manager -n apigee -o yaml \
-    > "$DIR/backup-ingress-manager.yaml"
+helm get values redis -n apigee -o yaml \
+  > backup-redis.yaml
 
-  helm upgrade ingress-manager "$DIR/apigee-ingress-manager" \
-    -n apigee --reuse-values \
-    --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
-    --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
-    --dry-run=server --hide-secret \
-    > "$DIR/dryrun-ingress.txt" 2>&1
+if helm upgrade redis ./apigee-redis \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+  --dry-run=server --hide-secret \
+  > dryrun-redis.txt 2>&1; then
 
-  RC=$?
-  echo "INGRESS DRY-RUN: $RC"
-  if [ "$RC" -ne 0 ]; then
-    grep -Ei 'error|failed|required|invalid' \
-      "$DIR/dryrun-ingress.txt" | tail -5
-  fi
+  echo "REDIS DRY-RUN OK"
+else
+  echo "REDIS DRY-RUN FALLÓ"
+  grep -Ei 'Error:|FAILED|required|invalid' \
+    dryrun-redis.txt | tail -5 || true
 fi
+)
