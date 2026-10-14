@@ -821,3 +821,59 @@ oc get pods -n apigee -o wide |
 grep -E 'apigee-controller-manager|apigee-metrics-adapter|apigee-metrics-apigee-telemetry-app'
 
 oc get apigeetelemetry -n apigee
+
+
+
+###############################################
+
+
+(
+set -euo pipefail
+umask 077
+
+cd ~/apigee-migration-1151
+
+FILE="apigee-telemetry/apigee-latam-npr-apigee-non-prod.json"
+
+if [ ! -s "$FILE" ]; then
+  trap 'rm -f "$FILE"' EXIT
+
+  for S in apigee-non-prod-svc-account apigee-metrics-svc-account; do
+    if DATA=$(oc get secret "$S" -n apigee -o json 2>/dev/null |
+      jq -er '.data["client_secret.json"]' 2>/dev/null); then
+
+      printf '%s' "$DATA" | base64 -d > "$FILE"
+
+      if jq -e '
+        .type == "service_account" and
+        ((.client_email // "") | contains("apigee-non-prod"))
+      ' "$FILE" >/dev/null; then
+        break
+      fi
+
+      rm -f "$FILE"
+    fi
+  done
+fi
+
+jq -e '
+  .type == "service_account" and
+  ((.client_email // "") | contains("apigee-non-prod"))
+' "$FILE" >/dev/null || {
+  echo "DETENIDO: credencial válida no encontrada"
+  exit 1
+}
+
+if helm upgrade telemetry ./apigee-telemetry \
+  -n apigee --reuse-values \
+  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+  --dry-run=server --hide-secret \
+  > dryrun-telemetry.txt 2>&1; then
+  echo "TELEMETRY DRY-RUN OK"
+else
+  echo "TELEMETRY DRY-RUN FALLO"
+  grep -Ei 'error|failed|required|unreachable' \
+    dryrun-telemetry.txt | tail -5 || true
+fi
+)
