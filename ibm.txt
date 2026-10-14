@@ -1,31 +1,18 @@
-echo "=== NODOS ANTIGUOS ==="
-oc get nodes 10.30.12.5 10.30.28.5 10.30.44.5
+CL=carla-npr-latam-ocw
 
-echo "=== PODS RESTANTES (EXCLUYE DAEMONSETS) ==="
-for N in 10.30.12.5 10.30.28.5 10.30.44.5; do
-  oc get pods -A \
-    --field-selector spec.nodeName="$N" \
-    -o json | jq -r --arg n "$N" '
-    .items[]
-    | select(
-        any(.metadata.ownerReferences[]?;
-            .kind == "DaemonSet") | not
-      )
-    | "\($n) \(.metadata.namespace)/\(.metadata.name)"
-  '
-done
+ibmcloud oc worker-pool ls --cluster "$CL"
 
-echo "=== OPERADORES CON PROBLEMAS ==="
-oc get co | awk 'NR==1 || $3!="True" || $5!="False"'
-
-
-ibmcloud oc worker-pool rm \
-  --cluster carla-npr-latam-ocw \
+ibmcloud oc worker ls \
+  --cluster "$CL" \
   --worker-pool apigee-data
 
 
-ibmcloud oc worker-pool ls \
-  --cluster carla-npr-latam-ocw
+
+ibmcloud oc worker-pool rm \
+  --cluster "$CL" \
+  --worker-pool apigee-data
+
+
 
 oc get nodes
 
@@ -35,4 +22,3 @@ oc get pods -n apigee -o wide |
   grep apigee-cassandra-default-
 
 oc get co
-
