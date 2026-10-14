@@ -102,3 +102,34 @@ oc get pods -n apigee -o json | jq '
   }'
 
 
+
+********************************
+
+
+echo "=== TELEMETRY: ESTADO Y SELECTORES ==="
+
+oc get apigeetelemetry apigee-telemetry \
+  -n apigee -o json |
+jq '{
+  state: .status.state,
+  generation: .metadata.generation,
+  observed: .status.observedGeneration,
+  selectors: (
+    [.spec | .. | objects |
+      select(
+        .key? == "ibm-cloud.kubernetes.io/worker-pool-name"
+        or .key? == "apigee-nodepool"
+      ) | {key,value}] | unique
+  ),
+  conditions: [
+    .status.conditions[]? |
+    {type,status,reason,message}
+  ]
+}'
+
+echo "=== APIGEE DEPLOYMENTS METRICS ==="
+
+oc get ad -n apigee -o json |
+jq -r '.items[] |
+select(.metadata.name | test("metrics|telemetry")) |
+[.metadata.name, (.status.state // "-")] | @tsv'
