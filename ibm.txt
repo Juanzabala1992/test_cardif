@@ -486,3 +486,23 @@ echo "=== WORKERS EN IBM ==="
 ibmcloud oc worker ls \
   --cluster carla-npr-latam-ocw
 
+
+*******************************
+
+
+
+oc adm cordon 10.30.28.6
+
+
+oc adm drain 10.30.28.6 \
+  --ignore-daemonsets \
+  --timeout=25m
+
+
+
+oc get nodes
+
+oc get pods -n apigee -o wide
+
+oc get apigeeorg,apigeeenv,apigeeredis -n apigee
+
