@@ -34,6 +34,13 @@ oc get pods -n apigee -o wide | grep 'dev-br-mtls'
 
 oc get rs -n apigee | grep 'dev-br-mtls'
 
+****************************
+
+
+oc get pods -n apigee -o wide | grep 'dev-br-mtls'
+
+
+oc get rs -n apigee | grep 'dev-br-mtls'
 
 
 
