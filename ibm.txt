@@ -81,3 +81,40 @@ oc get pv -o json | jq '
 echo "=== DISPONIBILIDAD ==="
 oc get pdb -n apigee
 
+
+
+
+*******************************
+
+
+
+oc get sts apigee-cassandra-default -n apigee \
+  -o yaml > cassandra-sts-backup.yaml
+
+
+
+
+oc patch sts apigee-cassandra-default -n apigee \
+  --type=json -p='[
+  {
+    "op":"replace",
+    "path":"/spec/updateStrategy",
+    "value":{"type":"OnDelete"}
+  },
+  {
+    "op":"replace",
+    "path":"/spec/template/spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms/0/matchExpressions/0/values",
+    "value":["apigee-data","apigee-data-rhcos"]
+  }
+]'
+
+
+
+oc get sts apigee-cassandra-default -n apigee \
+  -o json | jq '{
+    strategy: .spec.updateStrategy.type,
+    required: .spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution
+  }'
+
+
+
