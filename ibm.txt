@@ -36,5 +36,48 @@ ibmcloud oc worker-pool get \
 
 
 
+***********************************
+
+
+ibmcloud oc worker-pool create vpc-gen2 \
+  --cluster carla-npr-latam-ocw \
+  --name apigee-data-rhcos \
+  --flavor bx2.4x16 \
+  --size-per-zone 1 \
+  --operating-system RHCOS \
+  --label apigee-nodepool=apigee-data
+
+
+
+echo "=== SALUD DEL ANILLO CASSANDRA ==="
+oc exec -n apigee apigee-cassandra-default-0 \
+  -c apigee-cassandra -- \
+  bash -c 'nodetool -u cassandra -pw "$CASS_PASSWORD" status'
+
+echo "=== ESTRATEGIA STATEFULSET ==="
+oc get sts apigee-cassandra-default -n apigee -o json |
+jq '{
+  replicas: .spec.replicas,
+  strategy: .spec.updateStrategy,
+  management: .spec.podManagementPolicy
+}'
+
+echo "=== RESTRICCIONES DE LOS PVC ==="
+oc get pv -o json | jq '
+.items[]
+| select(.spec.claimRef.namespace? == "apigee")
+| select((.spec.claimRef.name // "") | contains("cassandra"))
+| {
+  pvc: .spec.claimRef.name,
+  reclaimPolicy: .spec.persistentVolumeReclaimPolicy,
+  nodeAffinity: .spec.nodeAffinity
+}'
+
+echo "=== CIFRADO POOL RHCOS EXISTENTE ==="
+ibmcloud oc worker-pool get \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-runtime-rhcos |
+grep -E 'KMS:|CRK:|KMS Account ID:'
+
 
 
