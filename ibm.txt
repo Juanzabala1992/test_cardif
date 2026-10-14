@@ -76,3 +76,130 @@ helm list -n apigee --all -o json | jq -r '
 "OTROS ESTADOS:",
 ($r[] | select(.status!="deployed") |
 "\(.name)  \(.status)")'
+
+***********************
+
+
+helm list -n apigee -o json | jq -r '
+[.[] | select(.chart | startswith("apigee-env-"))] as $r |
+"TOTAL: \($r | length)",
+"DEPLOYED: \($r | map(select(.status=="deployed")) | length)",
+"OTROS ESTADOS:",
+($r[] | select(.status!="deployed") |
+"\(.name)  \(.status)")'
+
+
+************************************
+
+
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+cd "$HOME/apigee-migration-1151"
+NS=apigee
+CRED=./apigee-env/apigee-latam-npr-apigee-non-prod.json
+LOG="$PWD/lote-rhcos-$(date +%Y%m%d-%H%M%S)"
+mkdir -m 700 "$LOG"
+trap 'rm -f "$CRED"' EXIT
+[[ ! -e "$CRED" ]] || { echo 'DETENIDO: JSON temporal ya existe'; exit 1; }
+
+mapfile -t RELEASES < <(helm list -n "$NS" -o json | jq -r '
+ .[] | select(.chart=="apigee-env-1.15.1" and .status=="deployed"
+              and .name!="dev-cl-mtls-env") | .name' | sort)
+[[ "${#RELEASES[@]}" -eq 25 ]] || { echo "DETENIDO: esperaba 25, encontré ${#RELEASES[@]}"; exit 1; }
+
+oc get nodes --no-headers | awk '$2!="Ready" {bad=1; print "Nodo no Ready: "$1" "$2} END{exit bad}' || exit 1
+oc get apigeeorg -n "$NS" -o json | jq -e 'all(.items[]; .status.state == "running")' > /dev/null || { echo "DETENIDO: ApigeeOrg no está running"; exit 1; }
+[[ $(oc get pods -n "$NS" -o json | jq '[.items[] | select(.status.phase=="Pending")] | length') -eq 0 ]] || { echo 'DETENIDO: hay pods Pending'; exit 1; }
+
+oc get secret -n "$NS" -o json | jq -r '.items[].metadata.name' > "$LOG/secret-names.txt"
+oc get apigeeenv -n "$NS" -o json | jq -r '.items[].metadata.name' > "$LOG/env-names.txt"
+: > "$LOG/plan.tsv"
+
+create_cred() {
+  local secret="$1"
+  [[ ! -e "$CRED" ]] || { echo 'DETENIDO: JSON ya existe'; return 1; }
+  oc get secret "$secret" -n "$NS" -o json \
+    | jq -er '.data["client_secret.json"]' \
+    | base64 -d > "$CRED"
+  jq -e 'type=="object"' "$CRED" > /dev/null
+}
+
+for R in "${RELEASES[@]}"; do
+  helm get values "$R" -n "$NS" -o json > "$LOG/$R.values.json"
+  ENV=$(jq -r '.env // empty' "$LOG/$R.values.json")
+  [[ "$ENV" =~ ^[a-z0-9-]+$ ]] || { echo "DETENIDO: env inválido en $R"; exit 1; }
+  [[ $(jq -r '.nodeSelector.apigeeRuntime.key' "$LOG/$R.values.json") == 'ibm-cloud.kubernetes.io/worker-pool-name' ]] || { echo "DETENIDO: selector diferente en $R"; exit 1; }
+  [[ $(jq -r '.nodeSelector.apigeeRuntime.value' "$LOG/$R.values.json") == 'apigee-runtime' ]] || { echo "DETENIDO: pool diferente en $R"; exit 1; }
+
+  mapfile -t S < <(grep -E "^apigee-(runtime|synchronizer|udca)-apigee-latam-np-${ENV}-[0-9a-f]{7}-svc-account$" "$LOG/secret-names.txt" || true)
+  [[ ${#S[@]} -eq 3 ]] || { echo "DETENIDO: $R -> ${#S[@]} Secrets, esperaba 3"; exit 1; }
+  H0=''
+  for X in "${S[@]}"; do
+    H=$(oc get secret "$X" -n "$NS" -o json | jq -er '.data["client_secret.json"]' | base64 -d | sha256sum | cut -d' ' -f1)
+    [[ -z "$H0" || "$H0" == "$H" ]] || { echo "DETENIDO: credenciales diferentes de $R"; exit 1; }
+    H0="$H"
+  done
+  CR=$(grep -E "^apigee-latam-np-${ENV}-[a-f0-9]{7}$" "$LOG/env-names.txt" || true)
+  [[ -n "$CR" && "$CR" != *$'\n'* ]] || { echo "DETENIDO: ApigeeEnv ambiguo en $R"; exit 1; }
+  create_cred "${S[0]}"
+  if ! helm upgrade "$R" ./apigee-env -n "$NS" --reuse-values \
+     --set-string "env=$ENV" \
+     --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+     --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+     --dry-run=server --hide-secret > "$LOG/$R.dryrun.log" 2>&1; then
+    echo "DETENIDO: simulación fallida de $R; revisar $LOG/$R.dryrun.log"
+    exit 1
+  fi
+  rm -f "$CRED"
+  printf '%s\t%s\t%s\t%s\n' "$R" "$ENV" "$CR" "${S[0]}" >> "$LOG/plan.tsv"
+  echo "PREVALIDADO $R"
+done
+
+echo 'Los 25 releases superaron las simulaciones.'
+read -r -p 'Para aplicar cambios reales secuencialmente escribe APLICAR: ' CONFIRM
+[[ "$CONFIRM" == 'APLICAR' ]] || { echo 'Sin cambios: solo prevalidación'; exit 0; }
+
+check_ready() {
+  local cr="$1"
+  [[ $(oc get apigeeenv "$cr" -n "$NS" -o jsonpath='{.status.state}' 2>/dev/null) == 'running' ]] || return 1
+  oc get pods -n "$NS" -o json | jq -e --arg cr "$cr" '
+    .items as $pods |
+    all(["runtime", "synchronizer"][]; . as $kind |
+      any($pods[];
+        (.metadata.name | startswith("apigee-" + $kind + "-" + $cr + "-"))
+        and .status.phase == "Running"
+        and ((.status.containerStatuses // []) | length > 0)
+        and all(.status.containerStatuses[]; .ready == true)
+        and any(.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[]?.matchExpressions[]?;
+          .key == "apigee-nodepool" and (.values | index("apigee-runtime") != null))
+      )
+    )' > /dev/null
+}
+
+while IFS=$'\t' read -r R ENV CR S; do
+  echo "ACTUALIZANDO $R"
+  create_cred "$S"
+  if ! helm upgrade "$R" ./apigee-env -n "$NS" --reuse-values \
+      --set-string "env=$ENV" \
+      --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+      --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+      --rollback-on-failure --timeout 15m > "$LOG/$R.upgrade.log" 2>&1; then
+    echo "DETENIDO: falló Helm en $R. Revisar $LOG/$R.upgrade.log"
+    exit 1
+  fi
+  rm -f "$CRED"
+  HEALTHY=false
+  for try in $(seq 1 90); do
+    if check_ready "$CR"; then HEALTHY=true; break; fi
+    sleep 10
+  done
+  [[ "$HEALTHY" == true ]] || { echo "DETENIDO: $R no recuperó Runtime/Synchronizer en 15m"; exit 1; }
+  PENDING=$(oc get pods -n "$NS" -o json | jq '[.items[] | select(.status.phase=="Pending")] | length')
+  [[ "$PENDING" -eq 0 ]] || { echo "DETENIDO: ${PENDING} pods Pending después de $R"; exit 1; }
+  echo "OK $R (ApigeeEnv running, Runtime y Synchronizer Ready con afinidad nueva)"
+done < "$LOG/plan.tsv"
+echo 'Lote completado. IMPORTANTE: dev-env (failed), ingress-manager y el retiro de los RHEL 8 quedan pendientes.'
+
+
+bash apigee_rhcos_batch_25.sh
