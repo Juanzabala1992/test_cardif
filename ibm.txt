@@ -203,3 +203,18 @@ echo 'Lote completado. IMPORTANTE: dev-env (failed), ingress-manager y el retiro
 
 
 bash apigee_rhcos_batch_25.sh
+
+************************
+
+
+echo "=== ESTADO HELM ==="
+helm status dev-br-env -n apigee |
+  grep -E 'STATUS:|REVISION:'
+
+echo "=== ESTADO APIGEE ==="
+oc get apigeeenv -n apigee |
+  grep 'dev-br'
+
+echo "=== PODS ==="
+oc get pods -n apigee -o wide |
+  grep -E 'apigee-(runtime|synchronizer)-apigee-latam-np-dev-br-'
