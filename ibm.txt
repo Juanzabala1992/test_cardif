@@ -540,4 +540,11 @@ oc get deployment image-registry \
 oc get pod apigee-redis-default-1 \
   -n apigee -o wide
 
+*************************
 
+oc get pdb -n apigee
+
+oc get pod apigee-redis-default-1 -n apigee \
+  -o jsonpath='{.metadata.ownerReferences[*].kind}{" "}{.metadata.ownerReferences[*].name}{"\n"}'
+
+oc get pvc -n apigee
