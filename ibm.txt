@@ -461,3 +461,28 @@ done
 
 echo "=== PDB APIGEE ==="
 oc get pdb -n apigee
+
+
+
+
+******************************
+
+
+
+echo "=== PDB BLOQUEANTES ==="
+
+oc get pdb -n apigee -o json | jq -r '
+.items[]
+| select((.status.disruptionsAllowed // 0) == 0)
+| [
+    .metadata.name,
+    (.status.currentHealthy // 0),
+    (.status.desiredHealthy // 0),
+    (.status.expectedPods // 0)
+  ] | @tsv'
+
+echo "=== WORKERS EN IBM ==="
+
+ibmcloud oc worker ls \
+  --cluster carla-npr-latam-ocw
+
