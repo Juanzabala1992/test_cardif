@@ -281,6 +281,12 @@ podman ps
 
 podman logs -f liberty-test
 
+
+
+
+
+
+
 **************************
 
 echo "=== 1. DEV-ENV ==="
