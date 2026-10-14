@@ -218,3 +218,43 @@ oc get apigeeenv -n apigee |
 echo "=== PODS ==="
 oc get pods -n apigee -o wide |
   grep -E 'apigee-(runtime|synchronizer)-apigee-latam-np-dev-br-'
+
+*************************
+
+
+NUEVOS=0
+PENDIENTES=0
+REVISAR=0
+
+while IFS=$'\t' read -r R ST; do
+  KEY=$(helm get values "$R" -n apigee -o json 2>/dev/null |
+    jq -r '.nodeSelector.apigeeRuntime.key // "-"')
+
+  case "$KEY" in
+    apigee-nodepool)
+      ESTADO="SELECTOR_NUEVO"
+      NUEVOS=$((NUEVOS+1))
+      ;;
+    ibm-cloud.kubernetes.io/worker-pool-name)
+      ESTADO="PENDIENTE"
+      PENDIENTES=$((PENDIENTES+1))
+      ;;
+    *)
+      ESTADO="REVISAR"
+      REVISAR=$((REVISAR+1))
+      ;;
+  esac
+
+  echo "$R | Helm:$ST | $ESTADO"
+
+done < <(
+  helm list -n apigee -o json |
+    jq -r '.[] |
+      select(.chart | startswith("apigee-env-")) |
+      [.name,.status] | @tsv'
+)
+
+echo "=========================="
+echo "SELECTOR NUEVO: $NUEVOS"
+echo "PENDIENTES: $PENDIENTES"
+echo "REVISAR: $REVISAR"
