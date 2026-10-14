@@ -261,3 +261,22 @@ podman run --rm \
 
 podman inspect libertycore-custom:23.0.0.12-1 \
   --format 'User={{.Config.User}} Entrypoint={{.Config.Entrypoint}} Cmd={{.Config.Cmd}}'
+
+
+*************************************
+
+IMG="base-images.artifactory-dogen.group.echonet/cardif/libertycore-ibmjava8:23.0.0.12-8"
+
+podman inspect "$IMG" \
+  --format 'User={{.Config.User}} Entrypoint={{.Config.Entrypoint}} Cmd={{.Config.Cmd}} Ports={{.Config.ExposedPorts}}'
+
+
+podman run -d \
+  --name liberty-test \
+  -p 9080:9080 \
+  -p 9443:9443 \
+  "$IMG"
+
+podman ps
+
+podman logs -f liberty-test
