@@ -6,3 +6,17 @@ oc get pods -n apigee \
   --field-selector spec.nodeName=10.30.12.11 \
   -o custom-columns='NAME:.metadata.name,STATUS:.status.phase'
 
+
+
+***************************
+
+
+oc get pod \
+  apigee-open-telemetry-collector-apigee-telemetry-ht9rw \
+  -n apigee \
+  -o jsonpath='{.metadata.ownerReferences[*].kind}{" "}{.metadata.ownerReferences[*].name}{"\n"}'
+
+oc get pdb -n apigee | grep -E 'redis|telemetry'
+
+oc get pods -n apigee -o wide | grep 'apigee-redis-default'
+
