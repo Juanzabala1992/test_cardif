@@ -134,4 +134,22 @@ oc adm drain 10.30.12.11 \
   --ignore-daemonsets \
   --delete-emptydir-data \
   --dry-run=client
+*******************
+
+
+
+oc get co
+
+oc get pdb -A
+
+oc adm drain 10.30.12.11 \
+  --ignore-daemonsets \
+  --delete-emptydir-data \
+  --timeout=20m
+
+ibmcloud oc zone rm \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-runtime \
+  --zone br-sao-1
+
 
