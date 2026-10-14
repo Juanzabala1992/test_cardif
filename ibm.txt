@@ -694,3 +694,15 @@ ibmcloud oc worker-pool rm \
 
 ibmcloud oc worker ls --cluster carla-npr-latam-ocw
 oc get nodes
+
+
+*********************************
+
+
+echo "=== COMPONENTES ==="
+oc get pods -n apigee -o wide |
+grep -E 'apigee-controller-manager|apigee-metrics-adapter|apigee-metrics-apigee-telemetry-app'
+
+echo "=== EVENTOS ==="
+oc get events -n apigee \
+  --sort-by=.lastTimestamp | tail -15
