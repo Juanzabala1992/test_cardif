@@ -439,3 +439,11 @@ ibmcloud oc worker-pool create vpc-gen2 \
 ibmcloud oc worker-pool ls --cluster carla-npr-latam-ocw
 
 
+*********************
+
+ibmcloud oc worker-pool taint set \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-runtime-rhcos \
+  --taint migration=hold:NoSchedule
+
+
