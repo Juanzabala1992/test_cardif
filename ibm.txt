@@ -41,3 +41,43 @@ ibmcloud oc worker ls \
 
 oc get nodes -o wide
 
+
+
+
+*****************************
+
+
+echo "=== NODOS: LABELS Y ZONAS ==="
+oc get nodes -o json | jq -r '
+.items[] |
+[
+  .metadata.name,
+  (.metadata.labels["apigee-nodepool"] // "-"),
+  (.metadata.labels["failure-domain.beta.kubernetes.io/zone"] // "-"),
+  (.metadata.labels["topology.kubernetes.io/zone"] // "-"),
+  ([.spec.taints[]? | .key + ":" + .effect] | join(","))
+] | @tsv'
+
+echo "=== CONFIGURACION CASSANDRA ==="
+oc get sts apigee-cassandra-default -n apigee -o json | jq '{
+  replicas: .spec.replicas,
+  nodeSelector: .spec.template.spec.nodeSelector,
+  affinity: .spec.template.spec.affinity
+}'
+
+echo "=== RESTRICCIONES DE DISCOS ==="
+oc get pv -o json | jq '
+.items[]
+| select(
+    .spec.claimRef.namespace == "apigee"
+    and ((.spec.claimRef.name // "") | contains("cassandra"))
+  )
+| {
+    pvc: .spec.claimRef.name,
+    reclaim: .spec.persistentVolumeReclaimPolicy,
+    nodeAffinity: .spec.nodeAffinity
+  }'
+
+echo "=== DISPONIBILIDAD ==="
+oc get pdb -n apigee
+
