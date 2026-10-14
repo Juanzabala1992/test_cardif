@@ -36,3 +36,76 @@ oc exec -n apigee apigee-cassandra-default-0 \
 
 echo "=== PVC ==="
 oc get pvc -n apigee | grep cassandra-data
+
+
+***************************
+
+
+echo "=== POOL RHEL 8 ==="
+ibmcloud oc worker-pool get \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-data
+
+echo "=== PODS NO DAEMONSET EN NODOS ANTIGUOS ==="
+for N in 10.30.12.5 10.30.28.5 10.30.44.5; do
+  echo "===== $N ====="
+  oc get pods -A \
+    --field-selector spec.nodeName="$N" \
+    -o json | jq -r '
+    .items[]
+    | select(
+        ([.metadata.ownerReferences[]?.kind] |
+         index("DaemonSet")) == null
+      )
+    | [.metadata.namespace,
+       .metadata.name,
+       (.metadata.ownerReferences[0].kind // "SIN_CONTROLADOR"),
+       .status.phase]
+    | @tsv'
+done
+
+
+
+for N in 10.30.12.5 10.30.28.5 10.30.44.5; do
+  echo "=== DRENANDO $N ==="
+
+  oc adm drain "$N" \
+    --ignore-daemonsets \
+    --delete-emptydir-data \
+    --timeout=10m || break
+done
+
+
+
+oc get pods -A \
+  --field-selector=status.phase=Pending
+
+oc get apigeedatastores -n apigee
+
+oc get pods -n apigee -o wide |
+  grep apigee-cassandra-default-
+
+
+
+
+ibmcloud oc worker-pool rm \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-data
+
+
+
+ibmcloud oc worker-pool ls \
+  --cluster carla-npr-latam-ocw
+
+
+
+ibmcloud oc worker ls \
+  --cluster carla-npr-latam-ocw
+
+oc get nodes
+
+oc get apigeedatastores -n apigee
+
+oc get pvc -n apigee | grep cassandra-data
+
+
