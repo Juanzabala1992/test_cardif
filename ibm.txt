@@ -108,3 +108,26 @@ cut -f3,4 env-cred-audit.tsv | sort | uniq -c
 
 echo "=== EJEMPLOS ==="
 head -3 env-cred-audit.tsv
+
+
+**********************************
+
+cd ~/apigee-migration-1151
+
+helm upgrade dev-cl-mtls-env ./apigee-env \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+  --dry-run=server \
+  --hide-secret > dryrun-env.txt 2>&1
+
+RC=$?
+echo "RESULTADO: $RC"
+
+if [ "$RC" -ne 0 ]; then
+  grep -Ei 'Error:|FAILED|required|unreachable|invalid' \
+    dryrun-env.txt | tail -8
+fi
+
+
