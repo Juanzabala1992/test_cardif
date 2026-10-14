@@ -40,3 +40,14 @@ helm upgrade apigee-latam-npr ./apigee-org \
   > dryrun-org.txt 2>&1
 
 echo "Resultado dry-run: $?"
+
+
+***********************
+
+cd ~/apigee-migration-1151test -s backup-apigee-latam-npr.yaml && echo "Backup OK" || echo "Revisar backup"
+
+grep -nEi 'Error:|UPGRADE FAILED|failed|forbidden|not found|template:|invalid|denied' dryrun-org.txt | tail -15
+
+
+test -s backup-apigee-latam-npr.yaml && echo "Backup OK" || echo "Revisar backup"
+
