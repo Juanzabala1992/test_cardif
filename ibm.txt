@@ -20,3 +20,7 @@ oc get pdb -n apigee | grep -E 'redis|telemetry'
 
 oc get pods -n apigee -o wide | grep 'apigee-redis-default'
 
+**********************
+
+
+oc get apigeeredis default -n apigee
