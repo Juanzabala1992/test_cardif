@@ -298,3 +298,26 @@ oc get apigeeenv apigee-latam-np-dev-3abd4b8 \
 echo "=== INGRESS GATEWAYS ==="
 oc get pods -n apigee -o wide |
 grep 'apigee-ingressgateway'
+
+
+********************************
+
+
+echo "=== AFINIDAD INGRESS MANAGER ==="
+
+oc get deploy apigee-ingressgateway-manager \
+  -n apigee -o json | jq '{
+  replicas: .spec.replicas,
+  ready: .status.readyReplicas,
+  nodeSelector: .spec.template.spec.nodeSelector,
+  nodeAffinity: .spec.template.spec.affinity.nodeAffinity
+}'
+
+echo "=== HISTORIAL DEV-ENV ==="
+
+helm history dev-env -n apigee | tail -5
+
+echo "=== SELECTOR DEV-ENV ==="
+
+helm get values dev-env -n apigee -o json |
+jq '{env, runtimeSelector:.nodeSelector.apigeeRuntime}'
