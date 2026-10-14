@@ -36,3 +36,13 @@ oc get pods -A \
   --field-selector spec.nodeName=10.30.28.6 \
   -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,OWNER:.metadata.ownerReferences[0].kind,STATUS:.status.phase'
 
+
+*************************
+
+
+oc get pdb -n apigee
+
+oc get apigeeredis default -n apigee
+
+oc get co
+
