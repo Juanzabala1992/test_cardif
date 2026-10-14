@@ -57,3 +57,72 @@ oc get apigeeredis default -n apigee
 
 oc get pods -n apigee -o wide | grep apigee-redis-default
 oc get apigeeredis default -n apigee
+
+
+****************************
+
+
+(
+set -euo pipefail
+
+NS=apigee
+CJ=apigee-cassandra-backup
+
+SUSP=$(oc get cronjob "$CJ" -n "$NS" \
+  -o jsonpath='{.spec.suspend}')
+
+if [ "$SUSP" != "true" ]; then
+  echo "DETENIDO: el CronJob no está suspendido"
+  exit 1
+fi
+
+JOBS_JSON=$(oc get jobs -n "$NS" -o json)
+
+mapfile -t JOBS < <(
+  jq -r --arg cj "$CJ" '
+    .items[]
+    | select((.status.active // 0) > 0)
+    | select(any(.metadata.ownerReferences[]?;
+        .kind == "CronJob" and .name == $cj))
+    | .metadata.name
+  ' <<< "$JOBS_JSON"
+)
+
+echo "Jobs identificados: ${#JOBS[@]}"
+printf '%s\n' "${JOBS[@]}"
+
+if [ "${#JOBS[@]}" -ne 22 ]; then
+  echo "DETENIDO: la cantidad cambió. Revisar antes de continuar."
+  exit 1
+fi
+
+for JOB in "${JOBS[@]}"; do
+  echo "Suspendiendo: $JOB"
+  oc patch job "$JOB" -n "$NS" \
+    --type=merge \
+    -p '{"spec":{"suspend":true}}'
+done
+
+echo "Solicitudes de suspensión enviadas."
+)
+
+
+
+
+oc get jobs -n apigee -o json | jq -r '
+.items[]
+| select(.metadata.name |
+    startswith("apigee-cassandra-backup-"))
+| [
+    .metadata.name,
+    (.spec.suspend // false),
+    (.status.active // 0)
+  ]
+| @tsv'
+
+
+
+oc get pods -A \
+  --field-selector spec.nodeName=10.30.12.11 \
+  -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,OWNER:.metadata.ownerReferences[0].kind,STATUS:.status.phase'
+
