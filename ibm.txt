@@ -147,3 +147,22 @@ jq -r '.items[]
 echo "=== OPERADORES ==="
 oc get co |
 awk 'NR==1 || $3!="True" || $4!="False" || $5!="False"'
+
+
+
+***********************************
+
+
+ibmcloud oc worker ls \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-runtime
+
+ibmcloud oc worker-pool rm \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-runtime
+
+
+ibmcloud oc worker-pool ls --cluster carla-npr-latam-ocw
+ibmcloud oc worker ls --cluster carla-npr-latam-ocw
+oc get nodes
+oc get co
