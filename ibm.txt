@@ -24,3 +24,23 @@ oc get pods -n apigee -o wide | grep 'apigee-redis-default'
 
 
 oc get apigeeredis default -n apigee
+
+
+***********************
+
+
+NS=lam-c-dev-mashery-v6
+
+echo "=== TRAFFIC MANAGER ==="
+oc logs -n "$NS" deployment/trafficmanager-deploy \
+  -c trafficmanager --previous --tail=2000 2>&1 \
+  | grep -Ei -B 2 -A 3 \
+  'loader|register|exception|error|failed|timeout|connection' \
+  | tail -n 90
+
+echo "=== LOADER ==="
+oc logs -n "$NS" deployment/loader-deploy \
+  --since=30m --tail=1000 2>&1 \
+  | grep -Ei -B 2 -A 3 \
+  'error|exception|register|traffic|connection|timeout|failed' \
+  | tail -n 60
