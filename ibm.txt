@@ -130,4 +130,69 @@ if [ "$RC" -ne 0 ]; then
     dryrun-env.txt | tail -8
 fi
 
+***********************************************
 
+
+(
+set -euo pipefail
+cd ~/apigee-migration-1151
+umask 077
+
+FILE="apigee-env/apigee-latam-npr-apigee-non-prod.json"
+
+mapfile -t SECRETS < <(
+  oc get secrets -n apigee -o json |
+  jq -r '
+    .items[].metadata.name
+    | select(test("^apigee-(runtime|synchronizer|udca)-apigee-latam-np-dev-cl-mtls-.*-svc-account$"))
+  '
+)
+
+echo "Credenciales encontradas: ${#SECRETS[@]}"
+
+if [ "${#SECRETS[@]}" -ne 3 ]; then
+  echo "DETENIDO: faltan credenciales"
+  exit 1
+fi
+
+REF=""
+for S in "${SECRETS[@]}"; do
+  HASH=$(oc get secret "$S" -n apigee \
+    -o jsonpath='{.data.client_secret\.json}' |
+    base64 -d | sha256sum | awk '{print $1}')
+
+  if [ -n "$REF" ] && [ "$REF" != "$HASH" ]; then
+    echo "DETENIDO: credenciales diferentes"
+    exit 1
+  fi
+  REF="$HASH"
+done
+
+if [ -e "$FILE" ]; then
+  echo "DETENIDO: el archivo ya existe"
+  exit 1
+fi
+
+trap 'rm -f "$FILE"' EXIT
+
+oc get secret "${SECRETS[0]}" -n apigee \
+  -o jsonpath='{.data.client_secret\.json}' |
+  base64 -d > "$FILE"
+
+jq -e 'type=="object"' "$FILE" >/dev/null
+
+if helm upgrade dev-cl-mtls-env ./apigee-env \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+  --dry-run=server \
+  --hide-secret > dryrun-env.txt 2>&1; then
+  echo "DRY-RUN ENV OK"
+else
+  echo "DRY-RUN FALLÓ"
+  grep -Ei 'Error:|FAILED|missing|required|invalid|unreachable' \
+    dryrun-env.txt | tail -5 || true
+  exit 1
+fi
+)
