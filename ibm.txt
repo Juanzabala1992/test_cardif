@@ -46,3 +46,36 @@ oc get apigeeredis default -n apigee
 
 oc get co
 
+
+***************************
+
+
+oc get pods -A \
+  --field-selector spec.nodeName=10.30.28.6 -o json \
+  | jq -r '.items[]
+    | select(any(.spec.volumes[]?; has("persistentVolumeClaim")))
+    | [.metadata.namespace,.metadata.name,
+       ([.spec.volumes[]?
+       | select(has("persistentVolumeClaim"))
+       | .persistentVolumeClaim.claimName] | join(","))]
+    | @tsv'
+
+
+oc adm drain 10.30.28.6 \
+  --ignore-daemonsets \
+  --delete-emptydir-data \
+  --dry-run=client
+
+oc adm drain 10.30.28.6 \
+  --ignore-daemonsets \
+  --delete-emptydir-data \
+  --timeout=20m
+
+oc get co
+
+oc get apigeeredis default -n apigee
+
+oc get pods -A \
+  --field-selector spec.nodeName=10.30.28.6
+
+
