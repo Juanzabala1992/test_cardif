@@ -155,3 +155,41 @@ else
   exit 1
 fi
 )
+
+
+******************************
+
+
+(
+set -euo pipefail
+umask 077
+cd ~/apigee-migration-1151
+
+FILE=apigee-org/apigee-latam-npr-apigee-non-prod.json
+SECRET=apigee-watcher-apigee-latam-np-968192c-svc-account
+
+test ! -e "$FILE" || {
+  echo "DETENIDO: archivo temporal existente"
+  exit 1
+}
+
+trap 'rm -f "$FILE"' EXIT
+
+oc get secret "$SECRET" -n apigee -o json |
+  jq -er '.data["client_secret.json"]' |
+  base64 -d > "$FILE"
+
+jq -e 'type == "object"' "$FILE" >/dev/null
+
+helm upgrade apigee-latam-npr ./apigee-org \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+  --atomic \
+  --timeout 15m
+
+echo "ACTUALIZACION ORG COMPLETADA"
+)
+
+oc get apigeeorg -n apigee
