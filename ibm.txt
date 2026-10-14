@@ -571,3 +571,29 @@ jq '{
   unschedulable:.spec.unschedulable,
   pool:.metadata.labels["ibm-cloud.kubernetes.io/worker-pool-name"]
 }'
+
+
+
+***************************
+
+
+
+echo "=== PODS APIGEE NO READY ==="
+oc get pods -n apigee -o json | jq -r '
+.items[]
+| select(.metadata.deletionTimestamp == null)
+| select(.status.phase != "Succeeded" and .status.phase != "Failed")
+| select(.status.phase != "Running" or
+  ([.status.containerStatuses[]? | select(.ready != true)] | length) > 0)
+| [.metadata.name,.status.phase,(.spec.nodeName // "-")] | @tsv'
+
+echo "=== OPERADORES CON PROBLEMAS ==="
+oc get co -o json | jq -r '
+.items[]
+| select(
+  any(.status.conditions[];
+    (.type=="Available" and .status!="True") or
+    (.type=="Degraded" and .status=="True")
+  )
+)
+| .metadata.name'
