@@ -627,3 +627,8 @@ oc get apigeeorg,apigeeenv,apigeeredis -n apigee
 
 oc get pods -n apigee |
 grep -E 'Pending|CrashLoopBackOff|Error'
+
+
+*****************************
+
+oc get co | awk 'NR==1 || $3!="True" || $4!="False" || $5!="False"'
