@@ -254,3 +254,29 @@ oc get pods -n apigee -o wide |
   grep '^apigee-redis-default-'
 
 oc get apigeeredis default -n apigee
+
+
+****************************************
+
+
+(
+set -e
+cd ~/apigee-migration-1151
+umask 077
+
+helm get values ingress-manager -n apigee -o yaml \
+  > "backup-ingress-$(date +%Y%m%d%H%M%S).yaml"
+
+helm upgrade ingress-manager ./apigee-ingress-manager \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+  --atomic \
+  --timeout 15m
+
+oc rollout status deployment/apigee-ingressgateway-manager \
+  -n apigee --timeout=15m
+
+echo "INGRESS MANAGER ACTUALIZADO"
+)
