@@ -15,3 +15,34 @@ done
 
 echo "===== CASSANDRA ====="
 oc get pods -n apigee -o wide | grep 'apigee-cassandra-default-'
+
+
+****************************
+
+
+CL=carla-npr-latam-ocw
+
+ibmcloud oc worker-pool rm \
+  --cluster "$CL" \
+  --worker-pool apigee-data-rhcos
+
+
+
+
+ibmcloud oc worker-pool create vpc-gen2 \
+  --cluster "$CL" \
+  --name apigee-data-rhcos \
+  --flavor bx2.4x16 \
+  --size-per-zone 1 \
+  --operating-system RHCOS \
+  --label apigee-nodepool=apigee-data \
+  --kms-instance 0c52fc9e-96a9-4c63-8226-50bdc1612186 \
+  --crk abd7a792-de09-40d4-b8f1-bcf3a688c077 \
+  --kms-account-id f284a6766c2345e09d255d74e18c67c5
+
+
+ibmcloud oc worker-pool get \
+  --cluster "$CL" \
+  --worker-pool apigee-data-rhcos
+
+
