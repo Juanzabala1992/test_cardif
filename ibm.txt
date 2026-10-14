@@ -1,3 +1,20 @@
+mkdir -p ~/apigee-migration-1151
+
+helm pull \
+oci://us-docker.pkg.dev/apigee-release/apigee-hybrid-helm-charts/apigee-env \
+--version 1.15.1 \
+--untar \
+--untardir ~/apigee-migration-1151
+
+************************
+
+
+
+
+
+
+
+
 #!/usr/bin/env bash
 # Reanuda únicamente los releases apigee-env que conservan la afinidad antigua.
 # No actualiza dev-env si Helm está failed, no toca apigee-data ni retira workers.
