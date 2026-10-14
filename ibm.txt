@@ -17,3 +17,26 @@ helm pull $CHART_REPO/apigee-ingress-manager \
 
 
 ls -la ~/apigee-migration-1151
+
+
+************************
+
+
+cd ~/apigee-migration-1151
+umask 077
+
+# Guardar los valores actuales
+helm get values apigee-latam-npr \
+  -n apigee -o yaml \
+  > backup-apigee-latam-npr.yaml
+
+# Simular la modificación de afinidad
+helm upgrade apigee-latam-npr ./apigee-org \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool \
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime \
+  --dry-run=server \
+  > dryrun-org.txt 2>&1
+
+echo "Resultado dry-run: $?"
