@@ -321,3 +321,12 @@ echo "=== SELECTOR DEV-ENV ==="
 
 helm get values dev-env -n apigee -o json |
 jq '{env, runtimeSelector:.nodeSelector.apigeeRuntime}'
+
+
+
+******************************************
+
+
+helm history dev-env -n apigee -o json |
+jq -r '[.[] | select(.status=="failed")] |
+last | .description[0:1200]'
