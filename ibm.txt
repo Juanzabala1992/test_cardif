@@ -541,3 +541,33 @@ oc adm drain 10.30.28.6 \
   --delete-emptydir-data \
   --timeout=25m
 
+
+*********************************
+
+
+echo "=== PODS RESTANTES EN 10.30.28.6 ==="
+oc get pods -A \
+  --field-selector spec.nodeName=10.30.28.6 -o json |
+jq -r '.items[]
+| select(.status.phase != "Succeeded" and .status.phase != "Failed")
+| select(([.metadata.ownerReferences[]?.kind] | index("DaemonSet")) == null)
+| [.metadata.namespace,.metadata.name,.status.phase] | @tsv'
+
+echo "=== PODS APIGEE NO DISPONIBLES ==="
+oc get pods -n apigee -o json |
+jq -r '.items[]
+| select(.metadata.deletionTimestamp == null)
+| select(.status.phase != "Succeeded" and .status.phase != "Failed")
+| select(.status.phase != "Running" or
+  ([.status.containerStatuses[]? | select(.ready != true)] | length) > 0)
+| [.metadata.name,.status.phase,(.spec.nodeName // "-")] | @tsv'
+
+echo "=== ESTADO APIGEE ==="
+oc get apigeeorg,apigeeenv,apigeeredis -n apigee
+
+echo "=== NODO DRENADO ==="
+oc get node 10.30.28.6 -o json |
+jq '{
+  unschedulable:.spec.unschedulable,
+  pool:.metadata.labels["ibm-cloud.kubernetes.io/worker-pool-name"]
+}'
