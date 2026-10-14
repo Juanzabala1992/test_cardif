@@ -23,3 +23,23 @@ oc get events -n apigee \
   --sort-by=.lastTimestamp | tail -20
 
 
+************************
+
+
+POD=$(oc get pods -n apigee \
+  --field-selector=status.phase=Pending -o name \
+  | grep '^pod/apigee-runtime-' | head -1)
+
+if [ -n "$POD" ]; then
+  oc get -n apigee "$POD" -o json | jq '{
+    pod: .metadata.name,
+    nodeSelector: .spec.nodeSelector,
+    nodeAffinity: .spec.affinity.nodeAffinity,
+    cpuRequests: [.spec.containers[] |
+      {name: .name, cpu: .resources.requests.cpu}]
+  }'
+else
+  echo "No quedan pods Runtime Pending"
+fi
+
+
