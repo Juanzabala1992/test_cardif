@@ -29,3 +29,14 @@ oc get pods -n apigee -o json | jq -r '
 oc get pods -n apigee -o wide | grep dev-cl-mtls
 
 oc get apigeeenv -n apigee | grep dev-cl-mtls
+
+
+***********************************
+
+
+oc get apigeeenv \
+  apigee-latam-np-dev-cl-mtls-4c21055 \
+  -n apigee -w
+
+
+oc get pods -n apigee -o wide | grep dev-cl-mtls
