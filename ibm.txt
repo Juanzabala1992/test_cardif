@@ -55,3 +55,24 @@ oc get nodes -L ibm-cloud.kubernetes.io/worker-pool-name,apigee-nodepool
 helm list -n apigee
 
 
+**************************
+
+oc get node 10.30.44.8 -o json | jq -r '
+.status.conditions[]
+| select(.type=="Ready")
+| [.status,.reason,.message]
+| @tsv'
+
+
+
+for r in apigee-latam-npr operator ingress-manager dev-cl-mtls-env; do
+  echo "=== $r ==="
+  helm get values "$r" -n apigee -o json | jq '{
+    nodeSelector,
+    runtimeSelector: .runtime.nodeSelector,
+    synchronizerSelector: .synchronizer.nodeSelector
+  }'
+done
+
+
+
