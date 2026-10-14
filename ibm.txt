@@ -79,3 +79,13 @@ oc get pods -A \
   --field-selector spec.nodeName=10.30.28.6
 
 
+*************************
+
+
+oc get pods -A \
+  --field-selector spec.nodeName=10.30.28.6 \
+  -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase,DELETING:.metadata.deletionTimestamp'
+
+
+oc get co
+
