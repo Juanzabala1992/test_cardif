@@ -45,7 +45,14 @@ else
   echo "NO SE EJECUTA: las condiciones cambiaron"
 fi
 
+***********************
 
+
+oc get pods -n apigee -o wide | grep apigee-redis-default
+
+oc get sts apigee-redis-default -n apigee
+
+oc get apigeeredis default -n apigee
 
 
 oc get pods -n apigee -o wide | grep apigee-redis-default
