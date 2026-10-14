@@ -71,3 +71,40 @@ helm get values dev-cl-mtls-env \
     runtimePath: .runtime.serviceAccountPath,
     synchronizerPath: .synchronizer.serviceAccountPath
   }'
+
+
+
+****************
+
+
+cd ~/apigee-migration-1151
+umask 077
+: > env-cred-audit.tsv
+
+while IFS= read -r R; do
+  helm get values "$R" -n apigee -o json |
+    jq -r --arg r "$R" '
+      . as $v
+      | ($v.env // "") as $env
+      | (($v.envs // []
+          | map(select(.name == $env))
+          | .[0]) // {}) as $e
+      | [
+          $r,
+          $env,
+          ($e.serviceAccountPaths.runtime // "SIN_RUTA"),
+          ($e.serviceAccountPaths.synchronizer // "SIN_RUTA"),
+          ($e.serviceAccountSecretRefs.runtime // "-"),
+          ($e.serviceAccountSecretRefs.synchronizer // "-")
+        ] | @tsv
+    ' >> env-cred-audit.tsv
+done < /tmp/apigee-env-releases.txt
+
+echo "=== ENTORNOS ==="
+wc -l < env-cred-audit.tsv
+
+echo "=== RUTAS DE CREDENCIALES ==="
+cut -f3,4 env-cred-audit.tsv | sort | uniq -c
+
+echo "=== EJEMPLOS ==="
+head -3 env-cred-audit.tsv
