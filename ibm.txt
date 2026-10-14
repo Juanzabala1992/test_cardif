@@ -15,3 +15,11 @@ ibmcloud oc zone rm \
   --worker-pool apigee-runtime \
   --zone br-sao-2
 
+*********************
+
+
+oc get events -n apigee \
+  --field-selector reason=FailedScheduling \
+  --sort-by=.lastTimestamp | tail -20
+
+
