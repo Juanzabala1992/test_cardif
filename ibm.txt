@@ -1,91 +1,22 @@
-oc get jobs -n apigee -o json | jq -r '
-.items[]
-| select(.metadata.name | startswith("apigee-cassandra-backup-"))
-| select((.status.succeeded // 0) > 0)
-| [.metadata.name, (.status.completionTime // "-")]
-| @tsv
-' | sort -k2 | tail -5
+echo "=== NODOS ANTIGUOS ==="
+oc get nodes 10.30.12.5 10.30.28.5 10.30.44.5
 
-
-
-cd ~/migracion-cassandra
-
-helm upgrade datastore ./apigee-datastore \
-  -n apigee \
-  --reuse-values \
-  --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
-  --atomic \
-  --timeout 30m
-
-
-
-
-**************************
-
-
-echo "=== PODS CASSANDRA ==="
-oc get pods -n apigee -o wide | grep apigee-cassandra-default-
-
-echo "=== ESTADO DATASTORE ==="
-oc get apigeedatastores -n apigee
-
-echo "=== ANILLO CASSANDRA ==="
-oc exec -n apigee apigee-cassandra-default-0 \
-  -c apigee-cassandra -- \
-  bash -c 'nodetool -u cassandra -pw "$CASS_PASSWORD" status'
-
-echo "=== PVC ==="
-oc get pvc -n apigee | grep cassandra-data
-
-
-***************************
-
-
-echo "=== POOL RHEL 8 ==="
-ibmcloud oc worker-pool get \
-  --cluster carla-npr-latam-ocw \
-  --worker-pool apigee-data
-
-echo "=== PODS NO DAEMONSET EN NODOS ANTIGUOS ==="
+echo "=== PODS RESTANTES (EXCLUYE DAEMONSETS) ==="
 for N in 10.30.12.5 10.30.28.5 10.30.44.5; do
-  echo "===== $N ====="
   oc get pods -A \
     --field-selector spec.nodeName="$N" \
-    -o json | jq -r '
+    -o json | jq -r --arg n "$N" '
     .items[]
     | select(
-        ([.metadata.ownerReferences[]?.kind] |
-         index("DaemonSet")) == null
+        any(.metadata.ownerReferences[]?;
+            .kind == "DaemonSet") | not
       )
-    | [.metadata.namespace,
-       .metadata.name,
-       (.metadata.ownerReferences[0].kind // "SIN_CONTROLADOR"),
-       .status.phase]
-    | @tsv'
+    | "\($n) \(.metadata.namespace)/\(.metadata.name)"
+  '
 done
 
-
-
-for N in 10.30.12.5 10.30.28.5 10.30.44.5; do
-  echo "=== DRENANDO $N ==="
-
-  oc adm drain "$N" \
-    --ignore-daemonsets \
-    --delete-emptydir-data \
-    --timeout=10m || break
-done
-
-
-
-oc get pods -A \
-  --field-selector=status.phase=Pending
-
-oc get apigeedatastores -n apigee
-
-oc get pods -n apigee -o wide |
-  grep apigee-cassandra-default-
-
-
+echo "=== OPERADORES CON PROBLEMAS ==="
+oc get co | awk 'NR==1 || $3!="True" || $5!="False"'
 
 
 ibmcloud oc worker-pool rm \
@@ -93,19 +24,15 @@ ibmcloud oc worker-pool rm \
   --worker-pool apigee-data
 
 
-
 ibmcloud oc worker-pool ls \
-  --cluster carla-npr-latam-ocw
-
-
-
-ibmcloud oc worker ls \
   --cluster carla-npr-latam-ocw
 
 oc get nodes
 
 oc get apigeedatastores -n apigee
 
-oc get pvc -n apigee | grep cassandra-data
+oc get pods -n apigee -o wide |
+  grep apigee-cassandra-default-
 
+oc get co
 
