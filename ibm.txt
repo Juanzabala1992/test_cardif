@@ -142,20 +142,3 @@ while IFS=$'\t' read -r R ENV CR S; do
 done < "$LOG/plan.tsv"
 
 echo 'LOTE REANUDADO COMPLETO. FALTA: dev-env (failed), ingress-manager y retiro controlado de los dos workers RHEL 8.'
-
-
-*******************************
-
-
-mkdir -p ~/apigee-migration-1151
-
-helm pull \
-oci://us-docker.pkg.dev/apigee-release/apigee-hybrid-helm-charts/apigee-env \
---version 1.15.1 \
---untar \
---untardir ~/apigee-migration-1151
-
-
-
-sed -i '1{/^aenuda$/d;}' ~/test.sh
-bash -n ~/test.sh
