@@ -20,3 +20,12 @@ oc get pods -n apigee -o json | jq -r '
    ($p.spec.nodeName // "-"),
    (if $aff=="" then "SIN_AFINIDAD" else $aff end)]
 | @tsv'
+
+
+
+******************************
+
+
+oc get pods -n apigee -o wide | grep dev-cl-mtls
+
+oc get apigeeenv -n apigee | grep dev-cl-mtls
