@@ -17,3 +17,11 @@ ibmcloud oc zone add vpc-gen2 \
   --worker-pool apigee-runtime-rhcos \
   --zone br-sao-3 \
   --subnet-id 02v7-be3d40cc-6089-4b08-84b1-834761e9b9a8
+
+
+
+****************************
+
+ibmcloud oc worker ls --cluster carla-npr-latam-ocw
+
+oc get nodes -o wide
