@@ -615,3 +615,15 @@ ibmcloud oc zone rm \
 
 ibmcloud oc worker ls --cluster carla-npr-latam-ocw
 oc get nodes
+
+
+
+****************************
+
+
+oc get co
+
+oc get apigeeorg,apigeeenv,apigeeredis -n apigee
+
+oc get pods -n apigee |
+grep -E 'Pending|CrashLoopBackOff|Error'
