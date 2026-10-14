@@ -115,3 +115,40 @@ helm upgrade datastore ./apigee-datastore \
 
 
 
+********************************************
+
+
+
+echo "=== ANILLO CASSANDRA ==="
+oc exec -n apigee apigee-cassandra-default-0 \
+  -c apigee-cassandra -- \
+  bash -c 'nodetool -u cassandra -pw "$CASS_PASSWORD" status'
+
+echo "=== PODS ==="
+oc get pods -n apigee -o wide | grep apigee-cassandra-default-
+
+echo "=== PVC ==="
+oc get pvc -n apigee | grep cassandra-data
+
+echo "=== ULTIMOS JOBS DE BACKUP ==="
+oc get jobs -n apigee | grep apigee-cassandra-backup | tail -5
+
+
+
+
+cd ~/migracion-cassandra
+
+helm upgrade datastore ./apigee-datastore \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
+  --atomic \
+  --timeout 30m
+
+
+
+watch -n 15 'oc get pods -n apigee -o wide | grep apigee-cassandra-default-'
+
+
+
+
