@@ -597,3 +597,21 @@ oc get co -o json | jq -r '
   )
 )
 | .metadata.name'
+
+
+****************
+
+
+ibmcloud oc worker ls \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-runtime
+
+ibmcloud oc zone rm \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-runtime \
+  --zone br-sao-2
+
+
+
+ibmcloud oc worker ls --cluster carla-npr-latam-ocw
+oc get nodes
