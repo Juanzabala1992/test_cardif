@@ -1,83 +1,17 @@
-echo "=== CASSANDRA ==="
-oc get sts apigee-cassandra-default -n apigee
-oc get pods -n apigee -o wide | grep '^apigee-cassandra-default-'
+CL=carla-npr-latam-ocw
 
-echo "=== PDB ==="
-oc get pdb -n apigee | grep -E 'NAME|cassandra'
+for P in apigee-data apigee-data-rhcos; do
+  echo "===== POOL: $P ====="
 
-echo "=== PVC ==="
-oc get pvc -n apigee -o wide | grep -i cassandra
+  ibmcloud oc worker-pool get \
+    --cluster "$CL" \
+    --worker-pool "$P" | grep -Ei \
+    'Name:|Flavor:|Operating System:|KMS:|CRK:|KMS Account ID:|Labels:|Workers:'
 
-echo "=== DISCOS Y ZONAS ==="
-oc get pv -o json | jq -r '
-.items[]
-| select(.spec.claimRef.namespace? == "apigee")
-| select((.spec.claimRef.name // "") | contains("cassandra"))
-| [
-  .metadata.name,
-  (.spec.csi.driver // "OTRO"),
-  (.spec.storageClassName // "-"),
-  .spec.persistentVolumeReclaimPolicy,
-  ([.spec.nodeAffinity.required.nodeSelectorTerms[]?
-    .matchExpressions[]?
-    | select(.key | contains("zone"))
-    | .values[]] | join(","))
-] | @tsv'
+  ibmcloud oc worker-pool zones \
+    --cluster "$CL" \
+    --worker-pool "$P"
+done
 
-echo "=== SELECTOR DATA ==="
-helm get values datastore -n apigee -o json |
-jq '.nodeSelector.apigeeData'
-
-echo "=== POOL ACTUAL ==="
-ibmcloud oc worker-pool get \
-  --cluster carla-npr-latam-ocw \
-  --worker-pool apigee-data
-
-
-
-
-***********************************
-
-
-ibmcloud oc worker-pool create vpc-gen2 \
-  --cluster carla-npr-latam-ocw \
-  --name apigee-data-rhcos \
-  --flavor bx2.4x16 \
-  --size-per-zone 1 \
-  --operating-system RHCOS \
-  --label apigee-nodepool=apigee-data
-
-
-
-echo "=== SALUD DEL ANILLO CASSANDRA ==="
-oc exec -n apigee apigee-cassandra-default-0 \
-  -c apigee-cassandra -- \
-  bash -c 'nodetool -u cassandra -pw "$CASS_PASSWORD" status'
-
-echo "=== ESTRATEGIA STATEFULSET ==="
-oc get sts apigee-cassandra-default -n apigee -o json |
-jq '{
-  replicas: .spec.replicas,
-  strategy: .spec.updateStrategy,
-  management: .spec.podManagementPolicy
-}'
-
-echo "=== RESTRICCIONES DE LOS PVC ==="
-oc get pv -o json | jq '
-.items[]
-| select(.spec.claimRef.namespace? == "apigee")
-| select((.spec.claimRef.name // "") | contains("cassandra"))
-| {
-  pvc: .spec.claimRef.name,
-  reclaimPolicy: .spec.persistentVolumeReclaimPolicy,
-  nodeAffinity: .spec.nodeAffinity
-}'
-
-echo "=== CIFRADO POOL RHCOS EXISTENTE ==="
-ibmcloud oc worker-pool get \
-  --cluster carla-npr-latam-ocw \
-  --worker-pool apigee-runtime-rhcos |
-grep -E 'KMS:|CRK:|KMS Account ID:'
-
-
-
+echo "===== CASSANDRA ====="
+oc get pods -n apigee -o wide | grep 'apigee-cassandra-default-'
