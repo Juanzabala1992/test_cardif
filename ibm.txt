@@ -29,18 +29,24 @@ oc get apigeeredis default -n apigee
 ***********************
 
 
-NS=lam-c-dev-mashery-v6
+STATE=$(oc get apigeeredis default -n apigee -o jsonpath='{.status.state}')
+READY=$(oc get sts apigee-redis-default -n apigee -o jsonpath='{.status.readyReplicas}')
+NODE=$(oc get pod apigee-redis-default-1 -n apigee -o jsonpath='{.spec.nodeName}')
 
-echo "=== TRAFFIC MANAGER ==="
-oc logs -n "$NS" deployment/trafficmanager-deploy \
-  -c trafficmanager --previous --tail=2000 2>&1 \
-  | grep -Ei -B 2 -A 3 \
-  'loader|register|exception|error|failed|timeout|connection' \
-  | tail -n 90
+echo "Estado: $STATE | Replicas Ready: $READY | Nodo: $NODE"
 
-echo "=== LOADER ==="
-oc logs -n "$NS" deployment/loader-deploy \
-  --since=30m --tail=1000 2>&1 \
-  | grep -Ei -B 2 -A 3 \
-  'error|exception|register|traffic|connection|timeout|failed' \
-  | tail -n 60
+if [ "$STATE" = "running" ] && \
+   [ "$READY" = "2" ] && \
+   [ "$NODE" = "10.30.12.11" ]; then
+  echo 'Solicitando Eviction de Redis 1'
+  printf '%s' '{"apiVersion":"policy/v1","kind":"Eviction","metadata":{"name":"apigee-redis-default-1","namespace":"apigee"}}' \
+    | oc create --raw /api/v1/namespaces/apigee/pods/apigee-redis-default-1/eviction -f -
+else
+  echo "NO SE EJECUTA: las condiciones cambiaron"
+fi
+
+
+
+
+oc get pods -n apigee -o wide | grep apigee-redis-default
+oc get apigeeredis default -n apigee
