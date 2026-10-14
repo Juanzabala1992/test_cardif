@@ -733,3 +733,21 @@ done
 
 echo "=== ETIQUETAS DE WORKERS ==="
 oc get nodes -L ibm-cloud.kubernetes.io/worker-pool-name,apigee-nodepool
+
+*********************
+
+
+echo "=== RELEASES ==="
+helm list -n apigee -o json |
+jq -r '.[] |
+select(.chart | test("^apigee-(operator|telemetry)-")) |
+[.name,.chart,.status] | @tsv'
+
+for R in operator telemetry; do
+  echo "=== $R ==="
+  helm get values "$R" -n apigee -o json |
+  jq '{
+    runtime: .nodeSelector.apigeeRuntime,
+    metrics: .metrics.nodeSelector
+  }'
+done
