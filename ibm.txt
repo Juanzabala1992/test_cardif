@@ -1,1 +1,6 @@
+oc get pods -n apigee \
+  --field-selector spec.nodeName=10.30.12.11 \
+  -o name | grep 'apigee-runtime.*dev-br-mtls'
 
+
+oc get pdb -n apigee | grep 'dev-br-mtls'
