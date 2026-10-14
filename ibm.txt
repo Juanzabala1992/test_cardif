@@ -27,6 +27,22 @@ oc get pods -A -o wide | grep -i cassandra
 oc describe pdb apigee-cassandra-default -n apigee-system
 
 
+***************************************
+
+
+oc get pods -A -o wide \
+  --field-selector spec.nodeName=10.30.12.11
+
+
+oc get node 10.30.12.8
+
+
+oc describe node 10.30.12.8 | grep -i taints
+
+
+oc get node 10.30.12.8 \
+  -o jsonpath='{.status.nodeInfo.osImage}{"\n"}'
+
 **********************************
 
 oc exec -n apigee apigee-cassandra-default-0 -- nodetool status
