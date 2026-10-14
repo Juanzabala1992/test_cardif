@@ -1,120 +1,23 @@
-CL=carla-npr-latam-ocw
-POOL=apigee-data-rhcos
+echo "=== ESTADO CASSANDRA ==="
+oc get pods -n apigee -o wide | grep apigee-cassandra-default
 
-ibmcloud oc zone add vpc-gen2 \
-  --cluster "$CL" \
-  --worker-pool "$POOL" \
-  --zone br-sao-1 \
-  --subnet-id 02t7-278e7fdc-405d-43eb-b79b-f511538dbd3a
-
-ibmcloud oc zone add vpc-gen2 \
-  --cluster "$CL" \
-  --worker-pool "$POOL" \
-  --zone br-sao-2 \
-  --subnet-id 02u7-2746940b-947d-4b83-a5be-0d314dee191f
-
-ibmcloud oc zone add vpc-gen2 \
-  --cluster "$CL" \
-  --worker-pool "$POOL" \
-  --zone br-sao-3 \
-  --subnet-id 02v7-be3d40cc-6089-4b08-84b1-834761e9b9a8
-
-
-
-
-ibmcloud oc worker-pool get \
-  --cluster "$CL" \
-  --worker-pool "$POOL"
-
-ibmcloud oc worker ls --cluster "$CL"
-
-oc get nodes -o wide
-
-
-**************************
-
-
-ibmcloud oc worker ls \
-  --cluster carla-npr-latam-ocw
-
-
-
-oc get nodes -o wide
-
-
-
-
-*****************************
-
-
-echo "=== NODOS: LABELS Y ZONAS ==="
-oc get nodes -o json | jq -r '
-.items[] |
-[
-  .metadata.name,
-  (.metadata.labels["apigee-nodepool"] // "-"),
-  (.metadata.labels["failure-domain.beta.kubernetes.io/zone"] // "-"),
-  (.metadata.labels["topology.kubernetes.io/zone"] // "-"),
-  ([.spec.taints[]? | .key + ":" + .effect] | join(","))
-] | @tsv'
-
-echo "=== CONFIGURACION CASSANDRA ==="
-oc get sts apigee-cassandra-default -n apigee -o json | jq '{
-  replicas: .spec.replicas,
-  nodeSelector: .spec.template.spec.nodeSelector,
-  affinity: .spec.template.spec.affinity
-}'
-
-echo "=== RESTRICCIONES DE DISCOS ==="
-oc get pv -o json | jq '
-.items[]
-| select(
-    .spec.claimRef.namespace == "apigee"
-    and ((.spec.claimRef.name // "") | contains("cassandra"))
-  )
-| {
-    pvc: .spec.claimRef.name,
-    reclaim: .spec.persistentVolumeReclaimPolicy,
-    nodeAffinity: .spec.nodeAffinity
-  }'
-
-echo "=== DISPONIBILIDAD ==="
-oc get pdb -n apigee
-
-
-
-
-*******************************
-
-
-
-oc get sts apigee-cassandra-default -n apigee \
-  -o yaml > cassandra-sts-backup.yaml
-
-
-
-
-oc patch sts apigee-cassandra-default -n apigee \
-  --type=json -p='[
-  {
-    "op":"replace",
-    "path":"/spec/updateStrategy",
-    "value":{"type":"OnDelete"}
-  },
-  {
-    "op":"replace",
-    "path":"/spec/template/spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms/0/matchExpressions/0/values",
-    "value":["apigee-data","apigee-data-rhcos"]
-  }
-]'
-
-
-
+echo "=== CONTROLADOR ==="
 oc get sts apigee-cassandra-default -n apigee \
   -o json | jq '{
-    strategy: .spec.updateStrategy.type,
-    required: .spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution
+    owners: .metadata.ownerReferences,
+    ready: .status.readyReplicas,
+    replicas: .spec.replicas
   }'
 
+echo "=== APIGEE DATASTORE ==="
+oc get apigeedatastores -n apigee
 
+echo "=== INSTALACIONES HELM ==="
+helm list -n apigee
 
+echo "=== VALORES DATASTORE ==="
+helm get values datastore -n apigee -o json |
+jq '{
+  nodeSelector: .nodeSelector,
+  cassandraNodeSelector: .cassandra.nodeSelector
+}'
