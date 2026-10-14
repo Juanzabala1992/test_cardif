@@ -504,3 +504,24 @@ oc get node 10.30.12.8 \
 ibmcloud oc worker get \
   --cluster carla-npr-latam-ocw \
   --worker WORKER_ID_COMPLETO
+
+
+***************************
+
+
+oc get node 10.30.12.8
+oc describe node 10.30.12.8 | grep -E 'Taints:|apigee-nodepool|migration-pool'
+
+ibmcloud oc worker-pool label set \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-runtime-rhcos \
+  --label apigee-nodepool=apigee-runtime \
+  --label migration-pool=runtime-rhcos
+
+oc get pdb -A | grep -E 'apigee|ingress|registry|monitoring'
+
+oc get pods -n apigee -o wide | grep -E 'redis|cassandra-default|runtime'
+
+oc adm drain 10.30.12.11
+
+
