@@ -114,3 +114,36 @@ oc adm drain 10.30.44.8 \
   --ignore-daemonsets \
   --delete-emptydir-data \
   --timeout=25m
+
+
+******************************
+
+
+echo "=== METRICS ==="
+oc get pods -n apigee -o wide |
+grep -E '^apigee-metrics-(adapter|apigee-telemetry-app)'
+
+echo "=== TELEMETRY ==="
+oc get apigeetelemetry -n apigee
+
+echo "=== CASSANDRA ==="
+oc get pods -n apigee -o wide |
+grep '^apigee-cassandra-default-'
+
+echo "=== JOB CASSANDRA ==="
+oc get jobs -n apigee |
+grep 'cassandra-schema' || true
+
+echo "=== PODS NO READY ==="
+oc get pods -n apigee -o json |
+jq -r '.items[]
+| select(.metadata.deletionTimestamp == null)
+| select(.status.phase != "Succeeded" and .status.phase != "Failed")
+| select(.status.phase != "Running" or
+  ([.status.conditions[]? |
+  select(.type=="Ready" and .status=="True")] | length)==0)
+| [.metadata.name,.status.phase] | @tsv'
+
+echo "=== OPERADORES ==="
+oc get co |
+awk 'NR==1 || $3!="True" || $4!="False" || $5!="False"'
