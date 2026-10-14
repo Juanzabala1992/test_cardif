@@ -599,4 +599,10 @@ oc get pods -n apigee \
   -o custom-columns='NAME:.metadata.name,OWNER:.metadata.ownerReferences[0].kind,STATUS:.status.phase' \
   | grep -E 'NAME|apigee-runtime|redis|cassandra-backup'
 
+************
+
+
+
+oc get deployment -n apigee | grep -E 'dev-br-mtls|qa-br-mtls'
+
 
