@@ -524,4 +524,20 @@ oc get pods -n apigee -o wide | grep -E 'redis|cassandra-default|runtime'
 
 oc adm drain 10.30.12.11
 
+******************
+
+oc adm uncordon 10.30.12.11
+
+oc get nodes
+
+
+
+oc get pdb -n openshift-image-registry
+
+oc get deployment image-registry \
+  -n openshift-image-registry
+
+oc get pod apigee-redis-default-1 \
+  -n apigee -o wide
+
 
