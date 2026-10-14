@@ -478,3 +478,21 @@ ibmcloud oc worker-pool ls --cluster carla-npr-latam-ocw
 
 ibmcloud oc worker ls --cluster carla-npr-latam-ocw
 
+********************************
+
+
+
+oc get pods -A -o wide \
+  --field-selector spec.nodeName=10.30.12.11
+
+
+oc get node 10.30.12.8
+
+
+
+oc describe node 10.30.12.8 | grep -i taints
+
+
+
+oc get node 10.30.12.8 \
+  -o jsonpath='{.status.nodeInfo.osImage}{"\n"}'
