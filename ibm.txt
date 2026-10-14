@@ -86,3 +86,18 @@ oc get rs -n apigee -o json | jq -r '
 
 echo "=== ESTADO TELEMETRY ==="
 oc get apigeetelemetry -n apigee
+
+
+*************************
+
+echo "=== METRICS ==="
+oc get pods -n apigee -o wide |
+grep -E 'apigee-metrics-adapter|apigee-metrics-apigee-telemetry-app'
+
+echo "=== PODS RESTANTES EN RHEL 8 ==="
+oc get pods -A \
+  --field-selector spec.nodeName=10.30.44.8 -o json |
+jq -r '.items[]
+| select(.status.phase != "Succeeded" and .status.phase != "Failed")
+| select(([.metadata.ownerReferences[]?.kind] | index("DaemonSet")) == null)
+| [.metadata.namespace,.metadata.name,.status.phase] | @tsv'
