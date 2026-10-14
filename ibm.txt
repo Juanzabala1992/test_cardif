@@ -16,3 +16,23 @@ helm upgrade datastore ./apigee-datastore \
   --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
   --atomic \
   --timeout 30m
+
+
+
+
+**************************
+
+
+echo "=== PODS CASSANDRA ==="
+oc get pods -n apigee -o wide | grep apigee-cassandra-default-
+
+echo "=== ESTADO DATASTORE ==="
+oc get apigeedatastores -n apigee
+
+echo "=== ANILLO CASSANDRA ==="
+oc exec -n apigee apigee-cassandra-default-0 \
+  -c apigee-cassandra -- \
+  bash -c 'nodetool -u cassandra -pw "$CASS_PASSWORD" status'
+
+echo "=== PVC ==="
+oc get pvc -n apigee | grep cassandra-data
