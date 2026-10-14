@@ -1,161 +1,37 @@
-(
-set -euo pipefail
-umask 077
-cd ~/apigee-migration-1151
+echo "=== APIGEE DEPLOYMENTS ==="
 
-FILE="apigee-telemetry/apigee-latam-npr-apigee-non-prod.json"
-CREATED=0
-trap 'if [ "$CREATED" = 1 ]; then rm -f "$FILE"; fi' EXIT
-
-# Recuperar credencial temporal
-if [ ! -s "$FILE" ]; then
-  CREATED=1
-  for S in apigee-non-prod-svc-account apigee-metrics-svc-account; do
-    DATA=$(oc get secret "$S" -n apigee -o json 2>/dev/null |
-      jq -er '.data["client_secret.json"]' 2>/dev/null) || continue
-
-    if printf '%s' "$DATA" | base64 -d > "$FILE" 2>/dev/null &&
-       jq -e '.type=="service_account" and
-         ((.client_email // "") | contains("apigee-non-prod"))' \
-         "$FILE" >/dev/null; then
-      break
-    fi
-    rm -f "$FILE"
-  done
-fi
-
-jq -e '.type=="service_account" and
-  ((.client_email // "") | contains("apigee-non-prod"))' \
-  "$FILE" >/dev/null || {
-  echo "DETENIDO: falta credencial válida"
-  exit 1
-}
-
-# Respaldo
-helm get values telemetry -n apigee -o yaml \
-  > "backup-telemetry-$(date +%Y%m%d%H%M%S).yaml"
-
-ARGS=(
-  --reuse-values
-  --set-string nodeSelector.apigeeRuntime.key=apigee-nodepool
-  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime
-  --set-string metrics.nodeSelector.key=apigee-nodepool
-  --set-string metrics.nodeSelector.value=apigee-runtime
-)
-
-# Simulación
-helm upgrade telemetry ./apigee-telemetry \
-  -n apigee "${ARGS[@]}" \
-  --dry-run=server --hide-secret \
-  > dryrun-telemetry-metrics.txt 2>&1 || {
-  echo "DRY-RUN FALLÓ"
-  grep -Ei 'error|failed|required|invalid' \
-    dryrun-telemetry-metrics.txt | tail -5 || true
-  exit 1
-}
-
-echo "DRY-RUN OK"
-read -r -p "Escribe APLICAR para actualizar Metrics: " OK
-[ "$OK" = "APLICAR" ] || exit 0
-
-helm upgrade telemetry ./apigee-telemetry \
-  -n apigee "${ARGS[@]}" \
-  --rollback-on-failure --wait --timeout=15m
-)
-
-
-
-helm get values telemetry -n apigee -o json |
-jq '.metrics.nodeSelector'
-
-oc get pods -n apigee -o wide |
-grep -E 'apigee-controller-manager|apigee-metrics-adapter|apigee-metrics-apigee-telemetry-app'
-
-
-**********************************************
-
-
-
-echo "=== ESTADO TELEMETRY ==="
-oc get apigeetelemetry -n apigee
-
-echo "=== CONTROLADORES METRICS ==="
-oc get deploy -n apigee -o json | jq '
-.items[]
-| select(.metadata.name | contains("apigee-metrics"))
-| {
-    name: .metadata.name,
-    ready: .status.readyReplicas,
-    affinity: .spec.template.spec.affinity.nodeAffinity
+for A in \
+  apigee-metrics-adapter-apigee-telemetry \
+  apigee-metrics-apigee-telemetry-app
+do
+  echo "=== $A ==="
+  oc get ad "$A" -n apigee -o json | jq '{
+    state: .status.state,
+    replicas: .status.replicas,
+    affinity: [
+      .spec | .. | objects |
+      select(
+        .key? == "apigee-nodepool" or
+        .key? == "ibm-cloud.kubernetes.io/worker-pool-name"
+      ) | {key, values}
+    ]
   }'
+done
 
-echo "=== PODS PENDING Y SUS CONTROLADORES ==="
-oc get pods -n apigee -o json | jq '
+echo "=== REPLICASETS METRICS ==="
+
+oc get rs -n apigee -o json | jq -r '
 .items[]
 | select(.metadata.name |
     test("^apigee-metrics-(adapter|apigee-telemetry-app)"))
-| {
-    name: .metadata.name,
-    phase: .status.phase,
-    owner: .metadata.ownerReferences,
-    affinity: .spec.affinity.nodeAffinity
-  }'
-
-
-
-********************************
-
-
-echo "=== TELEMETRY: ESTADO Y SELECTORES ==="
-
-oc get apigeetelemetry apigee-telemetry \
-  -n apigee -o json |
-jq '{
-  state: .status.state,
-  generation: .metadata.generation,
-  observed: .status.observedGeneration,
-  selectors: (
-    [.spec | .. | objects |
-      select(
-        .key? == "ibm-cloud.kubernetes.io/worker-pool-name"
-        or .key? == "apigee-nodepool"
-      ) | {key,value}] | unique
-  ),
-  conditions: [
-    .status.conditions[]? |
-    {type,status,reason,message}
-  ]
-}'
-
-echo "=== APIGEE DEPLOYMENTS METRICS ==="
-
-oc get ad -n apigee -o json |
-jq -r '.items[] |
-select(.metadata.name | test("metrics|telemetry")) |
-[.metadata.name, (.status.state // "-")] | @tsv'
-
-
-
-*********************************************
-
-
-echo "=== SELECTORES TELEMETRY ==="
-oc get apigeetelemetry apigee-telemetry -n apigee -o json |
-jq '[.spec | .. | objects |
-  select(.key? == "apigee-nodepool" or
-         .key? == "ibm-cloud.kubernetes.io/worker-pool-name") |
-  {key,value,values}]'
-
-echo "=== ESTADO DE LOS DOS COMPONENTES ==="
-oc get ad -n apigee -o json |
-jq -r '.items[] |
-  select(.metadata.name |
-    test("^apigee-metrics-(adapter-apigee-telemetry|apigee-telemetry-app)$")) |
-  [.metadata.name,.status.state] | @tsv'
-
-echo "=== ERRORES DEL OPERADOR ==="
-oc logs deployment/apigee-controller-manager \
-  -n apigee --all-containers=true \
-  --since=60m --tail=500 |
-grep -Ei 'metrics|telemetry|error|releas|warn' |
-tail -25 || true
+| [
+    .metadata.name,
+    (.spec.replicas // 0),
+    (.status.readyReplicas // 0),
+    ([
+      .spec.template.spec.affinity.nodeAffinity
+      .requiredDuringSchedulingIgnoredDuringExecution
+      .nodeSelectorTerms[]?.matchExpressions[]?
+      | "\(.key)=\((.values // []) | join(","))"
+    ] | join(";"))
+  ] | @tsv'
