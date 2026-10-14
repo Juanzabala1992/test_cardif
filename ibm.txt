@@ -1,18 +1,40 @@
-echo "=== WORKERS IBM ==="
-ibmcloud oc worker ls \
-  --cluster carla-npr-latam-ocw
+echo "=== CASSANDRA ==="
+oc get sts apigee-cassandra-default -n apigee
+oc get pods -n apigee -o wide | grep '^apigee-cassandra-default-'
 
-echo "=== POOLS IBM ==="
-ibmcloud oc worker-pool ls \
-  --cluster carla-npr-latam-ocw
+echo "=== PDB ==="
+oc get pdb -n apigee | grep -E 'NAME|cassandra'
 
-echo "=== NODOS ==="
-oc get nodes
+echo "=== PVC ==="
+oc get pvc -n apigee -o wide | grep -i cassandra
 
-echo "=== OPERADORES PENDIENTES ==="
-oc get co |
-awk 'NR==1 || $3!="True" || $4!="False" || $5!="False"'
+echo "=== DISCOS Y ZONAS ==="
+oc get pv -o json | jq -r '
+.items[]
+| select(.spec.claimRef.namespace? == "apigee")
+| select((.spec.claimRef.name // "") | contains("cassandra"))
+| [
+  .metadata.name,
+  (.spec.csi.driver // "OTRO"),
+  (.spec.storageClassName // "-"),
+  .spec.persistentVolumeReclaimPolicy,
+  ([.spec.nodeAffinity.required.nodeSelectorTerms[]?
+    .matchExpressions[]?
+    | select(.key | contains("zone"))
+    | .values[]] | join(","))
+] | @tsv'
 
-echo "=== APIGEE ==="
-oc get apigeeorg,apigeeenv,apigeeredis,apigeetelemetry \
-  -n apigee
+echo "=== SELECTOR DATA ==="
+helm get values datastore -n apigee -o json |
+jq '.nodeSelector.apigeeData'
+
+echo "=== POOL ACTUAL ==="
+ibmcloud oc worker-pool get \
+  --cluster carla-npr-latam-ocw \
+  --worker-pool apigee-data
+
+
+
+
+
+
