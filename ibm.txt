@@ -65,3 +65,14 @@ jq --arg env "$ENV" '
     state: .status.state,
     replicas: .status.replicas
   }'
+
+
+*********************
+
+helm list -n apigee --all -o json | jq -r '
+[.[] | select(.chart | startswith("apigee-env-"))] as $r |
+"TOTAL: \($r|length)",
+"DEPLOYED: \($r|map(select(.status=="deployed"))|length)",
+"OTROS ESTADOS:",
+($r[] | select(.status!="deployed") |
+"\(.name)  \(.status)")'
