@@ -506,3 +506,38 @@ oc get pods -n apigee -o wide
 
 oc get apigeeorg,apigeeenv,apigeeredis -n apigee
 
+
+*********************************
+
+
+
+oc get pods -A \
+  --field-selector spec.nodeName=10.30.28.6 -o json |
+jq -r '
+.items[]
+| select(
+    ([.metadata.ownerReferences[]?.kind]
+    | index("DaemonSet")) == null
+  )
+| . as $p
+| [
+    $p.metadata.namespace,
+    $p.metadata.name,
+    ([
+      $p.spec.volumes[]?
+      | if has("emptyDir") then "emptyDir"
+        elif has("persistentVolumeClaim") then "PVC"
+        elif has("hostPath") then "hostPath"
+        else empty end
+    ] | unique | join(","))
+  ] | @tsv'
+
+
+
+
+
+oc adm drain 10.30.28.6 \
+  --ignore-daemonsets \
+  --delete-emptydir-data \
+  --timeout=25m
+
