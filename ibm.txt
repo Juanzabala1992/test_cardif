@@ -133,3 +133,29 @@ oc get ad -n apigee -o json |
 jq -r '.items[] |
 select(.metadata.name | test("metrics|telemetry")) |
 [.metadata.name, (.status.state // "-")] | @tsv'
+
+
+
+*********************************************
+
+
+echo "=== SELECTORES TELEMETRY ==="
+oc get apigeetelemetry apigee-telemetry -n apigee -o json |
+jq '[.spec | .. | objects |
+  select(.key? == "apigee-nodepool" or
+         .key? == "ibm-cloud.kubernetes.io/worker-pool-name") |
+  {key,value,values}]'
+
+echo "=== ESTADO DE LOS DOS COMPONENTES ==="
+oc get ad -n apigee -o json |
+jq -r '.items[] |
+  select(.metadata.name |
+    test("^apigee-metrics-(adapter-apigee-telemetry|apigee-telemetry-app)$")) |
+  [.metadata.name,.status.state] | @tsv'
+
+echo "=== ERRORES DEL OPERADOR ==="
+oc logs deployment/apigee-controller-manager \
+  -n apigee --all-containers=true \
+  --since=60m --tail=500 |
+grep -Ei 'metrics|telemetry|error|releas|warn' |
+tail -25 || true
