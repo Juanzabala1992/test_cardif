@@ -1,26 +1,45 @@
 NS=lam-c-dev-mashery-v6
 
-for JOB in loader-job-full-29867040 loader-job-onprem-29866860; do
-  POD=$(oc get pods -n "$NS" -o name \
-    | grep "pod/$JOB-" | head -1 | cut -d/ -f2)
+oc get cronjob loader-job-full loader-job-onprem \
+  -n "$NS" -o yaml \
+  > "$HOME/backup-mashery/cronjobs-loader-original.yaml"
 
-  echo "===== $JOB ====="
 
-  if [ -n "$POD" ]; then
-    oc describe pod "$POD" -n "$NS" \
-      | sed -n '/Events:/,$p' | tail -n 15
-  else
-    echo "No se encontro pod"
-  fi
+for CJ in loader-job-full loader-job-onprem; do
+  oc patch cronjob "$CJ" -n "$NS" \
+    --type=merge -p '{"spec":{"suspend":true}}'
 done
 
-***********************
+
+for CJ in loader-job-full loader-job-onprem; do
+  oc patch cronjob "$CJ" -n "$NS" \
+    --type=json \
+    -p='[{"op":"replace","path":"/spec/jobTemplate/spec/template/spec/containers/0/resources/requests/cpu","value":"50m"}]'
+done
 
 
-NS=lam-c-dev-mashery-v6
-
-oc get jobs \
+oc delete job \
   loader-job-full-29867040 \
   loader-job-onprem-29866860 \
-  -n "$NS" \
-  -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .spec.template.spec.containers[*]}{.name}{" CPU="}{.resources.requests.cpu}{" MEM="}{.resources.requests.memory}{" CPU-LIMIT="}{.resources.limits.cpu}{"\n"}{end}{end}'
+  -n "$NS"
+
+
+oc create job loader-onprem-recovery \
+  --from=cronjob/loader-job-onprem \
+  -n "$NS"
+
+
+
+oc get pods -n "$NS" | grep loader-onprem-recovery
+
+oc logs -n "$NS" \
+  job/loader-onprem-recovery --tail=100
+
+
+
+
+for CJ in loader-job-full loader-job-onprem; do
+  oc patch cronjob "$CJ" -n "$NS" \
+    --type=merge -p '{"spec":{"suspend":false}}'
+done
+
