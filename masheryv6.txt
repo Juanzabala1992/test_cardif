@@ -1,3 +1,21 @@
 oc logs -n lam-c-dev-mashery-v6 \
   configui-deploy-57799b5f89-xm6ns \
   -c configui --previous --tail=120
+
+
+****************************
+
+
+NS=lam-c-dev-mashery-v6
+
+echo "=== CLAVES SECRET CONFIGUI ==="
+oc get secret configui-user-secrets -n "$NS" \
+  -o go-template='{{range $k,$v := .data}}{{printf "%s\n" $k}}{{end}}'
+
+echo "=== MONTAJES CONFIGUI ==="
+oc get deploy configui-deploy -n "$NS" \
+  -o jsonpath='{range .spec.template.spec.containers[*].volumeMounts[*]}{.name}{" -> "}{.mountPath}{"\n"}{end}'
+
+echo "=== REFERENCIAS DE SECRETS ==="
+oc get deploy configui-deploy -n "$NS" \
+  -o jsonpath='{range .spec.template.spec.containers[*].env[*]}{.name}{" -> "}{.valueFrom.secretKeyRef.name}{"/"}{.valueFrom.secretKeyRef.key}{"\n"}{end}'
