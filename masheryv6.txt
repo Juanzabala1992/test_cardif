@@ -85,3 +85,11 @@ oc get cronjobs -n "$NS" | grep loader
 oc get pods -n "$NS" | grep -E \
 'mysql|platformapi|loader-deploy|trafficmanager|configui'
 
+
+****************************
+
+
+oc describe pod configui-deploy-68f7b98d4b-pd5rq \
+  -n lam-c-dev-mashery-v6 | tail -n 65
+
+
