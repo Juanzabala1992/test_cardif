@@ -1,58 +1,18 @@
-oc get pod configui-inspect \
-  -n lam-c-dev-mashery-v6 \
-  -o jsonpath='{.status.containerStatuses[?(@.name=="inspector")].state.waiting.message}{"\n"}'
-
-
-
-
-**********************
-
 NS=lam-c-dev-mashery-v6
 
-IMG=$(oc get deploy configui-deploy -n "$NS" \
-  -o jsonpath='{.spec.template.spec.containers[?(@.name=="configui")].image}')
-
-DIR=$(mktemp -d /tmp/configui-check.XXXXXX)
-
-oc image extract "$IMG" \
-  --path="/usr/local/bin/mlconfig:$DIR"
-
-
-
-ls -l "$DIR/mlconfig"
-stat -c 'Permisos: %a (%A)' "$DIR/mlconfig"
-
-
-
-oc delete pod configui-inspect -n "$NS"
-
-***************************
-
-
-cat > "$DIR/Containerfile" <<EOF
-FROM $IMG
-
-COPY --chmod=0755 mlconfig /usr/local/bin/mlconfig
-EOF
-
-
-
-FIXED="${IMG%:*}:v6.2.1-fixexec"
-
-podman build \
-  -f "$DIR/Containerfile" \
-  -t "$FIXED" \
-  "$DIR"
-
-podman push "$FIXED"
-
-
+FIXED="regional-registry.apps.saox1p0mocpc02.isz-latam-assurance.ocpdomain/regional/apim-le-configui:v6.2.1-fixexec"
 
 oc set image deployment/configui-deploy \
   configui="$FIXED" \
-  -n lam-c-dev-mashery-v6
+  -n "$NS"
+
+
+**************
 
 oc rollout status deployment/configui-deploy \
-  -n lam-c-dev-mashery-v6 \
-  --timeout=180s
+  -n "$NS" --timeout=180s
+
+
+
+oc get pods -n "$NS" | grep configui
 
