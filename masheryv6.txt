@@ -1,14 +1,10 @@
 NS=lam-c-dev-mashery-v6
 
-FIXED="regional-registry.apps.saox1p0mocpc02.isz-latam-assurance.ocpdomain/regional/apim-le-configui:v6.2.1-fixexec"
+echo "=== DEPLOYMENT ==="
+oc get deploy configui-deploy -n "$NS"
 
-oc set image deployment/configui-deploy \
-  configui="$FIXED" \
-  -n "$NS"
+echo "=== PODS CONFIGUI ==="
+oc get pods -n "$NS" -o wide | grep configui
 
-
-
-oc rollout status deployment/configui-deploy \
-  -n "$NS" --timeout=180s
-
-oc get pods -n "$NS" | grep configui
+echo "=== REPLICASETS ==="
+oc get rs -n "$NS" | grep configui
