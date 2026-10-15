@@ -19,3 +19,27 @@ oc get deploy configui-deploy -n "$NS" \
 echo "=== REFERENCIAS DE SECRETS ==="
 oc get deploy configui-deploy -n "$NS" \
   -o jsonpath='{range .spec.template.spec.containers[*].env[*]}{.name}{" -> "}{.valueFrom.secretKeyRef.name}{"/"}{.valueFrom.secretKeyRef.key}{"\n"}{end}'
+
+
+**************************************
+
+
+NS=lam-c-dev-mashery-v6
+
+(
+  ADMIN=$(oc get secret mashery-preinstall-admin \
+    -n "$NS" \
+    -o jsonpath='{.data.CUSTOM_AREA_ADMIN_PASSWORD}') || exit 1
+
+  CONFIG=$(oc get secret configui-user-secrets \
+    -n "$NS" \
+    -o go-template='{{index .data ".mlc_password"}}') || exit 1
+
+  if [ -z "$ADMIN" ] || [ -z "$CONFIG" ]; then
+    echo "ERROR: alguna contraseña está vacía"
+  elif [ "$ADMIN" = "$CONFIG" ]; then
+    echo "RESULTADO: CONTRASEÑAS IGUALES"
+  else
+    echo "RESULTADO: CONTRASEÑAS DIFERENTES"
+  fi
+)
