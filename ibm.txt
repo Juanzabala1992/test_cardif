@@ -22,3 +22,24 @@ oc get deployment downloads -n openshift-console
 
 oc get pdb downloads -n openshift-console
 
+
+************************************
+
+echo "=== ESPERANDO DOWNLOADS ==="
+oc wait pod/downloads-6b48968554-fvkfc \
+  -n openshift-console \
+  --for=condition=Ready \
+  --timeout=300s
+
+echo "=== PODS ==="
+oc get pods -n openshift-console -o wide |
+grep downloads
+
+echo "=== DEPLOYMENT ==="
+oc get deploy downloads -n openshift-console
+
+echo "=== PDB ==="
+oc get pdb downloads -n openshift-console
+
+
+
