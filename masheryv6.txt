@@ -47,15 +47,18 @@ done
 *********************************************
 
 
-Buenas tardes,
+NS=lam-c-dev-mashery-v6
 
-La migración de los clústeres OpenShift de **RHEL 8 a RHCOS** responde a un requerimiento de **IBM Cloud**, debido a la deprecación del uso de RHEL 8 en los nodos worker de estos clústeres.
+oc create job loader-full-recovery \
+  --from=cronjob/loader-job-full \
+  -n "$NS"
 
-Durante las migraciones realizadas en **Integration y TSP**, fue necesario mantener los nodos antiguos y nuevos activos en paralelo durante varias horas, mientras se trasladaban las aplicaciones, se validaba su funcionamiento y se resolvían algunos inconvenientes técnicos. Esto generó **costos adicionales temporales de infraestructura**.
 
-Para la próxima migración de **Producción**, será necesario aplicar el mismo procedimiento, por lo que se deben contemplar costos adicionales similares o incluso mayores, dependiendo del tiempo requerido para completar la migración y garantizar la estabilidad de los servicios.
 
-Una vez finalizadas las validaciones, se retirarán los nodos antiguos para detener estos costos adicionales.
+oc get job loader-full-recovery -n "$NS" -w
 
-Saludos cordiales.
+
+oc logs -n "$NS" \
+  job/loader-full-recovery --tail=80
+
 
