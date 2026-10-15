@@ -27,3 +27,42 @@ oc get pdb -A
 
 echo "=== NODOS ==="
 oc get nodes
+
+
+***************************
+
+
+
+echo "=== ZONAS DE LOS PVC ==="
+oc get pv -o json | jq -r '
+.items[]
+| select(
+  (.spec.claimRef.namespace // "") == "nexus-poc" or
+  (.spec.claimRef.namespace // "") == "lam-c-uat-devops"
+)
+| [
+  .spec.claimRef.namespace,
+  .spec.claimRef.name,
+  .spec.persistentVolumeReclaimPolicy,
+  ([.spec.nodeAffinity.required.nodeSelectorTerms[]?.matchExpressions[]?
+    | select(.key | contains("zone"))
+    | .values[]] | unique | join(","))
+] | @tsv'
+
+echo "=== PODS EN RHEL 8 ==="
+oc get pods -A -o json | jq -r '
+.items[]
+| select(
+  .spec.nodeName == "10.130.12.22" or
+  .spec.nodeName == "10.130.28.21"
+)
+| select(
+  ([.metadata.ownerReferences[]?.kind] |
+   index("DaemonSet")) == null
+)
+| [
+  .spec.nodeName,
+  .metadata.namespace,
+  .metadata.name,
+  .status.phase
+] | @tsv'
