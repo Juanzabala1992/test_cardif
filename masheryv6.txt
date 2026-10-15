@@ -13,3 +13,20 @@ oc logs -n "$NS" deployment/loader-deploy \
   | grep -Ei -B 2 -A 3 \
   'error|exception|register|traffic|connection|timeout|failed' \
   | tail -n 60
+
+
+
+*****************************
+
+
+NS=lam-c-dev-mashery-v6
+
+echo "=== TTL DE LOADER ==="
+oc get cm loader-configmap -n "$NS" -o yaml \
+  | grep -in -C 3 'loaderCompletionTTL'
+
+echo "=== JOBS DE LOADER ==="
+oc get jobs -n "$NS" | grep -Ei 'NAME|loader-job'
+
+echo "=== CRONJOBS DE LOADER ==="
+oc get cronjobs -n "$NS" | grep -Ei 'NAME|loader'
