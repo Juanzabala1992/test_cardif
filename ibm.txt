@@ -1,72 +1,22 @@
-oc logs -n openshift-console \
-  downloads-6b48968554-q44xv \
-  --previous --tail=80
+echo "=== DOWNLOADS ==="
+oc rollout status deployment/downloads \
+  -n openshift-console --timeout=5m
 
-oc describe pod -n openshift-console \
-  downloads-6b48968554-q44xv | tail -30
+echo "=== NEXUS Y KEYCLOAK ==="
+oc get pods -A -o wide |
+grep -E 'keycloak-[01]|nexus-c'
 
-
-
-oc adm cordon 10.130.12.22
-
-oc delete pod \
-  downloads-6b48968554-q44xv \
-  -n openshift-console
-
+echo "=== PDB QUE BLOQUEAN ==="
+oc get pdb -A -o json | jq -r '
+.items[]
+| select((.status.disruptionsAllowed // 0)==0)
+| [.metadata.namespace,.metadata.name] | @tsv'
 
 
-oc get pods -n openshift-console -o wide |
-grep downloads
-
-oc get deployment downloads -n openshift-console
-
-oc get pdb downloads -n openshift-console
+**********************
 
 
-************************************
-
-echo "=== ESPERANDO DOWNLOADS ==="
-oc wait pod/downloads-6b48968554-fvkfc \
-  -n openshift-console \
-  --for=condition=Ready \
-  --timeout=300s
-
-echo "=== PODS ==="
-oc get pods -n openshift-console -o wide |
-grep downloads
-
-echo "=== DEPLOYMENT ==="
-oc get deploy downloads -n openshift-console
-
-echo "=== PDB ==="
-oc get pdb downloads -n openshift-console
-
-
-
-******************************************
-
-
-oc adm drain 10.130.28.21 \
+oc adm drain 10.130.12.22 \
   --ignore-daemonsets \
   --delete-emptydir-data \
-  --timeout=10m
-
-
-
-
-oc describe pod downloads-6b48968554-fvkfc \
-  -n openshift-console | tail -40
-
-
-
-echo "=== NODOS ==="
-oc get nodes
-
-echo "=== DOWNLOADS ==="
-oc get pods -n openshift-console -o wide | grep downloads
-
-echo "=== KEYCLOAK ==="
-oc get pods -A -o wide | grep keycloak
-
-echo "=== OPERADORES CON PROBLEMAS ==="
-oc get co | awk 'NR==1 || $3!="True" || $5!="False"'
+  --timeout=15m
