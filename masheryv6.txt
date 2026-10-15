@@ -25,3 +25,34 @@ stat -c 'Permisos: %a (%A)' "$DIR/mlconfig"
 
 
 oc delete pod configui-inspect -n "$NS"
+
+***************************
+
+
+cat > "$DIR/Containerfile" <<EOF
+FROM $IMG
+
+COPY --chmod=0755 mlconfig /usr/local/bin/mlconfig
+EOF
+
+
+
+FIXED="${IMG%:*}:v6.2.1-fixexec"
+
+podman build \
+  -f "$DIR/Containerfile" \
+  -t "$FIXED" \
+  "$DIR"
+
+podman push "$FIXED"
+
+
+
+oc set image deployment/configui-deploy \
+  configui="$FIXED" \
+  -n lam-c-dev-mashery-v6
+
+oc rollout status deployment/configui-deploy \
+  -n lam-c-dev-mashery-v6 \
+  --timeout=180s
+
