@@ -46,3 +46,37 @@ echo "=== HELM DATASTORE ==="
 helm list -A | grep -i datastore || true
 
 
+**************************************
+
+
+CL=carla-npr-tsp-ocw
+
+echo "=== CONFIGURACION POOL ORIGINAL ==="
+ibmcloud oc worker-pool get \
+  --cluster "$CL" \
+  --worker-pool default
+
+echo "=== ZONAS Y SUBREDES ==="
+ibmcloud oc worker-pool zones \
+  --cluster "$CL" \
+  --worker-pool default
+
+echo "=== CARGAS POR NAMESPACE ==="
+oc get pods -A -o json | jq -r '
+[.items[]
+ | select(.spec.nodeName == "10.130.12.22"
+       or .spec.nodeName == "10.130.28.21")
+ | select(
+   ([.metadata.ownerReferences[]?.kind]
+    | index("DaemonSet")) == null
+ )]
+ | group_by(.metadata.namespace)[]
+ | [.[0].metadata.namespace, length]
+ | @tsv'
+
+echo "=== PVC EXISTENTES ==="
+oc get pvc -A
+
+echo "=== PDB ==="
+oc get pdb -A
+
