@@ -17,3 +17,62 @@ NS=lam-c-dev-mashery-v6
     echo "RESULTADO: CONTRASEÑAS DIFERENTES"
   fi
 )
+
+
+**************************
+
+
+NS=lam-c-dev-mashery-v6
+
+umask 077
+
+oc get secret configui-user-secrets \
+  -n "$NS" -o json \
+  > "$HOME/backup-mashery/configui-user-secrets-antes.json"
+
+
+
+
+
+set -o pipefail
+
+oc get secret mashery-preinstall-admin \
+  -n "$NS" \
+  -o go-template='{{index .data "CUSTOM_AREA_ADMIN_PASSWORD"}}' \
+| python3 -c '
+import sys,json
+v=sys.stdin.read().strip()
+if not v:
+    sys.exit("ERROR: contraseña vacía")
+print(json.dumps({"data":{".mlc_password":v}}))
+' \
+| oc patch secret configui-user-secrets \
+    -n "$NS" \
+    --type=merge \
+    --patch-file=/dev/stdin
+
+
+
+
+oc scale deployment/configui-deploy \
+  -n "$NS" --replicas=0
+
+
+
+oc get pods -n "$NS" | grep configui
+
+
+oc scale deployment/configui-deploy \
+  -n "$NS" --replicas=1
+
+
+
+oc get pods -n "$NS" | grep configui
+
+
+oc logs -n "$NS" \
+  deployment/configui-deploy \
+  -c configui --tail=60
+
+
+
