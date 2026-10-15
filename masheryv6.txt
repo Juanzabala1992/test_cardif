@@ -1,22 +1,42 @@
 NS=lam-c-dev-mashery-v6
 
-S=$(oc get deploy configui-deploy -n "$NS" \
-  -o jsonpath='{.spec.template.spec.volumes[?(@.name=="configui-key-vol")].secret.secretName}')
+CERT_SECRET=$(oc get deploy configui-deploy -n "$NS" \
+  -o jsonpath='{.spec.template.spec.volumes[?(@.name=="configui-certificate-vol")].secret.secretName}')
 
-echo "Secret utilizado: $S"
+echo "Secret del certificado: $CERT_SECRET"
 
-oc get secret "$S" -n "$NS" -o json | python3 -c '
-import sys, json, base64
-data = json.load(sys.stdin).get("data", {})
-for name, value in data.items():
-    raw = base64.b64decode(value)
-    lines = raw.splitlines()
-    first = lines[0] if lines else b""
-    if first.startswith(b"-----BEGIN "):
-        result = first.decode("ascii", "replace")
-    else:
-        result = "Formato no PEM o binario"
-    if b"ENCRYPTED" in b"\n".join(lines[:4]):
-        result += " [CIFRADA]"
-    print(name + " => " + result)
-'
+(
+  set -e
+  set -o pipefail
+  umask 077
+
+  T=$(mktemp -d /dev/shm/configui-key.XXXXXX) || exit 1
+  trap 'rm -rf -- "$T"' EXIT
+
+  oc extract secret/configui-key-secret \
+    -n "$NS" --to="$T" --confirm >/dev/null
+
+  oc extract "secret/$CERT_SECRET" \
+    -n "$NS" --to="$T" --confirm >/dev/null
+
+  openssl pkey \
+    -in "$T/tml-cm-key.pk8" \
+    -out "$T/key-unencrypted.pk8"
+
+  echo "CLAVE DESCIFRADA CORRECTAMENTE"
+
+  KEY_HASH=$(openssl pkey \
+    -in "$T/key-unencrypted.pk8" \
+    -pubout -outform DER | openssl dgst -sha256)
+
+  CERT_HASH=$(openssl x509 \
+    -in "$T/tml-cm-crt.pem" \
+    -pubkey -noout | openssl pkey -pubin -outform DER \
+    | openssl dgst -sha256)
+
+  if [ "$KEY_HASH" = "$CERT_HASH" ]; then
+    echo "CERTIFICADO Y CLAVE COINCIDEN"
+  else
+    echo "ERROR: CERTIFICADO Y CLAVE NO COINCIDEN"
+  fi
+)
