@@ -1,37 +1,9 @@
-CL=carla-npr-tsp-ocw
+watch -n 20 'ibmcloud oc worker ls --cluster carla-npr-tsp-ocw'
 
-ibmcloud oc worker-pool create vpc-gen2 \
-  --cluster "$CL" \
-  --name default-rhcos \
-  --flavor bx2.4x16 \
-  --size-per-zone 1 \
-  --operating-system RHCOS \
-  --kms-instance 0c52fc9e-96a9-4c63-8226-50bdc1612186 \
-  --crk 5cac1d45-d119-46cb-bd61-118fc7fbd714 \
-  --kms-account-id f284a6766c2345e09d255d74e18c67c5
-
-
-
-ibmcloud oc worker-pool get \
-  --cluster "$CL" \
-  --worker-pool default-rhcos
-
-
-
-ibmcloud oc zone add vpc-gen2 \
-  --cluster "$CL" \
-  --worker-pool default-rhcos \
-  --zone br-sao-1 \
-  --subnet-id 02t7-4bfa6966-742b-471f-9f1c-ee697c554aa3
-
-ibmcloud oc zone add vpc-gen2 \
-  --cluster "$CL" \
-  --worker-pool default-rhcos \
-  --zone br-sao-2 \
-  --subnet-id 02u7-adb9aa34-feee-49a3-bffb-ab10669b3367
-
-
-
-ibmcloud oc worker ls --cluster "$CL"
 
 oc get nodes -o wide
+
+oc get pods -A --field-selector=status.phase=Pending
+
+oc get co | awk 'NR==1 || $3!="True" || $5!="False"'
+
