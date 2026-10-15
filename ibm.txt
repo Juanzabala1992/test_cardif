@@ -7,3 +7,23 @@ oc get pods -A --field-selector=status.phase=Pending
 
 oc get co | awk 'NR==1 || $3!="True" || $5!="False"'
 
+*******************************
+
+
+
+echo "=== OPERADOR DNS ==="
+oc get co dns
+oc describe co dns | tail -35
+
+echo "=== PODS DNS ==="
+oc get pods -n openshift-dns -o wide
+
+echo "=== APLICACIONES NEXUS / SONAR ==="
+oc get pods -n nexus-poc -o wide
+oc get pods -n lam-c-uat-devops -o wide
+
+echo "=== PDB ==="
+oc get pdb -A
+
+echo "=== NODOS ==="
+oc get nodes
