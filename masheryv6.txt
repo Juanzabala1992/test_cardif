@@ -62,3 +62,26 @@ oc logs -n "$NS" \
   job/loader-full-recovery --tail=80
 
 
+****************************************
+
+NS=lam-c-dev-mashery-v6
+
+oc logs -n "$NS" \
+  job/loader-full-recovery --tail=25
+
+
+
+for CJ in loader-job-full loader-job-onprem; do
+  oc patch cronjob "$CJ" -n "$NS" \
+    --type=merge \
+    -p '{"spec":{"suspend":false,"startingDeadlineSeconds":60}}'
+done
+
+
+
+
+oc get cronjobs -n "$NS" | grep loader
+
+oc get pods -n "$NS" | grep -E \
+'mysql|platformapi|loader-deploy|trafficmanager|configui'
+
