@@ -43,3 +43,19 @@ for CJ in loader-job-full loader-job-onprem; do
     --type=merge -p '{"spec":{"suspend":false}}'
 done
 
+
+*********************************************
+
+
+Buenas tardes,
+
+La migración de los clústeres OpenShift de **RHEL 8 a RHCOS** responde a un requerimiento de **IBM Cloud**, debido a la deprecación del uso de RHEL 8 en los nodos worker de estos clústeres.
+
+Durante las migraciones realizadas en **Integration y TSP**, fue necesario mantener los nodos antiguos y nuevos activos en paralelo durante varias horas, mientras se trasladaban las aplicaciones, se validaba su funcionamiento y se resolvían algunos inconvenientes técnicos. Esto generó **costos adicionales temporales de infraestructura**.
+
+Para la próxima migración de **Producción**, será necesario aplicar el mismo procedimiento, por lo que se deben contemplar costos adicionales similares o incluso mayores, dependiendo del tiempo requerido para completar la migración y garantizar la estabilidad de los servicios.
+
+Una vez finalizadas las validaciones, se retirarán los nodos antiguos para detener estos costos adicionales.
+
+Saludos cordiales.
+
