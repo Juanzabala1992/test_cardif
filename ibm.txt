@@ -57,3 +57,16 @@ oc adm drain 10.130.28.21 \
 oc describe pod downloads-6b48968554-fvkfc \
   -n openshift-console | tail -40
 
+
+
+echo "=== NODOS ==="
+oc get nodes
+
+echo "=== DOWNLOADS ==="
+oc get pods -n openshift-console -o wide | grep downloads
+
+echo "=== KEYCLOAK ==="
+oc get pods -A -o wide | grep keycloak
+
+echo "=== OPERADORES CON PROBLEMAS ==="
+oc get co | awk 'NR==1 || $3!="True" || $5!="False"'
