@@ -13,3 +13,14 @@ for JOB in loader-job-full-29867040 loader-job-onprem-29866860; do
     echo "No se encontro pod"
   fi
 done
+
+***********************
+
+
+NS=lam-c-dev-mashery-v6
+
+oc get jobs \
+  loader-job-full-29867040 \
+  loader-job-onprem-29866860 \
+  -n "$NS" \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .spec.template.spec.containers[*]}{.name}{" CPU="}{.resources.requests.cpu}{" MEM="}{.resources.requests.memory}{" CPU-LIMIT="}{.resources.limits.cpu}{"\n"}{end}{end}'
