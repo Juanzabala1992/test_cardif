@@ -7,12 +7,8 @@ oc set image deployment/configui-deploy \
   -n "$NS"
 
 
-**************
 
 oc rollout status deployment/configui-deploy \
   -n "$NS" --timeout=180s
 
-
-
 oc get pods -n "$NS" | grep configui
-
