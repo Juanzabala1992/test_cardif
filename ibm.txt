@@ -1,82 +1,37 @@
-echo "=== CLUSTERS TSP ==="
-ibmcloud oc cluster ls | grep -i tsp
-
-echo "=== CONTEXTO OPENSHIFT ACTUAL ==="
-oc whoami --show-server
-
-
-**************************
-
-ibmcloud oc cluster get -c carla-npr-tsp-ocw
-
-*************************************************
-
-ibmcloud target --unset-resource-group
-ibmcloud oc cluster get -c carla-npr-tsp-ocw
-
-
-ibmcloud target -c 2779238 -r br-sao
-ibmcloud oc cluster get -c carla-npr-tsp-ocw
-
-
-************************
-
-
-
 CL=carla-npr-tsp-ocw
 
-echo "=== POOLS ==="
-ibmcloud oc worker-pool ls --cluster "$CL"
-
-echo "=== WORKERS ==="
-ibmcloud oc worker ls --cluster "$CL"
-
-echo "=== NODOS Y ZONAS ==="
-oc get nodes \
-  -L ibm-cloud.kubernetes.io/worker-pool-name \
-  -L topology.kubernetes.io/zone
-
-echo "=== CASSANDRA ==="
-oc get sts -A | grep -i cassandra || true
-
-echo "=== APIGEE DATASTORE ==="
-oc get apigeedatastores -A 2>/dev/null || true
-
-echo "=== HELM DATASTORE ==="
-helm list -A | grep -i datastore || true
+ibmcloud oc worker-pool create vpc-gen2 \
+  --cluster "$CL" \
+  --name default-rhcos \
+  --flavor bx2.4x16 \
+  --size-per-zone 1 \
+  --operating-system RHCOS \
+  --kms-instance 0c52fc9e-96a9-4c63-8226-50bdc1612186 \
+  --crk 5cac1d45-d119-46cb-bd61-118fc7fbd714 \
+  --kms-account-id f284a6766c2345e09d255d74e18c67c5
 
 
-**************************************
 
-
-CL=carla-npr-tsp-ocw
-
-echo "=== CONFIGURACION POOL ORIGINAL ==="
 ibmcloud oc worker-pool get \
   --cluster "$CL" \
-  --worker-pool default
+  --worker-pool default-rhcos
 
-echo "=== ZONAS Y SUBREDES ==="
-ibmcloud oc worker-pool zones \
+
+
+ibmcloud oc zone add vpc-gen2 \
   --cluster "$CL" \
-  --worker-pool default
+  --worker-pool default-rhcos \
+  --zone br-sao-1 \
+  --subnet-id 02t7-4bfa6966-742b-471f-9f1c-ee697c554aa3
 
-echo "=== CARGAS POR NAMESPACE ==="
-oc get pods -A -o json | jq -r '
-[.items[]
- | select(.spec.nodeName == "10.130.12.22"
-       or .spec.nodeName == "10.130.28.21")
- | select(
-   ([.metadata.ownerReferences[]?.kind]
-    | index("DaemonSet")) == null
- )]
- | group_by(.metadata.namespace)[]
- | [.[0].metadata.namespace, length]
- | @tsv'
+ibmcloud oc zone add vpc-gen2 \
+  --cluster "$CL" \
+  --worker-pool default-rhcos \
+  --zone br-sao-2 \
+  --subnet-id 02u7-adb9aa34-feee-49a3-bffb-ab10669b3367
 
-echo "=== PVC EXISTENTES ==="
-oc get pvc -A
 
-echo "=== PDB ==="
-oc get pdb -A
 
+ibmcloud oc worker ls --cluster "$CL"
+
+oc get nodes -o wide
