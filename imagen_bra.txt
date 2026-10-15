@@ -1,0 +1,17 @@
+oc get is -n devops | grep -i pdf-generator
+
+
+oc get istag -n devops pdf-generator-qa:1.0.4-snapshot-11
+
+
+REG=regional-registry.apps.saox1p0mocpc02.isz-latam-assurance.ocpdomain
+
+oc whoami -t | podman login \
+  -u "$(oc whoami)" \
+  --password-stdin "$REG"
+
+
+podman pull "$REG/devops/pdf-generator-qa:1.0.4-snapshot-11"
+
+podman save -o pdf-generator-qa.tar \
+  "$REG/devops/pdf-generator-qa:1.0.4-snapshot-11"
