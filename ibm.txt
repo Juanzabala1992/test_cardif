@@ -43,3 +43,17 @@ oc get pdb downloads -n openshift-console
 
 
 
+******************************************
+
+
+oc adm drain 10.130.28.21 \
+  --ignore-daemonsets \
+  --delete-emptydir-data \
+  --timeout=10m
+
+
+
+
+oc describe pod downloads-6b48968554-fvkfc \
+  -n openshift-console | tail -40
+
