@@ -1,24 +1,5 @@
-CL=carla-npr-latam-ocw
+echo "=== CLUSTERS TSP ==="
+ibmcloud oc cluster ls | grep -i tsp
 
-ibmcloud oc worker-pool ls --cluster "$CL"
-
-ibmcloud oc worker ls \
-  --cluster "$CL" \
-  --worker-pool apigee-data
-
-
-
-ibmcloud oc worker-pool rm \
-  --cluster "$CL" \
-  --worker-pool apigee-data
-
-
-
-oc get nodes
-
-oc get apigeedatastores -n apigee
-
-oc get pods -n apigee -o wide |
-  grep apigee-cassandra-default-
-
-oc get co
+echo "=== CONTEXTO OPENSHIFT ACTUAL ==="
+oc whoami --show-server
