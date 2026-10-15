@@ -66,3 +66,36 @@ oc get pods -A -o json | jq -r '
   .metadata.name,
   .status.phase
 ] | @tsv'
+
+
+*******************************
+
+echo "=== CSI DE ALMACENAMIENTO ==="
+oc get pods -n kube-system -o wide |
+grep ibm-vpc-block-csi-node
+
+echo "=== KEYCLOAK ==="
+oc get pods -A -o wide | grep keycloak
+
+echo "=== PDB CON CERO INTERRUPCIONES ==="
+oc get pdb -A -o json | jq -r '
+.items[]
+| select((.status.disruptionsAllowed // 0) == 0)
+| [.metadata.namespace, .metadata.name] | @tsv'
+
+
+
+oc adm drain 10.130.28.21 \
+  --ignore-daemonsets \
+  --delete-emptydir-data \
+  --timeout=10m
+
+
+
+oc get pods -A --field-selector=status.phase=Pending
+
+oc get pods -A | grep keycloak
+
+oc get co | awk 'NR==1 || $3!="True" || $5!="False"'
+
+oc get nodes
