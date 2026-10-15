@@ -17,3 +17,32 @@ ibmcloud oc cluster get -c carla-npr-tsp-ocw
 
 ibmcloud target -c 2779238 -r br-sao
 ibmcloud oc cluster get -c carla-npr-tsp-ocw
+
+
+************************
+
+
+
+CL=carla-npr-tsp-ocw
+
+echo "=== POOLS ==="
+ibmcloud oc worker-pool ls --cluster "$CL"
+
+echo "=== WORKERS ==="
+ibmcloud oc worker ls --cluster "$CL"
+
+echo "=== NODOS Y ZONAS ==="
+oc get nodes \
+  -L ibm-cloud.kubernetes.io/worker-pool-name \
+  -L topology.kubernetes.io/zone
+
+echo "=== CASSANDRA ==="
+oc get sts -A | grep -i cassandra || true
+
+echo "=== APIGEE DATASTORE ==="
+oc get apigeedatastores -A 2>/dev/null || true
+
+echo "=== HELM DATASTORE ==="
+helm list -A | grep -i datastore || true
+
+
