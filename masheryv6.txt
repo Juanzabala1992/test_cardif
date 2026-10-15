@@ -1,1 +1,5 @@
+oc get pod configui-deploy-debug-wbwnp \
+  -n lam-c-dev-mashery-v6 -o wide
 
+oc describe pod configui-deploy-debug-wbwnp \
+  -n lam-c-dev-mashery-v6 | tail -n 45
