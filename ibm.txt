@@ -8,3 +8,12 @@ oc whoami --show-server
 **************************
 
 ibmcloud oc cluster get -c carla-npr-tsp-ocw
+
+*************************************************
+
+ibmcloud target --unset-resource-group
+ibmcloud oc cluster get -c carla-npr-tsp-ocw
+
+
+ibmcloud target -c 2779238 -r br-sao
+ibmcloud oc cluster get -c carla-npr-tsp-ocw
