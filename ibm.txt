@@ -3,3 +3,8 @@ ibmcloud oc cluster ls | grep -i tsp
 
 echo "=== CONTEXTO OPENSHIFT ACTUAL ==="
 oc whoami --show-server
+
+
+**************************
+
+ibmcloud oc cluster get -c carla-npr-tsp-ocw
