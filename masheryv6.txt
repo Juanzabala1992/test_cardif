@@ -3,3 +3,69 @@ oc get pod configui-deploy-debug-wbwnp \
 
 oc describe pod configui-deploy-debug-wbwnp \
   -n lam-c-dev-mashery-v6 | tail -n 45
+
+******************************************************
+
+NS=lam-c-dev-mashery-v6
+
+IMG=$(oc get deploy configui-deploy -n "$NS" \
+  -o jsonpath='{.spec.template.spec.containers[?(@.name=="configui")].image}')
+
+echo "Imagen: $IMG"
+
+
+cat > /tmp/configui-inspect.yaml <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configui-inspect
+  namespace: $NS
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: inspector
+      image: "$IMG"
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "=== USUARIO ==="
+          id
+          echo "=== DIRECTORIOS ==="
+          ls -ld /usr /usr/local /usr/local/bin
+          echo "=== EJECUTABLES ==="
+          for f in /usr/local/bin/*config; do
+            [ -f "\$f" ] || continue
+            ls -l "\$f"
+            stat -c 'PERMISOS=%a UID=%u GID=%g' "\$f"
+            if [ -x "\$f" ]; then
+              echo "EJECUTABLE"
+            else
+              echo "SIN PERMISO DE EJECUCION"
+            fi
+          done
+      resources:
+        requests:
+          cpu: "25m"
+          memory: "64Mi"
+        limits:
+          cpu: "100m"
+          memory: "128Mi"
+EOF
+
+
+
+
+oc create -f /tmp/configui-inspect.yaml
+
+
+
+oc get pod configui-inspect -n "$NS"
+
+
+
+oc logs configui-inspect -n "$NS"
+
