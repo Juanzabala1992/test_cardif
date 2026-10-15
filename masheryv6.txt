@@ -30,3 +30,11 @@ oc get jobs -n "$NS" | grep -Ei 'NAME|loader-job'
 
 echo "=== CRONJOBS DE LOADER ==="
 oc get cronjobs -n "$NS" | grep -Ei 'NAME|loader'
+
+
+**********************************
+
+NS=lam-c-dev-mashery-v6
+
+oc get pods -n "$NS" -o wide | grep -E \
+'loader-job-(full-29867040|onprem-29866860|v6-2-1)'
