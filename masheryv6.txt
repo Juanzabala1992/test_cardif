@@ -8,3 +8,11 @@ oc get pods -n "$NS" -o wide | grep configui
 
 echo "=== REPLICASETS ==="
 oc get rs -n "$NS" | grep configui
+
+
+**********************************************
+
+oc describe pod \
+  -n lam-c-dev-mashery-v6 \
+  -l pod-template-hash=57799b5f89 \
+  | sed -n '/Events:/,$p'
