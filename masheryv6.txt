@@ -1,40 +1,15 @@
 NS=lam-c-dev-mashery-v6
 
-echo "=== TRAFFIC MANAGER ==="
-oc logs -n "$NS" deployment/trafficmanager-deploy \
-  -c trafficmanager --previous --tail=2000 2>&1 \
-  | grep -Ei -B 2 -A 3 \
-  'loader|register|exception|error|failed|timeout|connection' \
-  | tail -n 90
+for JOB in loader-job-full-29867040 loader-job-onprem-29866860; do
+  POD=$(oc get pods -n "$NS" -o name \
+    | grep "pod/$JOB-" | head -1 | cut -d/ -f2)
 
-echo "=== LOADER ==="
-oc logs -n "$NS" deployment/loader-deploy \
-  --since=30m --tail=1000 2>&1 \
-  | grep -Ei -B 2 -A 3 \
-  'error|exception|register|traffic|connection|timeout|failed' \
-  | tail -n 60
+  echo "===== $JOB ====="
 
-
-
-*****************************
-
-
-NS=lam-c-dev-mashery-v6
-
-echo "=== TTL DE LOADER ==="
-oc get cm loader-configmap -n "$NS" -o yaml \
-  | grep -in -C 3 'loaderCompletionTTL'
-
-echo "=== JOBS DE LOADER ==="
-oc get jobs -n "$NS" | grep -Ei 'NAME|loader-job'
-
-echo "=== CRONJOBS DE LOADER ==="
-oc get cronjobs -n "$NS" | grep -Ei 'NAME|loader'
-
-
-**********************************
-
-NS=lam-c-dev-mashery-v6
-
-oc get pods -n "$NS" -o wide | grep -E \
-'loader-job-(full-29867040|onprem-29866860|v6-2-1)'
+  if [ -n "$POD" ]; then
+    oc describe pod "$POD" -n "$NS" \
+      | sed -n '/Events:/,$p' | tail -n 15
+  else
+    echo "No se encontro pod"
+  fi
+done
