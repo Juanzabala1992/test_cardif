@@ -1,3 +1,27 @@
 oc get pod configui-inspect \
   -n lam-c-dev-mashery-v6 \
   -o jsonpath='{.status.containerStatuses[?(@.name=="inspector")].state.waiting.message}{"\n"}'
+
+
+
+
+**********************
+
+NS=lam-c-dev-mashery-v6
+
+IMG=$(oc get deploy configui-deploy -n "$NS" \
+  -o jsonpath='{.spec.template.spec.containers[?(@.name=="configui")].image}')
+
+DIR=$(mktemp -d /tmp/configui-check.XXXXXX)
+
+oc image extract "$IMG" \
+  --path="/usr/local/bin/mlconfig:$DIR"
+
+
+
+ls -l "$DIR/mlconfig"
+stat -c 'Permisos: %a (%A)' "$DIR/mlconfig"
+
+
+
+oc delete pod configui-inspect -n "$NS"
