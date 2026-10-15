@@ -89,6 +89,33 @@ oc get pods -n "$NS" | grep -E \
 ****************************
 
 
+
+
+NS=lam-c-dev-mashery-v6
+
+oc debug deployment/configui-deploy -n "$NS" -- /bin/sh -c '
+echo "=== USUARIO ==="
+id
+
+echo "=== DIRECTORIOS ==="
+ls -ld /usr /usr/local /usr/local/bin
+
+echo "=== EJECUTABLE ==="
+ls -l /usr/local/bin/*config 2>/dev/null
+
+echo "=== PERMISOS ==="
+for f in /usr/local/bin/*config; do
+  [ -f "$f" ] || continue
+  stat -c "%a %U:%G %n" "$f"
+  if [ -x "$f" ]; then
+    echo "EJECUTABLE"
+  else
+    echo "SIN PERMISO DE EJECUCION"
+  fi
+done
+'
+
+
 oc describe pod configui-deploy-68f7b98d4b-pd5rq \
   -n lam-c-dev-mashery-v6 | tail -n 65
 
