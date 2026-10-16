@@ -1,4 +1,8 @@
 NS=lam-c-dev-mashery-v6
 
-oc get secrets -n "$NS" \
-  | grep -Ei 'configui|cert|tls|ssl|key|mashery'
+oc get secret configui-certificate-secret \
+  -n "$NS" \
+  -o go-template='{{index .data "tml-cm-crt.pem"}}' \
+  | base64 -d \
+  | openssl x509 -noout \
+    -subject -issuer -dates -ext subjectAltName
