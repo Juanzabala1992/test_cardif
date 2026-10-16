@@ -1,8 +1,8 @@
 NS=lam-c-dev-mashery-v6
 
-oc get secret configui-certificate-secret \
-  -n "$NS" \
-  -o go-template='{{index .data "tml-cm-crt.pem"}}' \
-  | base64 -d \
-  | openssl x509 -noout \
-    -subject -issuer -dates -ext subjectAltName
+echo "=== RUTAS ==="
+oc get routes -n "$NS" \
+  -o custom-columns=NAME:.metadata.name,HOST:.spec.host,SERVICE:.spec.to.name,TLS:.spec.tls.termination
+
+echo "=== SERVICIOS CONFIGUI ==="
+oc get svc -n "$NS" | grep -Ei 'configui|config'
