@@ -1,49 +1,39 @@
 NS=lam-c-dev-mashery-v6
+umask 077
 
-(
-  set -e
-  set -o pipefail
-  umask 077
+T=$(mktemp -d /dev/shm/configui-tls.XXXXXX) || exit 1
 
-  BACKUP="$HOME/backup-mashery/configui-original-$(date +%Y%m%d-%H%M%S)"
+openssl genpkey -algorithm RSA \
+  -pkeyopt rsa_keygen_bits:3072 \
+  -out "$T/tml-cm-key.pk8"
 
-  mkdir -p "$BACKUP"
-  chmod 700 "$BACKUP"
+openssl req -new -x509 -sha256 -days 30 \
+  -key "$T/tml-cm-key.pk8" \
+  -out "$T/tml-cm-crt.pem" \
+  -subj "/CN=configui-svc.${NS}.svc" \
+  -addext "subjectAltName=DNS:configui-svc,DNS:configui-svc.${NS},DNS:configui-svc.${NS}.svc,DNS:configui-svc.${NS}.svc.cluster.local"
 
-  echo "=== RESPALDANDO SECRETS ==="
 
-  oc get secret configui-certificate-secret \
-    -n "$NS" -o json \
-    > "$BACKUP/configui-certificate-secret.json"
+****************************************
 
-  oc get secret configui-key-secret \
-    -n "$NS" -o json \
-    > "$BACKUP/configui-key-secret.json"
 
-  echo "=== RESPALDANDO CERTIFICADO ==="
+KEY_HASH=$(openssl pkey \
+  -in "$T/tml-cm-key.pk8" \
+  -pubout -outform DER | openssl dgst -sha256)
 
-  oc get secret configui-certificate-secret \
-    -n "$NS" \
-    -o go-template='{{index .data "tml-cm-crt.pem"}}' \
-    | base64 -d > "$BACKUP/tml-cm-crt.pem"
+CERT_HASH=$(openssl x509 \
+  -in "$T/tml-cm-crt.pem" \
+  -pubkey -noout | \
+  openssl pkey -pubin -outform DER | \
+  openssl dgst -sha256)
 
-  echo "=== RESPALDANDO CLAVE PRIVADA ORIGINAL ==="
+if [ "$KEY_HASH" = "$CERT_HASH" ] && [ -n "$KEY_HASH" ]; then
+  echo "CERTIFICADO Y CLAVE COINCIDEN"
+else
+  echo "ERROR: CERTIFICADO Y CLAVE NO COINCIDEN"
+fi
 
-  oc get secret configui-key-secret \
-    -n "$NS" \
-    -o go-template='{{index .data "tml-cm-key.pk8"}}' \
-    | base64 -d > "$BACKUP/tml-cm-key.pk8"
+head -n 1 "$T/tml-cm-key.pk8"
 
-  chmod 600 "$BACKUP"/*
-
-  echo "=== VALIDANDO CERTIFICADO ==="
-
-  openssl x509 -in "$BACKUP/tml-cm-crt.pem" \
-    -noout -subject -dates
-
-  echo "=== ARCHIVOS RESPALDADOS ==="
-
-  ls -lh "$BACKUP"
-
-  echo "RESPALDO GUARDADO EN: $BACKUP"
-)
+openssl x509 -in "$T/tml-cm-crt.pem" \
+  -noout -subject -dates -ext subjectAltName
