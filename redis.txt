@@ -1,49 +1,5 @@
-oc get deployment redis-enterprise-operator \
-  -n bra-c-dev-redis \
-  -o jsonpath='{range .spec.template.spec.containers[*]}{.name}{" : "}{.image}{"\n"}{end}'
-
-
-***********************
-
-oc get subscriptions,csv,installplans \
-  -n bra-c-dev-redis
-
-
-oc get subscription -n bra-c-dev-redis \
-  -o custom-columns=NAME:.metadata.name,INSTALLED:.status.installedCSV,CURRENT:.status.currentCSV,CHANNEL:.spec.channel,APPROVAL:.spec.installPlanApproval
-
-oc get rec rec -n bra-c-dev-redis \
-  -o jsonpath='{.spec.upgradeSpec.autoUpgradeRedisEnterprise}{"\n"}'
-
-
-************************************
-
-oc get subscriptions -A \
-  -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,INSTALLED:.status.installedCSV,CURRENT:.status.currentCSV,CHANNEL:.spec.channel,APPROVAL:.spec.installPlanApproval \
+oc get packagemanifests -n openshift-marketplace \
   | grep -i redis
 
 
-oc get csv redis-enterprise-operator.v7.8.6-1.2 \
-  -n bra-c-dev-redis \
-  -o jsonpath='Phase={.status.phase} Reason={.status.reason}{"\n"}'
-
-********************************+
-
-oc get deployment redis-enterprise-operator \
-  -n bra-c-dev-redis -o yaml \
-  | grep -E 'olm.owner|meta.helm.sh|managed-by'
-
-
-
-oc get operatorgroup -n bra-c-dev-redis -o wide
-
-
-******************************************
-
-
-oc get secret configui-certificate-secret \
-  -n lam-c-dev-mashery-v6 \
-  -o go-template='{{index .data "tml-cm-crt.pem"}}' \
-  | base64 -d \
-  | openssl x509 -noout -subject -issuer -dates
-
+oc version
