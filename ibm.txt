@@ -1,3 +1,323 @@
+#!/usr/bin/env bash
+# PREFLIGHT RHEL 8 -> RHCOS, IBM Cloud OpenShift PROD - salida en PANTALLAS.
+# VERSION 3.0, 2026-10-19
+# SOLO LECTURA. No crea archivos, no guarda reportes, no crea nodos,
+# no hace cordon/drain, no modifica objetos/Helm ni accede al contenido de Secrets.
+# Debe ejecutarse con ibmcloud y oc YA configurados para el cluster deseado.
+set -uo pipefail
+export LC_ALL=C
+
+CL="${CL:-${1:-}}"
+APNS="${APNS:-}"               # Namespace de Apigee (opcional; se intenta detectar)
+POOL="${POOL:-}"               # Opcional para detallar un pool concreto
+NEW_POOL="${NEW_POOL:-}"       # Solo referencia, NO CREA pool
+VPC_ID="${VPC_ID:-}"           # Si se conoce, permite consultar detalles de la VPC
+export VPC_ID
+PAGINA="${PAGINA:-TODAS}"      # TODAS o 1..10
+FILAS="${FILAS:-13}"          # Lineas de informacion por fotografia
+RUN_NODETOOL="${RUN_NODETOOL:-1}" # nodetool status: solo lectura
+LIMITE="${LIMITE:-0}"         # No limita filas: el paginador muestra TODOS los resultados
+
+usage() {
+  cat <<'EOF'
+Uso: CL='cluster-PROD' APNS=apigee bash Preflight_RHCOS_PROD_PANTALLAS.sh
+
+Muestra textos en la terminal y PAUSA para tomar fotos; no genera ningun archivo.
+  PAGINA=4    Muestra solo el bloque 4 (validacion de recursos).
+  POOL=nombre PAGINA=2  Detalles del pool indicado.
+  VPC_ID=... PAGINA=3  Detalles opcionales de VPC.
+  FILAS=10     Muestra solo 10 lineas por foto (pantalla pequena).
+  RUN_NODETOOL=0  No ejecuta el comando de diagnostico de Cassandra.
+
+Bloques: 1 contexto, 2 pools, 3 VPC/subredes, 4 nodos/capacidad,
+5 aplicaciones por nodo, 6 PVC/PV/zonas, 7 afinidades,
+8 operadores/PDB/errores, 9 Apigee/Cassandra/Helm, 10 cierre/checklist.
+EOF
+}
+if [[ "$CL" == "-h" || "$CL" == "--help" ]]; then usage; exit 0; fi
+if [[ -z "$CL" ]]; then usage; exit 2; fi
+if [[ "$PAGINA" != "TODAS" && ! "$PAGINA" =~ ^(10|[1-9])$ ]]; then
+  echo "ERROR: PAGINA debe ser TODAS o 1..10"; exit 2
+fi
+if [[ ! "$FILAS" =~ ^[0-9]+$ ]] || ((FILAS < 8 || FILAS > 50)); then
+  echo 'ERROR: FILAS debe estar entre 8 y 50'; exit 2
+fi
+for dep in oc ibmcloud jq; do
+  if ! command -v "$dep" >/dev/null 2>&1; then
+    echo "ERROR: falta $dep. Instalala o ejecuta en IBM Cloud Shell."; exit 2
+  fi
+done
+if ! oc get nodes --request-timeout=20s -o name >/dev/null 2>&1; then
+  echo 'ERROR: el contexto oc no puede consultar los nodos. Revisar oc login/contexto.'
+  exit 3
+fi
+
+# Emite SOLO el texto filtrado del comando. Ninguna salida se almacena en archivos.
+raw() {
+  local titulo="$1" rc=0 out; shift
+  printf '\n-- %s --\n' "$titulo"
+  out="$("$@" 2>&1)" || rc=$?
+  if ((rc)); then
+    printf '[NO DISPONIBLE, rc=%d] %s\n' "$rc" "$(printf '%s\n' "$out" | head -n 2)"
+  elif [[ -n "$out" ]]; then printf '%s\n' "$out";
+  else echo '(sin resultados)'; fi
+}
+json() {
+  local titulo="$1" filtro="$2" rc=0 out; shift 2
+  printf '\n-- %s --\n' "$titulo"
+  out="$("$@" 2>&1)" || rc=$?
+  if ((rc)); then
+    printf '[NO DISPONIBLE, rc=%d] %s\n' "$rc" "$(printf '%s\n' "$out" | head -n 2)"
+    return 0
+  fi
+  if ! jq -e . >/dev/null 2>&1 <<< "$out"; then
+    echo '[SIN JSON] La herramienta devolvio datos no compatibles.'
+    return 0
+  fi
+  jq -r "$filtro" <<< "$out" 2>&1 || echo '[ERROR de parseo jq; enviar fotografia]'
+}
+
+# Devuelve pools desde etiquetas reales de Kubernetes.
+list_pools() {
+  oc get nodes -o json 2>/dev/null | jq -r '
+    [.items[]?.metadata.labels["ibm-cloud.kubernetes.io/worker-pool-name"] // empty]
+    | unique[]' 2>/dev/null || true
+}
+
+b1() {
+  echo 'CONTEXTO IBM CLOUD + OPENSHIFT'
+  echo "Cluster solicitado: $CL"
+  raw 'Target IBM (cuenta, region, resource group)' ibmcloud target
+  raw 'API de oc en esta sesion' oc whoami --show-server
+  raw 'Contexto Kubernetes' oc config current-context
+  json 'Version de OpenShift' '
+    .items[]? | "Version deseada="+(.spec.desired.version//"-")+" disponible="+([.status.conditions[]?|select(.type=="Available")|.status][0]//"?")' \
+    oc get clusterversion -o json
+  raw 'Ficha del cluster IBM (comparar con la cuenta PROD)' ibmcloud oc cluster get --cluster "$CL"
+  echo 'VERIFICAR MANUALMENTE: CLI, cuenta, API y cluster deben ser exactamente PROD.'
+}
+
+b2() {
+  echo 'POOLS IBM - OS, CIFRADO KMS/CRK, CAPACIDAD, LABELS'
+  raw 'Todos los pools' ibmcloud oc worker-pool ls --cluster "$CL"
+  local p pools
+  if [[ -n "$POOL" ]]; then
+    pools="$POOL"
+  else
+    pools="$(list_pools)"
+  fi
+  if [[ -z "$pools" ]]; then
+    echo '[AVISO] No se pudieron detectar los nombres de pools.'
+    echo 'Usar POOL=nombre_exacto PAGINA=2 para leer su detalle.'
+    return 0
+  fi
+  while IFS= read -r p; do
+    [[ -z "$p" ]] && continue
+    raw "Pool: $p (incluye OS, flavor, KMS, CRK, labels)" ibmcloud oc worker-pool get --cluster "$CL" --worker-pool "$p"
+    raw "Zonas y subredes: $p" ibmcloud oc worker-pool zones --cluster "$CL" --worker-pool "$p"
+  done <<< "$pools"
+  raw 'Estado de aprovisionamiento workers IBM' ibmcloud oc worker ls --cluster "$CL"
+}
+
+b3() {
+  echo 'RED / VPC / SUBREDES / SECURITY GROUPS'
+  raw 'Cluster IBM - recursos de red' ibmcloud oc cluster get --cluster "$CL" --show-resources
+  local p pools
+  pools="$(list_pools)"
+  while IFS= read -r p; do
+    [[ -z "$p" ]] && continue
+    raw "Subredes asociadas al pool: $p" ibmcloud oc worker-pool zones --cluster "$CL" --worker-pool "$p"
+  done <<< "$pools"
+  if [[ -n "$VPC_ID" ]]; then
+    json "VPC $VPC_ID - datos clave" '
+      {id,name,status,resource_group:(.resource_group.id//"-"),
+       address_prefix_management,classic_access,default_security_group:(.default_security_group.id//"-")}' \
+      ibmcloud is vpc "$VPC_ID" --output JSON
+    json 'Subredes de esta VPC (nombre / id / zona / CIDR / estado)' '
+      (if type=="array" then .[] else (.subnets//[])[] end)
+      | select((.vpc.id//.vpc_id//"")==env.VPC_ID)
+      | [.name,.id,(.zone.name//"-"),(.ipv4_cidr_block//"-"),(.status//"-")] | @tsv' \
+      ibmcloud is subnets --output JSON
+    json 'Grupos de seguridad de la VPC (nombre/id)' '
+      (if type=="array" then .[] else (.security_groups//[])[] end)
+      | [.name,.id,(.vpc.id//"-")] | @tsv' \
+      ibmcloud is security-groups --vpc "$VPC_ID" --output JSON
+    json 'Network ACL vinculadas a VPC (nombre / id)' '
+      (if type=="array" then .[] else (.network_acls//[])[] end)
+      | select((.vpc.id//.vpc_id//"")==env.VPC_ID)
+      | [.name,.id] | @tsv' \
+      ibmcloud is network-acls --output JSON
+    json 'Tablas de rutas VPC (nombre / id)' '
+      (if type=="array" then .[] else (.routing_tables//[])[] end)
+      | [.name,.id] | @tsv' \
+      ibmcloud is vpc-routing-tables "$VPC_ID" --output JSON
+    echo 'Si hay accesos IAM limitados, consultar las reglas SG/ACL por el equipo de red.'
+  else
+    echo 'Si VPC no aparece: anotar el ID e invocar VPC_ID=<id> PAGINA=3.'
+  fi
+}
+
+b4() {
+  echo 'NODOS, VERSION, ZONAS, CAPACIDAD Y TAINTS'
+  json 'Nodos (cada uno; Ready, OS, zona, pool, CPU, memoria)' '
+    "NODO | POOL | ZONA | OS | READY | CORDON | CPU | MEM alloc",
+    (.items[] | [
+      .metadata.name,
+      (.metadata.labels["ibm-cloud.kubernetes.io/worker-pool-name"]//"-"),
+      (.metadata.labels["topology.kubernetes.io/zone"]//"-"),
+      (.status.nodeInfo.osImage//"-"),
+      ([.status.conditions[]?|select(.type=="Ready")|.status][0]//"?"),
+      (.spec.unschedulable//false|tostring),
+      (.status.allocatable.cpu//"-"),
+      (.status.allocatable.memory//"-")
+    ]|@tsv)' oc get nodes -o json
+  json 'Labels de agendamiento y taints' '
+    .items[] | . as $n |
+    [$n.metadata.name,
+     ([$n.metadata.labels|to_entries[]?|select(.key|test("worker-pool|role|nodepool|dedicated|apigee";"i"))|"\(.key)=\(.value)"]|join(";")),
+     ([$n.spec.taints[]?|"\(.key):\(.effect)"]|join(";"))] | @tsv' oc get nodes -o json
+  raw 'Consumo instantaneo (si Metrics disponible)' oc adm top nodes
+}
+
+b5() {
+  echo 'PODS POR NODO - CONTAR CARGAS A MIGRAR'
+  json 'Resumen por worker (todos los pods / sin DaemonSet)' '
+    .items|group_by(.spec.nodeName//"SIN_NODO")[]
+    | [.[0].spec.nodeName//"SIN_NODO",
+       (length|tostring),
+       ([.[]|select(([.metadata.ownerReferences[]?.kind]|index("DaemonSet"))==null)]|length|tostring)]|@tsv' \
+    oc get pods -A -o json
+  json 'PODS que NO son DaemonSet (pod / nodo / namespace / owner)' '
+    .items[]|select(([.metadata.ownerReferences[]?.kind]|index("DaemonSet"))==null)
+    | [.spec.nodeName//"SIN_NODO",.metadata.namespace,.metadata.name,
+       ([.metadata.ownerReferences[]?|.kind+":"+.name]|join(",")),.status.phase] | @tsv' \
+    oc get pods -A -o json
+}
+
+b6() {
+  echo 'PVC/PV, ZONAS, RECLAIM POLICY, MONTES Y SNAPSHOTS'
+  json 'PVC: namespace, claim, PV, estado, capacidad' '
+    "NAMESPACE | PVC | PV | PHASE | CAPACITY | SC",
+    (.items[]|[.metadata.namespace,.metadata.name,
+     (.spec.volumeName//"-"),(.status.phase//"-"),
+     (.status.capacity.storage//.spec.resources.requests.storage//"-"),
+     (.spec.storageClassName//"-")]|@tsv)' \
+    oc get pvc -A -o json
+  json 'PV: claim, zona, storage class, reclaim (DELETE = RIESGO)' '
+    "NAMESPACE | CLAIM | PV | ZONAS | RECLAIM | STORAGE",
+    (.items[]|[(.spec.claimRef.namespace//"-"),(.spec.claimRef.name//"-"),
+     .metadata.name,
+     ([.spec.nodeAffinity.required.nodeSelectorTerms[]?.matchExpressions[]?
+       | select(.key|test("zone";"i"))|.values[]?]|unique|join(",")),
+     (.spec.persistentVolumeReclaimPolicy//"-"),(.spec.capacity.storage//"-")]|@tsv)' \
+    oc get pv -o json
+  json 'Pods que usan PVC: namespace / pod / worker / claim' '
+    .items[]|. as $pod|.spec.volumes[]?
+    | select(.persistentVolumeClaim.claimName?!=null)
+    | [$pod.metadata.namespace,$pod.metadata.name,
+       ($pod.spec.nodeName//"SIN_NODO"),.persistentVolumeClaim.claimName]|@tsv' \
+    oc get pods -A -o json
+  raw 'VolumeSnapshots (si CRD existe)' oc get volumesnapshots -A
+  json 'CSI node pods (validar en workers nuevos)' '
+    .items[] | select(.metadata.name|test("ibm-vpc-block-csi|file-csi|csi-node";"i"))
+    | [.metadata.name, (.status.phase//"?"),(.spec.nodeName//"SIN_NODO")] | @tsv' \
+    oc get pods -n kube-system -o json
+}
+
+b7() {
+  echo 'REGLAS DE SCHEDULING QUE BLOQUEAN MIGRACIONES'
+  json 'Deployment/StatefulSet con restricciones de pool, nodos, zona' '
+    .items[]|select(.kind=="Deployment" or .kind=="StatefulSet")
+    | . as $w
+    | ($w.spec.template.spec.nodeSelector//{}) as $ns
+    | ($w.spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution//{}) as $na
+    | select(($ns|length)>0 or ($na|length)>0)
+    | [$w.kind,$w.metadata.namespace,$w.metadata.name,
+       ("selector="+($ns|tojson)),("requiredAffinity="+($na|tojson))]|@tsv' \
+    oc get deployments,statefulsets -A -o json
+  json 'Taints relevantes en todos los nodes' '
+    .items[]|select((.spec.taints//[]|length)>0)
+    | [.metadata.name,([.spec.taints[]?|.key+":"+.effect]|join(","))]|@tsv' oc get nodes -o json
+  raw 'Autoscalers HPA' oc get hpa -A
+  raw 'Machines Config Pools' oc get mcp
+}
+
+b8() {
+  echo 'OPERADORES / PDB / REPLICAS / PODS FALLIDOS'
+  json 'Operadores NO saludables' '
+    .items[]|. as $c
+    | select(([.status.conditions[]?|select(.type=="Available")|.status][0]//"False")!="True"
+      or ([.status.conditions[]?|select(.type=="Degraded")|.status][0]//"True")!="False")
+    | [$c.metadata.name,
+      ([.status.conditions[]?|select(.type=="Available")|.status][0]//"?"),
+      ([.status.conditions[]?|select(.type=="Degraded")|.status][0]//"?")]|@tsv' \
+    oc get clusteroperators -o json
+  json 'PDB: permitido, actuales, deseados; cero requiere revisar aplicabilidad' '
+    .items[]|[.metadata.namespace,.metadata.name,
+      (.status.disruptionsAllowed//0|tostring),
+      (.status.currentHealthy//0|tostring),
+      (.status.desiredHealthy//0|tostring),
+      (.status.expectedPods//0|tostring)] | @tsv' oc get pdb -A -o json
+  json 'Deployments con replicas no listas' '
+    .items[]|select((.status.readyReplicas//0)<(.spec.replicas//1))
+    | [.metadata.namespace,.metadata.name,
+      (.status.readyReplicas//0|tostring)+"/"+(.spec.replicas//1|tostring)]|@tsv' \
+    oc get deploy -A -o json
+  json 'StatefulSets con replicas no listas' '
+    .items[]|select((.status.readyReplicas//0)<(.spec.replicas//1))
+    | [.metadata.namespace,.metadata.name,
+      (.status.readyReplicas//0|tostring)+"/"+(.spec.replicas//1|tostring)]|@tsv' \
+    oc get sts -A -o json
+  json 'Pods Pending, Failed o con container waiting (incl. image pull)' '
+    .items[]|. as $p
+    | ([$p.status.containerStatuses[]?|.state.waiting.reason? // empty]|unique) as $reasons
+    | select($p.status.phase=="Pending" or $p.status.phase=="Failed" or ($reasons|length)>0)
+    | [$p.metadata.namespace,$p.metadata.name,($p.status.phase//"?"),
+      ($reasons|join(",")),($p.spec.nodeName//"SIN_NODO")]|@tsv' \
+    oc get pods -A -o json
+  json 'Warning events: razon y cantidad, sin mensajes potencialmente sensibles' '
+    .items|group_by(.reason//"-")[]|[.[0].reason,(length|tostring)]|@tsv' \
+    oc get events -A --field-selector type=Warning -o json
+}
+
+b9() {
+  echo 'INTEGRATION: APIGEE/CASSANDRA/HELM/BACKUPS'
+  raw 'ApigeeDatastores encontrados' oc get apigeedatastores -A
+  local ns="$APNS"
+  if [[ -z "$ns" ]]; then
+    ns="$(oc get apigeedatastores -A -o json 2>/dev/null | jq -r '.items[0].metadata.namespace//empty' 2>/dev/null || true)"
+  fi
+  if [[ -z "$ns" ]]; then
+    echo 'NO SE DETECTO APIGEE: bloque no aplica o define APNS=<namespace>.'
+    return 0
+  fi
+  echo "Namespace Apigee detectado: $ns"
+  json 'ApigeeDatastore: status/estado' '
+    .items[]|[.metadata.name,
+      (.status.state//.status.currentState//.status.phase//"?"),
+      (.status.conditions//[]|map(.type+":"+.status)|join(","))]|@tsv' \
+    oc get apigeedatastores -n "$ns" -o json
+  json 'StatefulSet Cassandra: replicas, strategy y selector' '
+    .items[]|select(.metadata.name|test("cassandra";"i"))
+    | [.metadata.name, (.status.readyReplicas//0|tostring)+"/"+(.spec.replicas//1|tostring),
+      (.spec.updateStrategy.type//"?"),
+      (.spec.template.spec.nodeSelector//{}|tojson),
+      (.spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution//{}|tojson)]|@tsv' \
+    oc get sts -n "$ns" -o json
+  json 'Pods Cassandra en nodos actuales' '
+    .items[] | select(.metadata.name|test("cassandra";"i"))
+    | [.metadata.name,(.status.phase//"?"),(.spec.nodeName//"SIN_NODO"),
+       ([.status.containerStatuses[]?|select(.ready)]|length|tostring)+"/"+([.spec.containers[]?]|length|tostring)]|@tsv' \
+    oc get pods -n "$ns" -o json
+  json 'PDB Apigee' '
+    .items[]|[.metadata.name,(.status.disruptionsAllowed//0|tostring)]|@tsv' \
+    oc get pdb -n "$ns" -o json
+  if command -v helm >/dev/null 2>&1; then
+    raw 'Helm releases / version chart' helm list -n "$ns"
+    json 'Helm datastore SOLO campos scheduling/backup sin claves' '
+      {nodeSelector:(.nodeSelector//{}),
+       backup:{enabled:(.cassandra.backup.enabled//.backup.enabled//null),
+       schedule:(.cassandra.backup.schedule//null),
        cloudProvider:(.cassandra.backup.cloudProvider//null),
        dbStorageBucket:(.cassandra.backup.dbStorageBucket//null)}}' \
       helm get values datastore -n "$ns" -o json
