@@ -1,3 +1,3 @@
-oc adm node-logs worker0.saox1p0mocpc03.ext-latam-assurance.ocpdomain -u kubelet --since=-3h
-oc adm node-logs worker0.saox1p0mocpc03.ext-latam-assurance.ocpdomain -u kubelet --since=-3h | grep -Ei 'error|fail|timeout|notready|pleg|runtime|evict|pressure|killing' | tail -n 100
-oc adm node-logs worker0.saox1p0mocpc03.ext-latam-assurance.ocpdomain -u crio --since=-3h | grep -Ei 'error|fail|timeout|killing|stopping' | tail -n 100
+oc debug node/worker0.saox1p0mocpc03.ext-latam-assurance.ocpdomain -- chroot /host journalctl --list-boots
+
+oc adm node-logs worker0.saox1p0mocpc03.ext-latam-assurance.ocpdomain -u kubelet --since=-4h | grep -E 'Oct 19 18:1[0-3]:' | grep -Ei 'shutdown|reboot|drain|runtime|pleg|evict|error|fail|killing' | head -n 100
