@@ -1,33 +1,18 @@
-oc get pods -o wide
+oc adm top nodes
 
-oc get events --sort-by=.lastTimestamp | tail -n 80
-
-oc describe pod cache-set-0-0
-
-oc describe pod cass-set-0-0
-
-oc get nodes -o wide
-
-oc describe node <NOMBRE_DEL_NODO>
+oc adm top pods -A --sort-by=cpu | head -n 30
 
 
-
-***********************
-
-oc adm top pods --containers | grep cass-set
-
-oc get pods -o custom-columns='POD:.metadata.name,CPU_REQUEST:.spec.containers[*].resources.requests.cpu,CPU_LIMIT:.spec.containers[*].resources.limits.cpu,MEM_REQUEST:.spec.containers[*].resources.requests.memory,MEM_LIMIT:.spec.containers[*].resources.limits.memory' | grep -E 'POD|cass-set'
+oc adm top pods -n lam-c-prd-mashery562 --containers
 
 
-oc get pvc
-
-oc exec cass-set-0-0 -- df -h
-oc exec cass-set-0-1 -- df -h
-oc exec cass-set-0-2 -- df -h
+oc describe node <NOMBRE_DEL_WORKER>
 
 
-oc describe pod cass-set-0-0
+oc adm top nodes
 
+
+oc adm top pods -A --sort-by=cpu | head -n 30
 
 
 oc adm top pods --containers | grep cass-set
@@ -36,4 +21,3 @@ for p in cass-set-0-0 cass-set-0-1 cass-set-0-2; do
   echo "=== $p ==="
   oc get pod "$p" -o jsonpath='{range .spec.containers[*]}{.name}{" CPU_REQ="}{.resources.requests.cpu}{" CPU_LIM="}{.resources.limits.cpu}{" MEM_REQ="}{.resources.requests.memory}{" MEM_LIM="}{.resources.limits.memory}{"\n"}{end}'
 done
-
