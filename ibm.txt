@@ -495,3 +495,46 @@ oc get volumesnapshot -n apigee -o json | jq -r '
    | startswith("cassandra-data-"))] as $s
 | "TOTAL: \($s|length) READY: \([$s[] |
   select(.status.readyToUse == true)]|length)"'
+
+
+
+
+************************************************
+
+
+echo "=== ULTIMOS BACKUPS EXITOSOS ==="
+oc get jobs -n apigee -o json | jq -r '
+[.items[]
+ | select(.metadata.name |
+   startswith("apigee-cassandra-backup-"))
+ | select((.status.succeeded // 0) > 0)]
+| sort_by(.status.completionTime)
+| reverse | .[:3][]
+| [.metadata.name, .status.completionTime] | @tsv'
+
+echo "=== ULTIMO SNAPSHOT READY POR PVC ==="
+oc get volumesnapshot -n apigee -o json | jq -r '
+[.items[]
+ | select((.spec.source.persistentVolumeClaimName // "")
+   | startswith("cassandra-data-"))
+ | select(.status.readyToUse == true)]
+| group_by(.spec.source.persistentVolumeClaimName)[]
+| sort_by(.metadata.creationTimestamp)
+| last
+| [.spec.source.persistentVolumeClaimName,
+   .metadata.creationTimestamp] | @tsv'
+
+echo "=== CRONJOB BACKUP ==="
+oc get cronjob apigee-cassandra-backup -n apigee \
+  -o json | jq '{
+    suspendido: .spec.suspend,
+    programacion: .spec.schedule,
+    ultimoIntento: .status.lastScheduleTime,
+    plantillaSuspendida: .spec.jobTemplate.spec.suspend
+  }'
+
+echo "=== CHARTS HELM UTILIZADOS ==="
+helm list -n apigee -o json | jq -r '
+[.[] | .chart]
+| group_by(.)[]
+| "\(.[0]) x\(length)"'
