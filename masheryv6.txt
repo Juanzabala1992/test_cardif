@@ -1,34 +1,12 @@
-oc debug node/worker0.saox1p0mocpc03.ext-latam-assurance.ocpdomain -- chroot /host journalctl --list-boots
-
-oc adm node-logs worker0.saox1p0mocpc03.ext-latam-assurance.ocpdomain -u kubelet --since=-4h | grep -E 'Oct 19 18:1[0-3]:' | grep -Ei 'shutdown|reboot|drain|runtime|pleg|evict|error|fail|killing' | head -n 100}
+oc adm node-logs master0.saox1p0mocpc03.ext-latam-assurance.ocpdomain --path=kube-apiserver/audit.log
 
 
-
-
-sudo journalctl -u kubelet --since "2026-10-19 18:00:00 UTC" --until "2026-10-19 18:15:00 UTC" --no-pager | grep -Ei 'error|fail|runtime|shutdown|evict|stop|notready|pressure|pleg'
-
-*********************************
-
-sudo journalctl -u kubelet \
---since "2026-10-19 18:05:00" \
---until "2026-10-19 18:10:59" \
---no-pager | grep -Ei 'killing|stopping|terminat|delet|evict|shutdown|runtime|notready|error|fail' | tail -n 100
-
-
-sudo systemctl show kubelet crio \
--p Id -p ActiveEnterTimestamp -p ActiveState
-
-
-*************************************
-
-
-oc adm node-logs --role=master --path=kube-apiserver/
-
-
-
-oc adm node-logs master0.saox1p0mocpc03.ext-latam-assurance.ocpdomain --path=kube-apiserver/audit.log | jq -r '
+oc adm node-logs master0.saox1p0mocpc03.ext-latam-assurance.ocpdomain --path=kube-apiserver/audit-2026-10-19T18-27-41.840.log | jq -r '
 select(.requestReceivedTimestamp >= "2026-10-19T18:05:00Z" and .requestReceivedTimestamp <= "2026-10-19T18:15:00Z")
-| select(.objectRef.resource == "pods")
-| select(.verb == "delete" or .verb == "deletecollection" or .objectRef.subresource == "eviction")
-| [.requestReceivedTimestamp, .verb, .user.username, .objectRef.namespace, .objectRef.name] | @tsv'
-
+| select(
+    .objectRef.resource == "pods" and
+    (.verb == "delete" or .verb == "deletecollection" or
+    (.verb == "create" and .objectRef.subresource == "eviction"))
+  )
+| [.requestReceivedTimestamp, .verb, .user.username, .objectRef.namespace, .objectRef.name, .responseStatus.code]
+| @tsv'
