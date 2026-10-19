@@ -1,64 +1,113 @@
-echo "=== DOWNLOADS ==="
-oc rollout status deployment/downloads \
-  -n openshift-console --timeout=5m
+       cloudProvider:(.cassandra.backup.cloudProvider//null),
+       dbStorageBucket:(.cassandra.backup.dbStorageBucket//null)}}' \
+      helm get values datastore -n "$ns" -o json
+    raw 'Historial Helm datastore' helm history datastore -n "$ns"
+  else
+    echo '[FALTA HELM] Consultar release desde la terminal que tenga Helm.'
+  fi
+  json 'CronJobs Cassandra backup / suspend / plantilla suspend' '
+    .items[]|select(.metadata.name|test("cassandra.*backup|backup.*cassandra";"i"))
+    | [.metadata.name,(.spec.suspend//false|tostring),
+       (.spec.jobTemplate.spec.suspend//false|tostring),
+       (.status.lastScheduleTime//"-")]|@tsv' \
+    oc get cronjobs -n "$ns" -o json
+  json 'Jobs Cassandra backup recientes / completados' '
+    [.items[]|select(.metadata.name|test("cassandra.*backup|backup.*cassandra";"i"))]
+    | sort_by(.status.completionTime//.metadata.creationTimestamp)
+    | .[-12:][]
+    | [.metadata.name, (.status.succeeded//0|tostring),
+       (.status.failed//0|tostring),(.spec.suspend//false|tostring),
+       (.status.completionTime//"-")]|@tsv' \
+    oc get jobs -n "$ns" -o json
+  if [[ "$RUN_NODETOOL" == "1" ]]; then
+    raw 'Cassandra nodetool status (UN en todos)' \
+      oc exec -n "$ns" apigee-cassandra-default-0 -c apigee-cassandra -- \
+      bash -c 'nodetool -u cassandra -pw "$CASS_PASSWORD" status'
+  else
+    echo 'Nodetool omitido (RUN_NODETOOL=0).'
+  fi
+  echo 'ADVERTENCIA: JOB Completed NO demuestra backup externo recuperable.'
+}
 
-echo "=== NEXUS Y KEYCLOAK ==="
-oc get pods -A -o wide |
-grep -E 'keycloak-[01]|nexus-c'
+b10() {
+  echo 'CIERRE DEL PREFLIGHT - REVISION RAPIDA PARA PLAN PROD'
+  raw 'PODS TSP criticos (si existen): Keycloak, Nexus, downloads, Sonar' \
+    bash -c 'oc get pods -A -o wide | grep -Ei "keycloak|nexus|downloads|sonar|postgres|packageserver" || true'
+  raw 'RHCOS vs RHEL (lista resumida)' oc get nodes -o wide
+  json 'ALERTAS: nodos NotReady o sin scheduling' '
+    .items[]|. as $n
+    | select(([.status.conditions[]?|select(.type=="Ready")|.status][0]//"False")!="True" or (.spec.unschedulable//false))
+    | [.metadata.name,([.status.conditions[]?|select(.type=="Ready")|.status][0]//"?"),(.spec.unschedulable//false|tostring)]|@tsv' \
+    oc get nodes -o json
+  json 'ALERTAS: PDB con 0 interrupciones y pods protegidos' '
+    .items[]|select((.status.disruptionsAllowed//0)==0 and (.status.expectedPods//0)>0)
+    | [.metadata.namespace,.metadata.name,
+       (.status.currentHealthy//0|tostring)+"/"+(.status.desiredHealthy//0|tostring)]|@tsv' \
+    oc get pdb -A -o json
+  json 'ALERTAS: PVC no Bound' '
+    .items[]|select((.status.phase//"?")!="Bound")
+    | [.metadata.namespace,.metadata.name,(.status.phase//"-")]|@tsv' \
+    oc get pvc -A -o json
+  json 'ALERTAS: PV con politica Delete' '
+    [.items[]|select(.spec.claimRef!=null and .spec.persistentVolumeReclaimPolicy=="Delete")]|length
+    | "Total de PV reclamados con Delete: \(.) (NO BORRAR PVC/PV)"' \
+    oc get pv -o json
+  echo 'REVISION GO/NO-GO PARA EL CAMBIO:'
+  echo '[ ] IBM cuenta / region / API y nombre exacto de PROD'
+  echo '[ ] Pools actuales, SO/flavor/zonas/subredes/KMS/CRK/SG verificados'
+  echo '[ ] Volumenes zonales y nodos destino compatibles'
+  echo '[ ] PVC Delete protegidos, backups RESTAURABLES confirmados'
+  echo '[ ] PDB permiten evicciones; descargas imagenes y replica health'
+  echo '[ ] Apps criticas, DNS/CSI/ingress/operadores saludables'
+  echo '[ ] En Integration: Cassandra UN y helm chart+JSON PRODUCCION listos'
+  echo '[ ] Capacidades/limites VPC, costos nodos en paralelo aprobados'
+  echo '[ ] Change, ventana, responsables y rollback documentados'
+  echo 'IMPORTANTE: ESTE SCRIPT NO MUEVE NINGUN POD, NO CREA NODOS.'
+}
 
-echo "=== PDB QUE BLOQUEAN ==="
-oc get pdb -A -o json | jq -r '
-.items[]
-| select((.status.disruptionsAllowed // 0)==0)
-| [.metadata.namespace,.metadata.name] | @tsv'
+section() {
+  case "$1" in
+    1) b1 ;; 2) b2 ;; 3) b3 ;; 4) b4 ;; 5) b5 ;;
+    6) b6 ;; 7) b7 ;; 8) b8 ;; 9) b9 ;; 10) b10 ;;
+  esac
+}
 
+present() {
+  local num="$1" count i from to screen total rawtxt
+  local -a lines=()
+  rawtxt="$(section "$num")"
+  mapfile -t lines <<< "$rawtxt"
+  count="${#lines[@]}"
+  if ((count==0)); then lines=('Sin resultados'); count=1; fi
+  total=$(( (count + FILAS - 1) / FILAS ))
+  for (( i=0; i<total; i++ )); do
+    from=$((i * FILAS))
+    to=$((from + FILAS))
+    if ((to>count)); then to=$count; fi
+    if [[ -t 0 ]] && command -v clear >/dev/null 2>&1; then clear; fi
+    printf '\n====================================================\n'
+    printf 'PROD %s | BLOQUE %s/10 | FOTO %s/%s\n' "$CL" "$num" "$((i+1))" "$total"
+    printf '====================================================\n'
+    printf '%s\n' "${lines[@]:from:to-from}"
+    if [[ -t 0 ]]; then
+      printf '\n[HAZ FOTO] Enter: siguiente pantalla; Ctrl+C: salir. '
+      read -r _ || return 1
+    fi
+  done
+}
 
-**********************
-
-
-oc adm drain 10.130.12.22 \
-  --ignore-daemonsets \
-  --delete-emptydir-data \
-  --timeout=15m
-
-
-*********************
-
-echo "=== NODOS ==="
-oc get nodes
-
-echo "=== NEXUS ==="
-oc get pods -n lam-c-uat-devops -o wide
-
-echo "=== KEYCLOAK ==="
-oc get pods -A -o wide | grep keycloak
-
-echo "=== PVC ==="
-oc get pvc -A
-
-echo "=== OPERADORES ==="
-oc get co | awk 'NR==1 || $3!="True" || $5!="False"'
-
-
-**********************************
-
-
-oc rollout status deployment/nexus \
-  -n lam-c-uat-devops \
-  --timeout=5m
-
-oc get pods -n lam-c-uat-devops -o wide
-
-oc get pvc -A
-
-
-
-
-oc get events -n lam-c-uat-devops \
-  --sort-by=.lastTimestamp | tail -20
-
-
-
-ibmcloud oc worker-pool rm \
-  --cluster carla-npr-tsp-ocw \
-  --worker-pool default
+printf '\nPREFLIGHT PROD - SOLO LECTURA / SOLO TEXTO\n'
+printf 'Cluster: %s | Seccion: %s | Lineas/foto: %s\n' "$CL" "$PAGINA" "$FILAS"
+printf 'No se crean archivos ni se exporta informacion.\n'
+if [[ -t 0 ]]; then
+  printf 'Comprueba que el contexto oc y el target IBM corresponden a PROD.\n'
+  printf 'Escribe el nombre exacto del cluster para comenzar: '
+  read -r confirm || exit 3
+  [[ "$confirm" == "$CL" ]] || { echo 'Cancelado: nombre no coincide.'; exit 3; }
+fi
+if [[ "$PAGINA" == 'TODAS' ]]; then
+  for n in {1..10}; do present "$n" || break; done
+else
+  present "$PAGINA"
+fi
+printf '\nPREFLIGHT FINALIZADO - NO SE CAMBIO NADA EN EL CLUSTER.\n'
