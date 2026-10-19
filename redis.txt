@@ -1,3 +1,16 @@
 oc get deployment redis-enterprise-operator \
   -n bra-c-dev-redis \
   -o jsonpath='{range .spec.template.spec.containers[*]}{.name}{" : "}{.image}{"\n"}{end}'
+
+
+***********************
+
+oc get subscriptions,csv,installplans \
+  -n bra-c-dev-redis
+
+
+oc get subscription -n bra-c-dev-redis \
+  -o custom-columns=NAME:.metadata.name,INSTALLED:.status.installedCSV,CURRENT:.status.currentCSV,CHANNEL:.spec.channel,APPROVAL:.spec.installPlanApproval
+
+oc get rec rec -n bra-c-dev-redis \
+  -o jsonpath='{.spec.upgradeSpec.autoUpgradeRedisEnterprise}{"\n"}'
