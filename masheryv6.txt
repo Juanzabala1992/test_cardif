@@ -17,3 +17,18 @@ sudo journalctl -u kubelet \
 
 sudo systemctl show kubelet crio \
 -p Id -p ActiveEnterTimestamp -p ActiveState
+
+
+*************************************
+
+
+oc adm node-logs --role=master --path=kube-apiserver/
+
+
+
+oc adm node-logs master0.saox1p0mocpc03.ext-latam-assurance.ocpdomain --path=kube-apiserver/audit.log | jq -r '
+select(.requestReceivedTimestamp >= "2026-10-19T18:05:00Z" and .requestReceivedTimestamp <= "2026-10-19T18:15:00Z")
+| select(.objectRef.resource == "pods")
+| select(.verb == "delete" or .verb == "deletecollection" or .objectRef.subresource == "eviction")
+| [.requestReceivedTimestamp, .verb, .user.username, .objectRef.namespace, .objectRef.name] | @tsv'
+
