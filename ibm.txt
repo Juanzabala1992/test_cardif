@@ -443,3 +443,55 @@ else
   present "$PAGINA"
 fi
 printf '\nPREFLIGHT FINALIZADO - NO SE CAMBIO NADA EN EL CLUSTER.\n'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
++**************************
+
+
+
+echo "=== HELM DATASTORE ==="
+helm list -n apigee --filter '^datastore$'
+helm get values datastore -n apigee -o json |
+jq '.nodeSelector'
+
+echo "=== APIGEE DATASTORE ==="
+oc get apigeedatastores -n apigee
+
+echo "=== PDB APIGEE ==="
+oc get pdb -n apigee
+
+echo "=== BACKUPS CASSANDRA ==="
+oc get jobs -n apigee -o json | jq -r '
+[.items[]
+ | select(.metadata.name |
+   startswith("apigee-cassandra-backup-"))]
+| sort_by(.metadata.creationTimestamp)
+| reverse | .[:8][]
+| [.metadata.name,
+   (.status.succeeded // 0),
+   (.spec.suspend // false),
+   (.status.completionTime // "-")]
+| @tsv'
+
+echo "=== SNAPSHOTS CASSANDRA ==="
+oc get volumesnapshot -n apigee -o json | jq -r '
+[.items[]
+ | select((.spec.source.persistentVolumeClaimName // "")
+   | startswith("cassandra-data-"))] as $s
+| "TOTAL: \($s|length) READY: \([$s[] |
+  select(.status.readyToUse == true)]|length)"'
