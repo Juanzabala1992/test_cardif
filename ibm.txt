@@ -571,3 +571,29 @@ if [ -n "$JOB" ]; then
   echo "=== EVENTOS DEL JOB ==="
   oc describe job "$JOB" -n apigee | tail -25
 fi
+
+
+*******************************************
+
+
+JOB=apigee-cassandra-backup-29873040
+
+echo "=== LOGS DEL BACKUP ==="
+oc logs -n apigee job/"$JOB" \
+  --timestamps --tail=60
+
+echo "=== SNAPSHOTS RECIENTES ==="
+oc get volumesnapshot -n apigee -o json | jq -r '
+[.items[]
+ | select((.spec.source.persistentVolumeClaimName // "")
+   | startswith("cassandra-data-"))
+ | select((.metadata.creationTimestamp // "")
+   >= "2026-10-18T00:00:00Z")
+ | {
+     fecha: .metadata.creationTimestamp,
+     pvc: .spec.source.persistentVolumeClaimName,
+     ready: (.status.readyToUse // false),
+     error: (.status.error.message // "-")
+   }]
+| sort_by(.fecha) | reverse | .[:12][]
+| [.fecha,.pvc,.ready,.error] | @tsv'
