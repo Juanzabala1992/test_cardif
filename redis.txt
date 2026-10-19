@@ -90,4 +90,20 @@ oc logs -n "$NS" \
   -c configui --tail=60
 
 
+***************************
+
+NS=lam-c-dev-mashery-v6
+
+oc logs -n "$NS" deployment/configui-deploy \
+  -c configui --since=10m --tail=150 \
+  | grep -Ei 'FATAL|ERROR|invalid_request|credentials'
+
+
+
+oc get pod mysql-migra-masheryv6-6c89fd8b7d-vmgr4 \
+  -n "$NS" \
+  -o jsonpath='{range .spec.containers[?(@.name=="mysql")].volumeMounts[*]}{.name}{" -> "}{.mountPath}{"\n"}{end}'
+
+
+
 
