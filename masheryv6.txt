@@ -1,8 +1,30 @@
-NS=lam-c-dev-mashery-v6
+oc get pods -o wide
 
-echo "=== RUTAS ==="
-oc get routes -n "$NS" \
-  -o custom-columns=NAME:.metadata.name,HOST:.spec.host,SERVICE:.spec.to.name,TLS:.spec.tls.termination
+oc get events --sort-by=.lastTimestamp | tail -n 80
 
-echo "=== SERVICIOS CONFIGUI ==="
-oc get svc -n "$NS" | grep -Ei 'configui|config'
+oc describe pod cache-set-0-0
+
+oc describe pod cass-set-0-0
+
+oc get nodes -o wide
+
+oc describe node <NOMBRE_DEL_NODO>
+
+
+
+***********************
+
+oc adm top pods --containers | grep cass-set
+
+oc get pods -o custom-columns='POD:.metadata.name,CPU_REQUEST:.spec.containers[*].resources.requests.cpu,CPU_LIMIT:.spec.containers[*].resources.limits.cpu,MEM_REQUEST:.spec.containers[*].resources.requests.memory,MEM_LIMIT:.spec.containers[*].resources.limits.memory' | grep -E 'POD|cass-set'
+
+
+oc get pvc
+
+oc exec cass-set-0-0 -- df -h
+oc exec cass-set-0-1 -- df -h
+oc exec cass-set-0-2 -- df -h
+
+
+oc describe pod cass-set-0-0
+
