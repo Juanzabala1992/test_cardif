@@ -1,23 +1,5 @@
-oc adm top nodes
-
-oc adm top pods -A --sort-by=cpu | head -n 30
+oc get pods -n lam-c-prd-mashery562 -o wide
 
 
-oc adm top pods -n lam-c-prd-mashery562 --containers
+oc adm node-logs worker0.saox1p0mocpc03.ext-latam-assurance.ocpdomain -u kubelet --since=3h
 
-
-oc describe node <NOMBRE_DEL_WORKER>
-
-
-oc adm top nodes
-
-
-oc adm top pods -A --sort-by=cpu | head -n 30
-
-
-oc adm top pods --containers | grep cass-set
-
-for p in cass-set-0-0 cass-set-0-1 cass-set-0-2; do
-  echo "=== $p ==="
-  oc get pod "$p" -o jsonpath='{range .spec.containers[*]}{.name}{" CPU_REQ="}{.resources.requests.cpu}{" CPU_LIM="}{.resources.limits.cpu}{" MEM_REQ="}{.resources.requests.memory}{" MEM_LIM="}{.resources.limits.memory}{"\n"}{end}'
-done
