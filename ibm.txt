@@ -597,3 +597,45 @@ oc get volumesnapshot -n apigee -o json | jq -r '
    }]
 | sort_by(.fecha) | reverse | .[:12][]
 | [.fecha,.pvc,.ready,.error] | @tsv'
+
+
+*****************************************
+
+
+STAMP="20261019040003"
+
+echo "=== SNAPSHOTS DEL BACKUP ==="
+oc get volumesnapshot -n apigee -o json |
+jq -r --arg t "$STAMP" '
+.items[]
+| select(.metadata.name | contains($t))
+| [
+    .metadata.name,
+    .spec.source.persistentVolumeClaimName,
+    (.status.readyToUse // false),
+    (.status.boundVolumeSnapshotContentName // "-"),
+    (.status.error.message // "-")
+  ] | @tsv'
+
+echo "=== CONTENIDO DE SNAPSHOTS ==="
+oc get volumesnapshotcontent -o json |
+jq -r --arg t "$STAMP" '
+.items[]
+| select(
+    (.spec.volumeSnapshotRef.name // "")
+    | contains($t)
+  )
+| [
+    .metadata.name,
+    (.status.readyToUse // false),
+    (.status.error.message // "-")
+  ] | @tsv'
+
+echo "=== BACKUPS ACTIVOS ==="
+oc get jobs -n apigee -o json |
+jq -r '
+[.items[]
+| select(.metadata.name |
+    startswith("apigee-cassandra-backup-"))
+| select((.status.active // 0) > 0)]
+| length'
