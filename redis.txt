@@ -38,3 +38,12 @@ oc get deployment redis-enterprise-operator \
 oc get operatorgroup -n bra-c-dev-redis -o wide
 
 
+******************************************
+
+
+oc get secret configui-certificate-secret \
+  -n lam-c-dev-mashery-v6 \
+  -o go-template='{{index .data "tml-cm-crt.pem"}}' \
+  | base64 -d \
+  | openssl x509 -noout -subject -issuer -dates
+
