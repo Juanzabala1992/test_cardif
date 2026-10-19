@@ -1,7 +1,223 @@
 NS=lam-c-dev-mashery-v6
+POD=mysql-migra-masheryv6-6c89fd8b7d-vmgr4
+
+
+1. Error de base de datos MySQL
+A. Identificación del error de permisos
+Consultamos los logs de Platform API:
+oc logs -n "$NS" \
+  deployment/platformapi-deploy \
+  --tail=150
+
+
+Error encontrado:
+ERROR 1044 (42000):
+Access denied for user 'mashery'@'%'
+to database 'masherysolar'
+
+
+Después ingresamos a MySQL y validamos los permisos:
+oc rsh -n "$NS" "$POD"
+
+
+Dentro del pod:
+MYSQL_PWD="$MYSQL_PASSWORD" mysql \
+  -h "$MYSQL84_SERVICE_HOST" \
+  -P "$MYSQL84_SERVICE_PORT" \
+  -u "$MYSQL_USER"
+
+
+Consultamos:
+SHOW DATABASES LIKE 'mashery%';
+
+SELECT USER(), CURRENT_USER();
+
+SHOW GRANTS;
+
+USE masherysolar;
+
+
+Diagnóstico: inicialmente el usuario mashery únicamente tenía privilegios sobre mashery.*, mientras los componentes intentaban acceder a masherysolar.
+
+Posteriormente, comprobamos también con el usuario root que faltaba preparar correctamente esa base de datos.
+B. Identificación de las tablas faltantes
+Verificamos las tablas:
+SHOW TABLES FROM mashery;
+SHOW TABLES FROM masherysolar;
+
+
+Y encontramos el script principal:
+scripts/db/apim-le-db-schema_6.2.1.sql
+
+
+Se preparó masherysolar, se habilitaron los permisos correspondientes y se importó el esquema principal utilizando:
+oc exec -i -n "$NS" "$POD" -c mysql -- sh -c \
+'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot masherysolar' \
+< scripts/db/apim-le-db-schema_6.2.1.sql
+
+
+C. Segundo error: tablas de configuración inexistentes
+Después ejecutamos el Job de inicialización:
+oc logs -n "$NS" \
+  job/mashery-db-seed \
+  -c db-seed \
+  --tail=100
+
+
+Errores encontrados:
+ERROR 1146 (42S02):
+Table 'masherysolar.token_purge_settings' doesn't exist
+
+ERROR 1146 (42S02):
+Table 'masherysolar.counter_purge_settings' doesn't exist
+
+ERROR 1146 (42S02):
+Table 'masherysolar.batch_settings' doesn't exist
+
+
+Para localizar los archivos SQL responsables, utilizamos:
+grep -RniE \
+'CREATE TABLE.*(token_purge_settings|counter_purge_settings|batch_settings)' \
+scripts/db/
+
+
+Encontramos los tres scripts:
+Script	Tabla
+apim-le-db-audit-purger-schema_6.2.1.sql	batch_settings
+apim-le-db-counter-purger-schema_6.2.1.sql	counter_purge_settings
+apim-le-db-token-purger-schema_6.2.1.sql	token_purge_settings
+¿Qué hicimos para resolverlo?
+
+Respaldamos MySQL y aplicamos los tres esquemas complementarios:
+for TIPO in audit counter token; do
+  FILE="scripts/db/apim-le-db-${TIPO}-purger-schema_6.2.1.sql"
+
+  oc exec -i -n "$NS" "$POD" -c mysql -- sh -c \
+  'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot masherysolar' \
+  < "$FILE" || break
+done
+
+
+Estos scripts contienen operaciones DROP TABLE, por lo que únicamente se ejecutaron como parte de la recuperación y después del respaldo.
+
+También cargamos los datos de configuración faltantes de token y counter.
+
+El resultado fue que las tres tablas quedaron creadas y verificadas. Posteriormente conseguimos que MySQL y Platform API estuvieran en 1/1 Running.
+
+2. Primer error de ConfigUI: permisos del ejecutable
+A. Comando que identificó el error
+oc describe pod \
+  configui-deploy-68f7b98d4b-pd5rq \
+  -n "$NS" | tail -n 65
+
+
+Error encontrado:
+CreateContainerError
+
+runc create failed:
+exec: "/usr/local/bin/mlconfig":
+permission denied
+
+
+Esto indicaba que OpenShift no podía ejecutar el binario principal de ConfigUI.
+B. Comando que confirmó los permisos incorrectos
+Extrajimos el ejecutable directamente desde la imagen:
+IMG=$(oc get deploy configui-deploy -n "$NS" \
+  -o jsonpath='{.spec.template.spec.containers[?(@.name=="configui")].image}')
+
+DIR=$(mktemp -d /tmp/configui-check.XXXXXX)
+
+oc image extract "$IMG" \
+  --path="/usr/local/bin/mlconfig:$DIR"
+
+stat -c 'Permisos: %a (%A)' "$DIR/mlconfig"
+
+
+Resultado:
+Permisos: 640 (-rw-r-----)
+
+
+Esta fue la evidencia definitiva: el ejecutable mlconfig no tenía permiso de ejecución.
+C. ¿Qué hicimos para resolverlo?
+Construimos una imagen corregida utilizando Podman:
+FROM <imagen-original-configui>
+
+COPY --chmod=0755 mlconfig /usr/local/bin/mlconfig
+
+
+La construimos y publicamos con estos comandos:
+FIXED="${IMG%:*}:v6.2.1-fixexec"
+
+podman build \
+  -f "$DIR/Containerfile" \
+  -t "$FIXED" "$DIR"
+
+podman push "$FIXED"
+
+
+Actualizamos el Deployment:
+oc set image deployment/configui-deploy \
+  configui="$FIXED" \
+  -n "$NS"
+
+
+La nueva imagen consiguió ejecutar mlconfig, superando el CreateContainerError.
+
+Durante el despliegue también encontramos Insufficient cpu, por lo que liberamos la réplica anterior mediante un escalado controlado de ConfigUI a cero y luego a uno.
+
+3. Segundo error de ConfigUI: clave privada cifrada
+Una vez corregimos los permisos, ConfigUI consiguió iniciar, pero presentó un error diferente.
+A. Comando que identificó el error
+oc logs -n "$NS" \
+  deployment/configui-deploy \
+  -c configui \
+  --tail=60
+
+
+Error encontrado:
+FATAL /api/server.go:233:
+encrypted private key is not supported
+
+
+B. Comando que confirmó que la clave estaba cifrada
+Localizamos el Secret:
+oc get secret configui-key-secret \
+  -n "$NS" \
+  -o go-template='{{index .data "tml-cm-key.pk8"}}' \
+  | base64 -d | head -n 1
+
+
+Resultado:
+-----BEGIN ENCRYPTED PRIVATE KEY-----
+
+
+Después validamos el certificado original:
+oc get secret configui-certificate-secret \
+  -n "$NS" \
+  -o go-template='{{index .data "tml-cm-crt.pem"}}' \
+  | base64 -d \
+  | openssl x509 -noout -subject -issuer -dates
+
+
+Encontramos que el certificado original correspondía a:
+CN = *.example.com
+notAfter = Dec 14 00:20:08 2032 GMT
+
+
+El certificado no estaba vencido. El problema era que ConfigUI no soportaba la clave privada cifrada.
+C. ¿Qué hicimos para resolverlo?
+Primero respaldamos ambos Secrets:
+configui-certificate-secret
+configui-key-secret
+
+
+Como no disponíamos de la contraseña de la clave original, generamos un nuevo certificado temporal para el servicio interno de ConfigUI.
+
+Estos fueron los comandos principales:
+NS=lam-c-dev-mashery-v6
 umask 077
 
-T=$(mktemp -d /dev/shm/configui-tls.XXXXXX) || exit 1
+T=$(mktemp -d /dev/shm/configui-tls.XXXXXX)
 
 openssl genpkey -algorithm RSA \
   -pkeyopt rsa_keygen_bits:3072 \
@@ -14,96 +230,28 @@ openssl req -new -x509 -sha256 -days 30 \
   -addext "subjectAltName=DNS:configui-svc,DNS:configui-svc.${NS},DNS:configui-svc.${NS}.svc,DNS:configui-svc.${NS}.svc.cluster.local"
 
 
-********************************
+Validamos que certificado y clave coincidieran mediante sus claves públicas y hashes SHA-256.
 
-KEY_HASH=$(openssl pkey \
-  -in "$T/tml-cm-key.pk8" \
-  -pubout -outform DER | openssl dgst -sha256)
-
-CERT_HASH=$(openssl x509 \
-  -in "$T/tml-cm-crt.pem" \
-  -pubkey -noout | \
-  openssl pkey -pubin -outform DER | \
-  openssl dgst -sha256)
-
-if [ "$KEY_HASH" = "$CERT_HASH" ] && [ -n "$KEY_HASH" ]; then
-  echo "CERTIFICADO Y CLAVE COINCIDEN"
-else
-  echo "ERROR: CERTIFICADO Y CLAVE NO COINCIDEN"
-fi
-
-head -n 1 "$T/tml-cm-key.pk8"
-
-openssl x509 -in "$T/tml-cm-crt.pem" \
-  -noout -subject -dates -ext subjectAltName
+Resultados obtenidos:
+CERTIFICADO Y CLAVE COINCIDEN
+-----BEGIN PRIVATE KEY-----
 
 
-******************************************
-
-NS=lam-c-dev-mashery-v6
-
-echo "$T"
-
-ls -lh "$T/tml-cm-crt.pem" "$T/tml-cm-key.pk8"
+Posteriormente se actualizaron los Secrets configui-key-secret y configui-certificate-secret con el nuevo par criptográfico, conservando los respaldos originales.
 
 
 
+***********************************
 
+4. Resumen técnico de las correcciones
+Error identificado	Causa	Corrección realizada
+MySQL 1044 Access denied	Acceso insuficiente a masherysolar	Preparación del esquema y permisos
+MySQL 1146 Table doesn't exist	Faltaban tres tablas complementarias	Importación de scripts SQL de auditoría y purga
+ConfigUI permission denied	Ejecutable mlconfig con permisos 640	Nueva imagen v6.2.1-fixexec con permisos 755
+ConfigUI encrypted private key is not supported	Clave privada cifrada incompatible	Nuevo certificado y clave PKCS#8 sin cifrar
 
-(
-set -e
-set -o pipefail
+Finalmente reiniciamos únicamente ConfigUI de forma controlada.
 
-oc create secret generic configui-key-secret \
-  --from-file=tml-cm-key.pk8="$T/tml-cm-key.pk8" \
-  --dry-run=client -o json \
-| python3 -c 'import json,sys; print(json.dumps({"data":json.load(sys.stdin)["data"]}))' \
-| oc patch secret configui-key-secret \
-  -n "$NS" --type=merge --patch-file=/dev/stdin
-
-oc create secret generic configui-certificate-secret \
-  --from-file=tml-cm-crt.pem="$T/tml-cm-crt.pem" \
-  --dry-run=client -o json \
-| python3 -c 'import json,sys; print(json.dumps({"data":json.load(sys.stdin)["data"]}))' \
-| oc patch secret configui-certificate-secret \
-  -n "$NS" --type=merge --patch-file=/dev/stdin
-)
-
-
- No reinciar si falla
-
-
-oc scale deployment/configui-deploy \
-  -n "$NS" --replicas=0
-
-
-oc get pods -n "$NS" | grep configui
-
-
-oc scale deployment/configui-deploy \
-  -n "$NS" --replicas=1
-
-oc get pods -n "$NS" | grep configui
-
-oc logs -n "$NS" \
-  deployment/configui-deploy \
-  -c configui --tail=60
-
-
-***************************
-
-NS=lam-c-dev-mashery-v6
-
-oc logs -n "$NS" deployment/configui-deploy \
-  -c configui --since=10m --tail=150 \
-  | grep -Ei 'FATAL|ERROR|invalid_request|credentials'
-
-
-
-oc get pod mysql-migra-masheryv6-6c89fd8b7d-vmgr4 \
-  -n "$NS" \
-  -o jsonpath='{range .spec.containers[?(@.name=="mysql")].volumeMounts[*]}{.name}{" -> "}{.mountPath}{"\n"}{end}'
-
-
-
-
+El resultado observado fue:
+configui-deploy-57799b5f89-748hd
+1/1 Running
