@@ -538,3 +538,36 @@ helm list -n apigee -o json | jq -r '
 [.[] | .chart]
 | group_by(.)[]
 | "\(.[0]) x\(length)"'
+
+
+************************************************
+
+
+
+JOB=$(oc get jobs -n apigee -o json | jq -r '
+[.items[]
+ | select(.metadata.name |
+   startswith("apigee-cassandra-backup-"))]
+| sort_by(.metadata.creationTimestamp)
+| last | .metadata.name // empty')
+
+echo "=== ULTIMO JOB: $JOB ==="
+
+if [ -n "$JOB" ]; then
+  oc get job "$JOB" -n apigee -o json | jq '{
+    creado: .metadata.creationTimestamp,
+    suspendido: .spec.suspend,
+    activos: .status.active,
+    exitosos: .status.succeeded,
+    fallidos: .status.failed,
+    condiciones: .status.conditions
+  }'
+
+  echo "=== PODS DEL BACKUP ==="
+  oc get pods -n apigee \
+    -l "batch.kubernetes.io/job-name=$JOB" \
+    -o wide
+
+  echo "=== EVENTOS DEL JOB ==="
+  oc describe job "$JOB" -n apigee | tail -25
+fi
