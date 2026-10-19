@@ -1,5 +1,49 @@
-oc get packagemanifests -n openshift-marketplace \
-  | grep -i redis
+NS=lam-c-dev-mashery-v6
 
+(
+  set -e
+  set -o pipefail
+  umask 077
 
-oc version
+  BACKUP="$HOME/backup-mashery/configui-original-$(date +%Y%m%d-%H%M%S)"
+
+  mkdir -p "$BACKUP"
+  chmod 700 "$BACKUP"
+
+  echo "=== RESPALDANDO SECRETS ==="
+
+  oc get secret configui-certificate-secret \
+    -n "$NS" -o json \
+    > "$BACKUP/configui-certificate-secret.json"
+
+  oc get secret configui-key-secret \
+    -n "$NS" -o json \
+    > "$BACKUP/configui-key-secret.json"
+
+  echo "=== RESPALDANDO CERTIFICADO ==="
+
+  oc get secret configui-certificate-secret \
+    -n "$NS" \
+    -o go-template='{{index .data "tml-cm-crt.pem"}}' \
+    | base64 -d > "$BACKUP/tml-cm-crt.pem"
+
+  echo "=== RESPALDANDO CLAVE PRIVADA ORIGINAL ==="
+
+  oc get secret configui-key-secret \
+    -n "$NS" \
+    -o go-template='{{index .data "tml-cm-key.pk8"}}' \
+    | base64 -d > "$BACKUP/tml-cm-key.pk8"
+
+  chmod 600 "$BACKUP"/*
+
+  echo "=== VALIDANDO CERTIFICADO ==="
+
+  openssl x509 -in "$BACKUP/tml-cm-crt.pem" \
+    -noout -subject -dates
+
+  echo "=== ARCHIVOS RESPALDADOS ==="
+
+  ls -lh "$BACKUP"
+
+  echo "RESPALDO GUARDADO EN: $BACKUP"
+)
