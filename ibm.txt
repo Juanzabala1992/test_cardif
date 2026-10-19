@@ -1,3 +1,15 @@
+export CL="carla-prd-latam-ocw01"
+
+ibmcloud oc cluster config \
+  --cluster "$CL" --admin
+
+echo "$CL"
+
+FILAS=10 bash Preflight_RHCOS_PROD_PANTALLAS.sh
+
+
+
+
 #!/usr/bin/env bash
 # PREFLIGHT RHEL 8 -> RHCOS, IBM Cloud OpenShift PROD - salida en PANTALLAS.
 # VERSION 3.0, 2026-10-19
