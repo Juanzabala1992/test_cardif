@@ -1,11 +1,4 @@
-sudo journalctl -k \
---since "2026-10-19 17:30:00" \
---until "2026-10-19 18:15:00" \
---no-pager | grep -Ei 'oom|out of memory|killed process|memory cgroup|allocation failure|page allocation'
-
-
-
-sudo journalctl -u kubelet \
---since "2026-10-19 17:30:00" \
---until "2026-10-19 18:11:00" \
---no-pager | grep -Ei 'PLEG|runtime|timeout|notready|pressure|evict' | head -n 100
+sudo journalctl \
+--since "2026-10-19 17:40:00" \
+--until "2026-10-19 17:48:00" \
+-p warning --no-pager | tail -n 100
