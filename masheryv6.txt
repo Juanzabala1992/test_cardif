@@ -1,3 +1,8 @@
 oc debug node/worker0.saox1p0mocpc03.ext-latam-assurance.ocpdomain -- chroot /host journalctl --list-boots
 
-oc adm node-logs worker0.saox1p0mocpc03.ext-latam-assurance.ocpdomain -u kubelet --since=-4h | grep -E 'Oct 19 18:1[0-3]:' | grep -Ei 'shutdown|reboot|drain|runtime|pleg|evict|error|fail|killing' | head -n 100
+oc adm node-logs worker0.saox1p0mocpc03.ext-latam-assurance.ocpdomain -u kubelet --since=-4h | grep -E 'Oct 19 18:1[0-3]:' | grep -Ei 'shutdown|reboot|drain|runtime|pleg|evict|error|fail|killing' | head -n 100}
+
+
+
+
+sudo journalctl -u kubelet --since "2026-10-19 18:00:00 UTC" --until "2026-10-19 18:15:00 UTC" --no-pager | grep -Ei 'error|fail|runtime|shutdown|evict|stop|notready|pressure|pleg'
