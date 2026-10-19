@@ -27,4 +27,14 @@ oc get csv redis-enterprise-operator.v7.8.6-1.2 \
   -n bra-c-dev-redis \
   -o jsonpath='Phase={.status.phase} Reason={.status.reason}{"\n"}'
 
+********************************+
+
+oc get deployment redis-enterprise-operator \
+  -n bra-c-dev-redis -o yaml \
+  | grep -E 'olm.owner|meta.helm.sh|managed-by'
+
+
+
+oc get operatorgroup -n bra-c-dev-redis -o wide
+
 
