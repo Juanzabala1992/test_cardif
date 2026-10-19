@@ -14,3 +14,17 @@ oc get subscription -n bra-c-dev-redis \
 
 oc get rec rec -n bra-c-dev-redis \
   -o jsonpath='{.spec.upgradeSpec.autoUpgradeRedisEnterprise}{"\n"}'
+
+
+************************************
+
+oc get subscriptions -A \
+  -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,INSTALLED:.status.installedCSV,CURRENT:.status.currentCSV,CHANNEL:.spec.channel,APPROVAL:.spec.installPlanApproval \
+  | grep -i redis
+
+
+oc get csv redis-enterprise-operator.v7.8.6-1.2 \
+  -n bra-c-dev-redis \
+  -o jsonpath='Phase={.status.phase} Reason={.status.reason}{"\n"}'
+
+
