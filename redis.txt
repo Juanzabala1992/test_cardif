@@ -14,8 +14,7 @@ openssl req -new -x509 -sha256 -days 30 \
   -addext "subjectAltName=DNS:configui-svc,DNS:configui-svc.${NS},DNS:configui-svc.${NS}.svc,DNS:configui-svc.${NS}.svc.cluster.local"
 
 
-****************************************
-
+********************************
 
 KEY_HASH=$(openssl pkey \
   -in "$T/tml-cm-key.pk8" \
@@ -37,3 +36,4 @@ head -n 1 "$T/tml-cm-key.pk8"
 
 openssl x509 -in "$T/tml-cm-crt.pem" \
   -noout -subject -dates -ext subjectAltName
+
