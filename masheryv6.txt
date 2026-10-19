@@ -1,12 +1,11 @@
 sudo journalctl -k \
---since "2026-10-19 18:00:00" \
+--since "2026-10-19 17:30:00" \
 --until "2026-10-19 18:15:00" \
 --no-pager | grep -Ei 'oom|out of memory|killed process|memory cgroup|allocation failure|page allocation'
 
 
 
 sudo journalctl -u kubelet \
---since "2026-10-19 18:00:00" \
---until "2026-10-19 18:15:00" \
---no-pager | grep -Ei 'memorypressure|systemoom|oomkilled|eviction|evict|memory.available|threshold|memory pressure'
-
+--since "2026-10-19 17:30:00" \
+--until "2026-10-19 18:11:00" \
+--no-pager | grep -Ei 'PLEG|runtime|timeout|notready|pressure|evict' | head -n 100
