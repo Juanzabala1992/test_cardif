@@ -28,3 +28,12 @@ oc exec cass-set-0-2 -- df -h
 
 oc describe pod cass-set-0-0
 
+
+
+oc adm top pods --containers | grep cass-set
+
+for p in cass-set-0-0 cass-set-0-1 cass-set-0-2; do
+  echo "=== $p ==="
+  oc get pod "$p" -o jsonpath='{range .spec.containers[*]}{.name}{" CPU_REQ="}{.resources.requests.cpu}{" CPU_LIM="}{.resources.limits.cpu}{" MEM_REQ="}{.resources.requests.memory}{" MEM_LIM="}{.resources.limits.memory}{"\n"}{end}'
+done
+
