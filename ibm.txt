@@ -638,21 +638,9 @@ tail -20
 
 
 
-echo "=== RESOURCE GROUP DEL CLUSTER ==="
-ibmcloud resource group CARLA-PRD-WORKLOAD-RG
+echo "=== RESOURCE GROUP PREDETERMINADO ==="
+ibmcloud resource groups --default
 
-echo "=== RESOURCE GROUPS DE LA CUENTA ==="
-ibmcloud resource groups
-
-echo "=== SNAPSHOT CLASS DE APIGEE ==="
-oc get volumesnapshotclass hybrid-snapshot-v3 \
-  -o json | jq '{
-    driver,
-    parameters,
-    deletionPolicy
-  }'
-
-echo "=== VERSION CSI ADDON ==="
-ibmcloud ks cluster addon ls \
-  --cluster carla-prd-latam-ocw01 |
-grep vpc-block-csi
+echo "=== VERSIONES CSI DISPONIBLES ==="
+ibmcloud oc cluster addon versions |
+grep vpc-block-csi-driver
