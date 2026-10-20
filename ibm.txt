@@ -462,185 +462,22 @@ printf '\nPREFLIGHT FINALIZADO - NO SE CAMBIO NADA EN EL CLUSTER.\n'
 
 +**************************
 
+***********************************************
 
 
-echo "=== HELM DATASTORE ==="
-helm list -n apigee --filter '^datastore$'
-helm get values datastore -n apigee -o json |
-jq '.nodeSelector'
-
-echo "=== APIGEE DATASTORE ==="
-oc get apigeedatastores -n apigee
-
-echo "=== PDB APIGEE ==="
-oc get pdb -n apigee
-
-echo "=== BACKUPS CASSANDRA ==="
-oc get jobs -n apigee -o json | jq -r '
-[.items[]
- | select(.metadata.name |
-   startswith("apigee-cassandra-backup-"))]
-| sort_by(.metadata.creationTimestamp)
-| reverse | .[:8][]
-| [.metadata.name,
-   (.status.succeeded // 0),
-   (.spec.suspend // false),
-   (.status.completionTime // "-")]
-| @tsv'
-
-echo "=== SNAPSHOTS CASSANDRA ==="
-oc get volumesnapshot -n apigee -o json | jq -r '
-[.items[]
- | select((.spec.source.persistentVolumeClaimName // "")
-   | startswith("cassandra-data-"))] as $s
-| "TOTAL: \($s|length) READY: \([$s[] |
-  select(.status.readyToUse == true)]|length)"'
-
-
-
-
-************************************************
-
-
-echo "=== ULTIMOS BACKUPS EXITOSOS ==="
-oc get jobs -n apigee -o json | jq -r '
-[.items[]
- | select(.metadata.name |
-   startswith("apigee-cassandra-backup-"))
- | select((.status.succeeded // 0) > 0)]
-| sort_by(.status.completionTime)
-| reverse | .[:3][]
-| [.metadata.name, .status.completionTime] | @tsv'
-
-echo "=== ULTIMO SNAPSHOT READY POR PVC ==="
-oc get volumesnapshot -n apigee -o json | jq -r '
-[.items[]
- | select((.spec.source.persistentVolumeClaimName // "")
-   | startswith("cassandra-data-"))
- | select(.status.readyToUse == true)]
-| group_by(.spec.source.persistentVolumeClaimName)[]
-| sort_by(.metadata.creationTimestamp)
-| last
-| [.spec.source.persistentVolumeClaimName,
-   .metadata.creationTimestamp] | @tsv'
-
-echo "=== CRONJOB BACKUP ==="
-oc get cronjob apigee-cassandra-backup -n apigee \
-  -o json | jq '{
-    suspendido: .spec.suspend,
-    programacion: .spec.schedule,
-    ultimoIntento: .status.lastScheduleTime,
-    plantillaSuspendida: .spec.jobTemplate.spec.suspend
-  }'
-
-echo "=== CHARTS HELM UTILIZADOS ==="
-helm list -n apigee -o json | jq -r '
-[.[] | .chart]
-| group_by(.)[]
-| "\(.[0]) x\(length)"'
-
-
-************************************************
-
-
-
-JOB=$(oc get jobs -n apigee -o json | jq -r '
-[.items[]
- | select(.metadata.name |
-   startswith("apigee-cassandra-backup-"))]
-| sort_by(.metadata.creationTimestamp)
-| last | .metadata.name // empty')
-
-echo "=== ULTIMO JOB: $JOB ==="
-
-if [ -n "$JOB" ]; then
-  oc get job "$JOB" -n apigee -o json | jq '{
-    creado: .metadata.creationTimestamp,
-    suspendido: .spec.suspend,
-    activos: .status.active,
-    exitosos: .status.succeeded,
-    fallidos: .status.failed,
-    condiciones: .status.conditions
-  }'
-
-  echo "=== PODS DEL BACKUP ==="
-  oc get pods -n apigee \
-    -l "batch.kubernetes.io/job-name=$JOB" \
-    -o wide
-
-  echo "=== EVENTOS DEL JOB ==="
-  oc describe job "$JOB" -n apigee | tail -25
-fi
-
-
-*******************************************
-
-
-JOB=apigee-cassandra-backup-29873040
-
-echo "=== LOGS DEL BACKUP ==="
-oc logs -n apigee job/"$JOB" \
-  --timestamps --tail=60
-
-echo "=== SNAPSHOTS RECIENTES ==="
-oc get volumesnapshot -n apigee -o json | jq -r '
-[.items[]
- | select((.spec.source.persistentVolumeClaimName // "")
-   | startswith("cassandra-data-"))
- | select((.metadata.creationTimestamp // "")
-   >= "2026-10-18T00:00:00Z")
- | {
-     fecha: .metadata.creationTimestamp,
-     pvc: .spec.source.persistentVolumeClaimName,
-     ready: (.status.readyToUse // false),
-     error: (.status.error.message // "-")
-   }]
-| sort_by(.fecha) | reverse | .[:12][]
-| [.fecha,.pvc,.ready,.error] | @tsv'
-
-
-*****************************************
-
-
-echo "=== SNAPSHOT BLOQUEADO ==="
-
-SNAP=$(oc get volumesnapshot -n apigee -o json |
+echo "=== MOUNTS CASSANDRA ==="
+oc get pod apigee-cassandra-default-0 \
+  -n apigee -o json |
 jq -r '
-.items[]
-| select(.metadata.name | contains("20261019040003"))
-| .metadata.name' | head -1)
+.spec.containers[]
+| select(.name=="apigee-cassandra")
+| .volumeMounts[]
+| [.name,.mountPath] | @tsv'
 
-echo "Snapshot: $SNAP"
-
-if [ -n "$SNAP" ]; then
-  oc describe volumesnapshot "$SNAP" \
-    -n apigee | tail -30
-fi
-
-echo "=== CSI SNAPSHOTTER ==="
-oc logs -n kube-system \
-  ibm-vpc-block-csi-controller-0 \
-  -c csi-snapshotter \
-  --since=24h --tail=1000 |
-grep -Ei 'error|fail|snapshot|timeout|deadline' |
-tail -20
-
-echo "=== CSI DRIVER ==="
-oc logs -n kube-system \
-  ibm-vpc-block-csi-controller-0 \
-  -c iks-vpc-block-driver \
-  --since=24h --tail=1000 |
-grep -Ei 'error|fail|snapshot|timeout|deadline' |
-tail -20
-
-
-*******************************************
-
-
-
-echo "=== RESOURCE GROUP PREDETERMINADO ==="
-ibmcloud resource groups --default
-
-echo "=== VERSIONES CSI DISPONIBLES ==="
-ibmcloud oc cluster addon versions |
-grep vpc-block-csi-driver
+echo "=== ESPACIO DE LOS 3 PODS ==="
+for i in 0 1 2; do
+  echo "CASSANDRA-$i"
+  oc exec -n apigee \
+    apigee-cassandra-default-$i \
+    -c apigee-cassandra -- df -h
+done
