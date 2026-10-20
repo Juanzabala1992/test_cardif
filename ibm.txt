@@ -602,40 +602,20 @@ oc get volumesnapshot -n apigee -o json | jq -r '
 *****************************************
 
 
-STAMP="20261019040003"
+echo "=== CONTROLADORES CSI ==="
+oc get pods -A |
+grep -Ei 'snapshot-controller|vpc-block-csi-controller'
 
-echo "=== SNAPSHOTS DEL BACKUP ==="
-oc get volumesnapshot -n apigee -o json |
-jq -r --arg t "$STAMP" '
-.items[]
-| select(.metadata.name | contains($t))
-| [
-    .metadata.name,
-    .spec.source.persistentVolumeClaimName,
-    (.status.readyToUse // false),
-    (.status.boundVolumeSnapshotContentName // "-"),
-    (.status.error.message // "-")
-  ] | @tsv'
-
-echo "=== CONTENIDO DE SNAPSHOTS ==="
-oc get volumesnapshotcontent -o json |
-jq -r --arg t "$STAMP" '
-.items[]
-| select(
-    (.spec.volumeSnapshotRef.name // "")
-    | contains($t)
-  )
-| [
-    .metadata.name,
-    (.status.readyToUse // false),
-    (.status.error.message // "-")
-  ] | @tsv'
+echo "=== EVENTOS STORAGE ==="
+oc get events -A --sort-by=.lastTimestamp |
+grep -Ei 'snapshot|csi|failedcreate' |
+tail -20
 
 echo "=== BACKUPS ACTIVOS ==="
-oc get jobs -n apigee -o json |
-jq -r '
-[.items[]
+oc get jobs -n apigee -o json | jq -r '
+.items[]
 | select(.metadata.name |
-    startswith("apigee-cassandra-backup-"))
-| select((.status.active // 0) > 0)]
-| length'
+  startswith("apigee-cassandra-backup-"))
+| select((.status.active // 0) > 0)
+| [.metadata.name, .metadata.creationTimestamp]
+| @tsv'
