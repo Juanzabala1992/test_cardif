@@ -602,20 +602,33 @@ oc get volumesnapshot -n apigee -o json | jq -r '
 *****************************************
 
 
-echo "=== CONTROLADORES CSI ==="
-oc get pods -A |
-grep -Ei 'snapshot-controller|vpc-block-csi-controller'
+echo "=== SNAPSHOT BLOQUEADO ==="
 
-echo "=== EVENTOS STORAGE ==="
-oc get events -A --sort-by=.lastTimestamp |
-grep -Ei 'snapshot|csi|failedcreate' |
+SNAP=$(oc get volumesnapshot -n apigee -o json |
+jq -r '
+.items[]
+| select(.metadata.name | contains("20261019040003"))
+| .metadata.name' | head -1)
+
+echo "Snapshot: $SNAP"
+
+if [ -n "$SNAP" ]; then
+  oc describe volumesnapshot "$SNAP" \
+    -n apigee | tail -30
+fi
+
+echo "=== CSI SNAPSHOTTER ==="
+oc logs -n kube-system \
+  ibm-vpc-block-csi-controller-0 \
+  -c csi-snapshotter \
+  --since=24h --tail=1000 |
+grep -Ei 'error|fail|snapshot|timeout|deadline' |
 tail -20
 
-echo "=== BACKUPS ACTIVOS ==="
-oc get jobs -n apigee -o json | jq -r '
-.items[]
-| select(.metadata.name |
-  startswith("apigee-cassandra-backup-"))
-| select((.status.active // 0) > 0)
-| [.metadata.name, .metadata.creationTimestamp]
-| @tsv'
+echo "=== CSI DRIVER ==="
+oc logs -n kube-system \
+  ibm-vpc-block-csi-controller-0 \
+  -c iks-vpc-block-driver \
+  --since=24h --tail=1000 |
+grep -Ei 'error|fail|snapshot|timeout|deadline' |
+tail -20
