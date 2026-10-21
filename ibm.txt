@@ -546,3 +546,22 @@ ibmcloud target -r br-sao \
 ibmcloud target
 
 oc config current-context
+
+
+**************************
+
+
+R="$HOME/apigee-runtime-lote/RESUMEN-20261021_065127.txt"
+L="$HOME/apigee-runtime-lote/ejecucion-20261021_065127.log"
+
+echo "=== MOTIVO DE PARADA ==="
+head -n 10 "$R"
+
+echo "=== ULTIMOS EVENTOS ==="
+grep -Ei \
+'SIGUIENTE RELEASE|DETENIDO|FALLO|ERROR|COMPLETADO HELM' \
+"$L" | tail -15
+
+echo "=== ESTADO APIGEE ==="
+oc get apigeeenv -n apigee \
+  -o custom-columns=NAME:.metadata.name,STATE:.status.state
