@@ -159,3 +159,11 @@ jq '{
 echo "=== RESOURCE GROUP ==="
 ibmcloud resource groups |
 grep -i CARLA-PRD-WORKLOAD
+
+
+**************************
+
+
+ibmcloud oc cluster get \
+  --cluster carla-prd-latam-ocw01 |
+grep -i 'Resource Group'
