@@ -98,3 +98,34 @@ oc get nodes \
 
 
 bash ~/Migracion_RHCOS_Integration_PROD_Asistida.sh preflight
+
+
+
+*************************************
+
+
+tmux attach -t migracion-prod
+
+
+
+
+SRC="$HOME/Migracion_RHCOS_Integration_PROD_Asistida.sh"
+FIX="$HOME/Migracion_RHCOS_Integration_PROD_POR_RELEASE.sh"
+
+cp "$SRC" "$FIX"
+
+sed -i \
+  -e 's@apigee-rhcos-prod-charts@apigee-rhcos-prod-por-release@' \
+  -e 's@localchart="${chart%-${CHART_VERSION}}"@localchart="$rel"@' \
+  "$FIX"
+
+echo "=== CONFIGURACION ==="
+grep -nE 'CHART_HOME=|localchart=' "$FIX"
+
+echo "=== VALIDACION ==="
+bash -n "$FIX" && echo "SCRIPT CORREGIDO OK"
+
+echo "=== CHART OPERATOR ==="
+test -f "$HOME/apigee-rhcos-prod-por-release/operator/Chart.yaml" \
+  && echo "CHART RECUPERADO OK"
+
