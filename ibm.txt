@@ -141,3 +141,31 @@ oc get node "$NODE" -o jsonpath='{range .status.addresses[*]}{.type}{"="}{.addre
 
 
 oc get pod -n apigee apigee-hybrid-helm-guardrail-datastore -o jsonpath='{.spec.dnsPolicy}{"\n"}'
+
+
+
+***************************
+
+
+NODE=$(oc get pod -n apigee \
+apigee-hybrid-helm-guardrail-datastore \
+-o jsonpath='{.spec.nodeName}')
+
+echo "===== NODO ====="
+echo "$NODE"
+
+echo "===== DNS CLUSTER ====="
+oc get dns.operator/default \
+-o jsonpath='{.status.clusterIP}{"\n"}'
+
+echo "===== DNS NODE RESOLVER ====="
+oc -n openshift-dns get ds/node-resolver \
+-o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="NAMESERVER")].value}{"\n"}'
+
+echo "===== RED CASSANDRA ====="
+oc get pod -n apigee apigee-cassandra-default-0 \
+-o jsonpath='{.spec.hostNetwork}{" "}{.spec.dnsPolicy}{"\n"}'
+
+echo "===== RESOLUCION HOSTNAME ====="
+oc exec -n apigee apigee-cassandra-default-0 \
+-c apigee-cassandra -- getent hosts "$NODE"
