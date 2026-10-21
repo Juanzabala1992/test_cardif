@@ -2,3 +2,31 @@
 
 
 kube_node_status_condition{node=~"worker0.*",condition="MemoryPressure",status="true"}
+
+
+
+Se identificó el error 1044 - Access denied en los componentes de Mashery, debido a que la aplicación intentaba acceder a masherysolar, base que no estaba creada y sobre la cual el usuario no tenía permisos.
+
+Se creó la base, se configuraron los permisos y se importó el esquema principal con 133 tablas.
+
+Posteriormente se identificaron errores 1146 - Table doesn't exist en el Job de inicialización, por tres tablas faltantes. Se importaron los esquemas complementarios y se completó la carga de datos.
+
+
+Traffic Manager
+
+
+Se encontraron Jobs de Loader bloqueados en Pending por falta de CPU disponible en los workers.
+
+Se ajustaron las solicitudes de CPU y se ejecutaron satisfactoriamente las cargas Onprem y Full, obteniendo respuestas 200 OK.
+
+En Traffic Manager también se identificó la ausencia del archivo .trustStorePassword, por lo que se corrigió el Secret correspondiente.
+
+
+ConfigUI
+
+
+Inicialmente presentaba CreateContainerError debido a que el ejecutable mlconfig tenía permisos 640. Se generó y publicó una imagen corregida con permisos de ejecución 755.
+
+Posteriormente se identificó el error encrypted private key is not supported.
+
+Se respaldaron los certificados originales y se generó un nuevo certificado temporal para el servicio interno, con clave privada compatible. Después de actualizar los Secrets, ConfigUI alcanzó 1/1 Running.
