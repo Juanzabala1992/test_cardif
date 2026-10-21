@@ -190,6 +190,13 @@ oc get pods -n openshift-marketplace -o wide
 **************************
 
 
+
+oc get pods -n openshift-marketplace \
+  -o custom-columns=NAME:.metadata.name,STATUS:.status.phase,SELECTOR:.spec.nodeSelector
+
+oc describe pod community-operators-1-d4w6c \
+  -n openshift-marketplace | tail -n 18
+
 oc get pods -n openshift-marketplace -o wide
 
 POD=$(oc get pods -n openshift-marketplace -o name | grep '^pod/certified-operators-1-' | head -1)
