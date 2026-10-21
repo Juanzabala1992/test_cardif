@@ -279,3 +279,27 @@ oc adm drain 10.110.44.4 \
   --timeout=5m
 
 
+***********************************************
+
+
+echo "=== WORKERS DEL POOL ANTIGUO ==="
+ibmcloud oc worker ls \
+  --cluster carla-prd-latam-ocw01 \
+  --worker-pool apigee-runtime
+
+echo "=== OPERADORES ==="
+oc get co
+
+echo "=== APIGEE ==="
+oc get apigeeenv -n apigee
+
+echo "=== REGISTRY Y CSI ==="
+oc get deploy image-registry -n openshift-image-registry
+oc get sts ibm-vpc-block-csi-controller -n kube-system
+
+
+
+ibmcloud oc zone rm \
+  --cluster carla-prd-latam-ocw01 \
+  --worker-pool apigee-runtime \
+  --zone br-sao-3
