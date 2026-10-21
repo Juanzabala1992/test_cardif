@@ -31,3 +31,23 @@ ibmcloud oc worker-pool create vpc-gen2 \
 
 ibmcloud oc worker-pool ls --cluster "$CL"
 
+
+***************************
+
+
+CL=carla-prd-latam-ocw01
+
+for P in apigee-data-rhcos apigee-runtime-rhcos; do
+  echo "=== $P ==="
+
+  ibmcloud oc worker-pool get \
+    --cluster "$CL" \
+    --worker-pool "$P"
+
+  ibmcloud oc worker-pool zones \
+    --cluster "$CL" \
+    --worker-pool "$P"
+done
+
+
+
