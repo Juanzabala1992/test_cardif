@@ -120,3 +120,24 @@ for i in 0 1 2; do
   echo "===== Cassandra $i ====="
   oc exec -n apigee "apigee-cassandra-default-$i" -- hostname -i
 done
+
+
+
+
+
+
+
+————
+
+
+NODE=$(oc get pod -n apigee apigee-hybrid-helm-guardrail-datastore -o jsonpath='{.spec.nodeName}')
+
+echo "NODO: $NODE"
+
+oc get node "$NODE" -o jsonpath='{range .status.addresses[*]}{.type}{"="}{.address}{"\n"}{end}'
+
+
+
+
+
+oc get pod -n apigee apigee-hybrid-helm-guardrail-datastore -o jsonpath='{.spec.dnsPolicy}{"\n"}'
