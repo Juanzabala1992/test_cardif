@@ -649,3 +649,20 @@ oc get apigeeenv -n apigee \
 
 echo "=== MEMORIA CLOUD SHELL ==="
 free -h
+
+
+*********************************
+
+
+
+echo "=== PODS MX-MTLS ==="
+oc get pods -n apigee -o wide |
+grep -E 'NAME|prod-mx-mtls-246af4d'
+
+echo "=== PROCESOS ACTIVOS ==="
+ps -eo pid,etime,args |
+grep -E '[m]igracion_runtime_lote|[h]elm upgrade'
+
+echo "=== NODOS ==="
+oc get nodes \
+-L ibm-cloud.kubernetes.io/worker-pool-name
