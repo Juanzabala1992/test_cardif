@@ -719,3 +719,23 @@ for R in apigee-latam-prd prod-br-env prod-br-group telemetry; do
   echo "========== $R =========="
   tail -n 8 "$DIR/$R.log"
 done
+
+
+
+*****************************************
+
+
+echo "=== BUSCANDO ARCHIVOS ==="
+
+find "$HOME" -type f \( \
+  -name 'apigee-latam-prd-apigee-watcher.json' -o \
+  -name 'apigee-latam-prd-apigee-udca.json' -o \
+  -name 'keystore_prod-mtls-27.pem' -o \
+  -name 'apigee-latam-prd-apigee-metrics.json' \
+\) -print
+
+echo "=== TODOS LOS ERRORES HELM ==="
+
+grep -hoE \
+  "'[^']+' is either an empty file or unreachable" \
+  "$HOME"/helm-dryruns/*.log | sort -u
