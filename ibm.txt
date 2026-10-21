@@ -119,3 +119,14 @@ oc patch catalogsource certified-operators-1 \
 
 oc get pods -n openshift-marketplace -o wide
 oc get catalogsource -n openshift-marketplace
+
+
+**********************************
+
+
+
+oc logs -n openshift-marketplace certified-operators-1-dk67b -c registry-server --previous --tail=30
+
+oc get catalogsource certified-operators-1 -n openshift-marketplace -o jsonpath='{.spec.image}{"\n"}{.spec.grpcPodConfig.securityContextConfig}{"\n"}'
+
+oc get pod certified-operators-1-dk67b -n openshift-marketplace -o jsonpath='{.metadata.annotations.openshift\.io/scc}{"\n"}'
