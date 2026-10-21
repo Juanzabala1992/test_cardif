@@ -401,3 +401,18 @@ for ((n=1; n<=26; n++)); do
   [[ "$n" -lt 26 ]] || { REASON='limite de pasos alcanzado'; exit 1; }
 done
 
+
+
+#########################
+
+
+for R in $(helm list -n apigee -o json |
+  jq -r '.[] | select(.name!="datastore") | .name'); do
+
+  V=$(helm get values "$R" -n apigee -o json |
+    jq -r '.nodeSelector.apigeeRuntime.value // "-"')
+
+  if [ "$V" = "apigee-runtime-rhcos" ]; then
+    echo "YA ACTUALIZADO: $R"
+  fi
+done
