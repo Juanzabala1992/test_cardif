@@ -692,3 +692,30 @@ while IFS=$'\t' read -r REL CHART; do
 done
 
 echo "=== SIMULACIONES FINALIZADAS ==="
+
+
+**************************************************
+
+CL=carla-prd-latam-ocw01
+
+ibmcloud target -r br-sao \
+  -g CARLA-PRD-WORKLOAD-RG
+
+oc config current-context
+
+ibmcloud oc worker-pool ls --cluster "$CL"
+
+oc get nodes
+
+
+
+*********************************
+
+
+
+DIR="$HOME/helm-dryruns"
+
+for R in apigee-latam-prd prod-br-env prod-br-group telemetry; do
+  echo "========== $R =========="
+  tail -n 8 "$DIR/$R.log"
+done
