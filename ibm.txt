@@ -619,24 +619,11 @@ esac
 
 
 
-F="$HOME/Migracion_RHCOS_Integration_PROD_Asistida.sh"
+ibmcloud target -r br-sao
 
-cp "$F" "$F.bak"
+ibmcloud target
 
-sed -i '1s/^GRACION ASISTIDA:/# MIGRACION ASISTIDA:/' "$F"
-
-sed -i '1i#!/usr/bin/env bash' "$F"
+oc config current-context
 
 
-
-
-
-head -n 3 "$F"
-
-wc -lc "$F"
-
-bash -n "$F" && echo "SINTAXIS OK"
-
-
-
-bash "$F" plan
+bash ~/Migracion_RHCOS_Integration_PROD_Asistida.sh plan
