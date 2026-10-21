@@ -49,5 +49,23 @@ for P in apigee-data-rhcos apigee-runtime-rhcos; do
     --worker-pool "$P"
 done
 
+*************************
 
+CL=carla-prd-latam-ocw01
+
+for P in apigee-data-rhcos apigee-runtime-rhcos; do
+
+  echo "=== POOL: $P ==="
+
+  ibmcloud oc worker-pool get \
+    --cluster "$CL" \
+    --worker-pool "$P"
+
+  echo "=== ZONAS: $P ==="
+
+  ibmcloud oc worker-pool zones \
+    --cluster "$CL" \
+    --worker-pool "$P"
+
+done
 
