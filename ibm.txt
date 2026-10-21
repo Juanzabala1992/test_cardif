@@ -117,3 +117,18 @@ grep '/clean-snapshot-' | head -1)
 
 oc describe -n apigee "$S" | \
 sed -n '/Events:/,$p'
+
+
+****************************
+
+echo "=== BACKUP CONFIGURADO ==="
+oc get cronjob -n apigee apigee-cassandra-backup \
+-o jsonpath='{.spec.jobTemplate.spec.template.spec.nodeSelector}{"\n"}{.spec.jobTemplate.spec.template.spec.affinity}{"\n"}'
+
+echo "=== JOBS DE LIMPIEZA ==="
+oc get cronjob -n apigee \
+-o custom-columns=NAME:.metadata.name,IMAGE:.spec.jobTemplate.spec.template.spec.containers[*].image
+
+echo "=== SECRET REGISTRY ==="
+oc get secret -n apigee secret-reg-apigee \
+--ignore-not-found
