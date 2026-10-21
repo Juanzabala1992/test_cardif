@@ -93,3 +93,107 @@ find "$HOME" -maxdepth 4 \
 bash -n ~/Migracion_RHCOS_Integration_PROD_Asistida.sh
 
 bash ~/Migracion_RHCOS_Integration_PROD_Asistida.sh plan
+
+
+
+########################################################
+
+
+
+
+
+#!/usr/bin/env bash
+# MIGRACION ASISTIDA: IBM OpenShift -> RHCOS, Apigee Hybrid 1.15.1 (Integration PROD).
+# Modos: plan | charts | preflight | runtime-next | runtime-one RELEASE | cassandra | drain NODO | estado.
+# No crea workers, no borra PVC/PV, no elimina pools, no cambia backups.
+# Un Helm upgrade exitoso NO garantiza que los pods ya se hayan movido.
+set -Eeuo pipefail
+umask 077
+
+CL='carla-prd-latam-ocw01'
+NS='apigee'
+OLD_DATA='apigee-data'
+OLD_RUNTIME='apigee-runtime'
+NEW_DATA="${NEW_DATA:-apigee-data-rhcos}"
+NEW_RUNTIME="${NEW_RUNTIME:-apigee-runtime-rhcos}"
+ACCOUNT='CARLA-PRD-INTEGRATION'
+CHART_VERSION='1.15.1'
+CHART_HOME="${CHART_HOME:-$HOME/apigee-rhcos-prod-charts}"
+LOG_HOME="${LOG_HOME:-$HOME/apigee-rhcos-prod-ejecucion}"
+LABEL_POOL='ibm-cloud.kubernetes.io/worker-pool-name'
+MODE="${1:-help}"
+
+say(){ printf '\n>>> %s\n' "$*"; }
+stop(){ printf '\nDETENIDO: %s\n' "$*" >&2; exit 1; }
+require(){ command -v "$1" >/dev/null 2>&1 || stop "falta el comando $1"; }
+confirm(){ local expected="$1" text; printf '\nESCRIBE EXACTAMENTE [%s] PARA CONTINUAR: ' "$expected"; read -r text; [[ "$text" == "$expected" ]] || stop 'no se confirmó la operación'; }
+help_text(){ cat <<'HELP'
+  INTEGRATION PROD / APIGEE 1.15.1 - MIGRACION RHEL8 -> RHCOS (ASISTIDA)
+
+  bash Migracion_RHCOS_Integration_PROD_Asistida.sh plan
+       Inventario de releases Helm, selectores y configuración. NO CAMBIA NADA.
+
+  bash Migracion_RHCOS_Integration_PROD_Asistida.sh charts
+       Descarga charts oficiales Apigee 1.15.1 en Cloud Shell (NO cambia cluster).
+       Si el chart requiere archivos JSON PROD, deben proceder de la bóveda autorizada.
+
+  bash Migracion_RHCOS_Integration_PROD_Asistida.sh preflight
+       Requiere los 6 workers NUEVOS listos, correctamente etiquetados y cifrados.
+
+  bash Migracion_RHCOS_Integration_PROD_Asistida.sh runtime-next
+       Simula y, tras confirmar, actualiza UN release de runtime pendiente.
+       Repetir hasta que plan no muestre releases runtime pendientes.
+
+  bash Migracion_RHCOS_Integration_PROD_Asistida.sh runtime-one NOMBRE_RELEASE
+       Simula y actualiza solo el release indicado (no datastore).
+
+  bash Migracion_RHCOS_Integration_PROD_Asistida.sh cassandra
+       Simula / actualiza datastore (NO reinicia ni borra pods a la fuerza).
+       Requiere aceptación específica del riesgo SIN backup reciente.
+
+  bash Migracion_RHCOS_Integration_PROD_Asistida.sh drain NOMBRE_NODO_ANTIGUO
+       Cordona + intenta evacuar un nodo RHEL antiguo, con PDB, sin --force.
+       Ejecutar sólo al final, uno a la vez.
+
+  bash Migracion_RHCOS_Integration_PROD_Asistida.sh estado
+       Resumen de workers, Cassandra, Apigee, pods restantes en nodos antiguos.
+
+IMPORTANTE:
+ - Verificar cuenta / contexto de producción y ejecutar ibmcloud target -r br-sao ANTES.
+ - Los nombres de nuevos pools pueden sobreescribirse con NEW_DATA y NEW_RUNTIME.
+ - NO CONTINUAR sin change aprobada y pruebas funcionales de negocio.
+ - Sin backup reciente recuperable, una perdida de datos puede NO TENER REVERSA.
+ - Ninguna fase elimina los pools viejos: esa decisión es manual tras estabilización.
+HELP
+}
+
+check_context(){
+  require oc; require ibmcloud; require jq; require helm
+  local ctx target server
+  ctx=$(oc config current-context) || stop 'no hay contexto OpenShift'
+  [[ "$ctx" == "$CL/"* ]] || stop "oc apunta a '$ctx' y no a $CL (ibmcloud oc cluster config --cluster $CL --admin)"
+  target=$(ibmcloud target 2>&1) || stop 'no hay sesión IBM Cloud válida'
+  grep -Fq "$ACCOUNT" <<<"$target" || stop "la cuenta IBM Cloud no es $ACCOUNT"
+  grep -Eq 'Region:[[:space:]]*br-sao([[:space:]]|$)' <<<"$target" || stop 'la región IBM no es br-sao; ejecutar ibmcloud target -r br-sao'
+  server=$(oc whoami --show-server) || stop 'oc no conectado'
+  [[ "$server" == *'.br-sao.'* ]] || stop "API inesperada: $server"
+  say "CUENTA CORRECTA: $ACCOUNT | CLUSTER: $CL | REGION: br-sao"
+}
+
+# Evita aceptar pool con VPC/cifrado distintos o con nodos de menos.
+check_pool_spec(){
+  local old="$1" new="$2" old_info new_info key a b oldz newz
+  old_info=$(ibmcloud oc worker-pool get --cluster "$CL" --worker-pool "$old") || stop "no se pudo consultar $old"
+  new_info=$(ibmcloud oc worker-pool get --cluster "$CL" --worker-pool "$new") || stop "no existe/no se puede consultar $new"
+  grep -Eq '^Operating System:[[:space:]]*RHCOS' <<<"$new_info" || stop "pool $new NO aparece como RHCOS"
+  for key in VPC Flavor KMS CRK 'KMS Account ID'; do
+    a=$(awk -F: -v k="$key" '$1==k {sub(/^[^:]*:[[:space:]]*/,"");print;exit}' <<<"$old_info")
+    b=$(awk -F: -v k="$key" '$1==k {sub(/^[^:]*:[[:space:]]*/,"");print;exit}' <<<"$new_info")
+    [[ -n "$a" && -n "$b" ]] || stop "no pude comparar $key entre $old y $new: revisar manualmente antes de proceder"
+    [[ "$a" == "$b" ]] || stop "DIFERENCIA $key ($old vs $new): $a / $b"
+  done
+  oldz=$(ibmcloud oc worker-pool zones --cluster "$CL" --worker-pool "$old" | awk '/^br-sao-[0-9]+[[:space:]]+/{print $1,$2}' | sort)
+  newz=$(ibmcloud oc worker-pool zones --cluster "$CL" --worker-pool "$new" | awk '/^br-sao-[0-9]+[[:space:]]+/{print $1,$2}' | sort)
+  [[ -n "$oldz" && "$oldz" == "$newz" ]] || stop "las zonas/subredes del pool $new NO coinciden con $old"
+  printf '%s -> %s: VPC, flavor, KMS, CRK, cuenta y subredes coinciden\n' "$old" "$new"
+}
