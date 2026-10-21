@@ -31,130 +31,16 @@ ibmcloud oc worker-pool create vpc-gen2 \
 
 
 
-echo "=== BUSCAR JSON ORIGINAL ==="
-
-find "$HOME/apigee-rhcos-prod-por-release" \
-     "$HOME/apigee-rhcos-prod-charts" \
-     -type f \
-     -name 'apigee-latam-prd-apigee-cassandra.json' \
-     -size +0c \
-     -print 2>/dev/null
+oc patch cronjob clean-snapshot -n apigee \
+  --type=merge -p '{"spec":{"suspend":true}}'
 
 
 
-
-CH="$HOME/apigee-rhcos-prod-por-release/datastore"
-
-if [ -s "$CH/apigee-latam-prd-apigee-cassandra.json" ] &&
-   [ -f "$CH/Chart.yaml" ]; then
-
-  helm upgrade datastore "$CH" \
-    -n apigee \
-    --reuse-values \
-    --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
-    --dry-run=server \
-    --hide-secret \
-    > "$HOME/cassandra-dryrun.log" 2>&1 \
-    && echo "SIMULACION DATASTORE OK" \
-    || echo "SIMULACION FALLO: revisar log protegido"
-else
-  echo "FALTA ARCHIVO ORIGINAL: NO APLICAR"
-fi
+oc create job -n apigee \
+  --from=cronjob/apigee-cassandra-backup \
+  cassandra-backup-rhcos-test
 
 
 
-*********************************
-
-
-echo "=== ANILLO CASSANDRA ==="
-oc exec -n apigee apigee-cassandra-default-0 \
-  -c apigee-cassandra -- sh -c \
-  'nodetool -u "$APIGEE_JMX_USER" -pw "$APIGEE_JMX_PASSWORD" status'
-
-echo "=== NODOS ANTIGUOS ==="
-for N in 10.110.44.9 10.110.12.11 10.110.28.10; do
-  echo "===== $N ====="
-  oc get pods -A --field-selector spec.nodeName="$N" \
-    -o custom-columns=NS:.metadata.namespace,POD:.metadata.name
-done
-
-************************
-
-echo "=== NODOS ==="
-oc get nodes
-
-echo "=== OPERADORES ==="
-oc get co
-
-echo "=== PODS CON PROBLEMAS ==="
-oc get pods -A \
-  --field-selector=status.phase!=Running,status.phase!=Succeeded
-
-echo "=== CASSANDRA ==="
-oc get sts -n apigee apigee-cassandra-default
-
-echo "=== ANILLO CASSANDRA ==="
-oc exec -n apigee apigee-cassandra-default-0 \
-  -c apigee-cassandra -- sh -c \
-  'nodetool -u "$APIGEE_JMX_USER" -pw "$APIGEE_JMX_PASSWORD" status'
-
-
-
-*******************
-
-eecho "===== BACKUP CASSANDRA ====="
-
-B=$(oc get pods -n apigee -o name | \
-grep '/apigee-cassandra-backup-' | head -1)
-
-oc describe -n apigee "$B" | \
-sed -n '/Events:/,$p'
-
-echo "===== CLEAN SNAPSHOT ====="
-
-S=$(oc get pods -n apigee -o name | \
-grep '/clean-snapshot-' | head -1)
-
-oc describe -n apigee "$S" | \
-sed -n '/Events:/,$p'
-
-
-****************************
-
-echo "=== BACKUP CONFIGURADO ==="
-oc get cronjob -n apigee apigee-cassandra-backup \
--o jsonpath='{.spec.jobTemplate.spec.template.spec.nodeSelector}{"\n"}{.spec.jobTemplate.spec.template.spec.affinity}{"\n"}'
-
-echo "=== JOBS DE LIMPIEZA ==="
-oc get cronjob -n apigee \
--o custom-columns=NAME:.metadata.name,IMAGE:.spec.jobTemplate.spec.template.spec.containers[*].image
-
-echo "=== SECRET REGISTRY ==="
-oc get secret -n apigee secret-reg-apigee \
---ignore-not-found
-
-
-**************************
-
-
-oc patch cronjob apigee-cassandra-backup \
-  -n apigee --type=json -p='[
-  {
-    "op":"replace",
-    "path":"/spec/jobTemplate/spec/template/spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms/0/matchExpressions/0/values",
-    "value":["apigee-runtime-rhcos"]
-  },
-  {
-    "op":"replace",
-    "path":"/spec/jobTemplate/spec/template/spec/affinity/nodeAffinity/preferredDuringSchedulingIgnoredDuringExecution/0/preference/matchExpressions/0/values",
-    "value":["apigee-runtime-rhcos"]
-  }
-]'
-
-
-
-***********************
-
-
-oc get cronjob clean-snapshot -n apigee \
-  -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].command}{"\n"}{.spec.jobTemplate.spec.template.spec.containers[0].args}{"\n"}'
+oc get job cassandra-backup-rhcos-test -n apigee
+oc get pods -n apigee -o wide | grep cassandra-backup-rhcos-test
