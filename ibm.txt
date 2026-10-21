@@ -645,3 +645,20 @@ grep -RInE \
   '\.Files\.(Get|Glob)' "$CH" | head -35 || true
 
 
+***************************************
+
+
+CH="$HOME/apigee-rhcos-prod-charts"
+LOG="$HOME/helm-operator-dryrun.log"
+
+if helm upgrade operator "$CH/apigee-operator" \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeRuntime.value=apigee-runtime-rhcos \
+  --dry-run=server \
+  --hide-secret > "$LOG" 2>&1; then
+    echo "SIMULACION OPERATOR OK"
+else
+    echo "SIMULACION FALLO"
+    tail -15 "$LOG"
+fi
