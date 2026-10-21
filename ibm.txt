@@ -88,3 +88,37 @@ jq -r '
 echo "=== ESTADO WORKERS IBM ==="
 ibmcloud oc worker ls \
   --cluster carla-prd-latam-ocw01
+
+
+***********************************
+
+
+echo "=== PDB SIN DISRUPCIONES ==="
+oc get pdb -A -o json | jq -r '
+.items[]
+| select((.status.disruptionsAllowed // 0) == 0)
+| [.metadata.namespace, .metadata.name,
+   (.status.currentHealthy // 0),
+   (.status.desiredHealthy // 0)] | @tsv'
+
+echo "=== BACKUPS ACTIVOS ==="
+oc get jobs -n apigee -o json | jq -r '
+.items[]
+| select(.metadata.name |
+    startswith("apigee-cassandra-backup-"))
+| select((.status.active // 0) > 0)
+| [.metadata.name,
+   .metadata.creationTimestamp,
+   (.status.active // 0),
+   (.status.succeeded // 0)] | @tsv'
+
+echo "=== BACKUPS EN WORKERS ANTIGUOS ==="
+oc get pods -n apigee -o json | jq -r '
+.items[]
+| select(.metadata.name |
+    startswith("apigee-cassandra-backup-"))
+| select(.spec.nodeName as $n |
+    ["10.110.12.4","10.110.28.4","10.110.44.4"]
+    | index($n) != null)
+| [.metadata.name,.status.phase,.spec.nodeName]
+| @tsv'
