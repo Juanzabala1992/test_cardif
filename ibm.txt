@@ -627,3 +627,21 @@ oc config current-context
 
 
 bash ~/Migracion_RHCOS_Integration_PROD_Asistida.sh plan
+
+
+****************************************
+
+
+CH="$HOME/apigee-rhcos-prod-charts"
+
+echo "=== CHARTS DISPONIBLES ==="
+find "$CH" -maxdepth 2 -name Chart.yaml \
+  -printf '%h\n' | sort
+
+echo "=== ARCHIVOS REQUERIDOS ==="
+grep -RInE \
+  --include='*.yaml' \
+  --include='*.tpl' \
+  '\.Files\.(Get|Glob)' "$CH" | head -35 || true
+
+
