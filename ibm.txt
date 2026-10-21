@@ -256,3 +256,26 @@ oc get pods -A \
 
 echo "=== ESTADO NODO ==="
 oc get node "$N"
+
+
+**********************
+
+
+oc get pods -A \
+  --field-selector spec.nodeName=10.110.44.4 \
+  -o json | jq -r '
+.items[]
+| select(.metadata.ownerReferences[0].kind == "Node")
+| [
+    .metadata.namespace,
+    .metadata.name,
+    (.metadata.annotations["kubernetes.io/config.mirror"] // "SIN_MIRROR")
+  ] | @tsv'
+
+
+
+oc adm drain 10.110.44.4 \
+  --ignore-daemonsets \
+  --timeout=5m
+
+
