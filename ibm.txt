@@ -449,3 +449,21 @@ if grep -qx 'set -Eeuo pipefail' "$F" &&
 else
   echo "ERROR: NO EJECUTAR EL LOTE"
 fi
+
+***********************************
+
+
+F="$HOME/apigee-runtime-lote/paso-20261021_060548-2.log"
+
+echo "=== ERROR PASO 2 ==="
+grep -niE \
+  'SIGUIENTE RELEASE|DETENIDO|ERROR|FALLO|failed|timeout|no saludable|SIMULACION' \
+  "$F" | tail -25
+
+echo "=== FINAL DEL LOG ==="
+tail -n 25 "$F"
+
+echo "=== RELEASES HELM CON PROBLEMAS ==="
+helm list -n apigee -o json |
+jq -r '.[] | select(.status != "deployed") |
+  [.name,.status] | @tsv'
