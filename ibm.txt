@@ -194,3 +194,46 @@ echo "=== ANILLO CASSANDRA ==="
 oc exec -n apigee apigee-cassandra-default-0 \
   -c apigee-cassandra -- \
   bash -c 'nodetool -u cassandra -pw "$CASS_PASSWORD" status'
+
+
+**********************************
+
+
+umask 077
+
+CH="$HOME/apigee-rhcos-prod-charts/apigee-datastore"
+
+echo "=== VERIFICAR CHART ==="
+test -f "$CH/Chart.yaml" || {
+  echo "ERROR: FALTA CHART DATASTORE"
+  exit 1
+}
+
+echo "=== RESPALDAR CONFIGURACION ==="
+helm get values datastore -n apigee -o yaml \
+  > "$HOME/datastore-values-pre-rhcos.yaml"
+
+echo "=== REGISTRAR PVC ==="
+oc get pvc -n apigee -o json \
+  > "$HOME/cassandra-pvc-pre-rhcos.json"
+
+echo "=== REGISTRAR ANILLO ==="
+oc exec -n apigee apigee-cassandra-default-0 \
+  -c apigee-cassandra -- \
+  bash -c 'nodetool -u cassandra -pw "$CASS_PASSWORD" status' \
+  > "$HOME/cassandra-ring-pre-rhcos.txt"
+
+echo "=== SIMULACION HELM DATASTORE ==="
+if helm upgrade datastore "$CH" \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
+  --dry-run=server \
+  --hide-secret \
+  > "$HOME/cassandra-dryrun.log" 2>&1; then
+
+  echo "SIMULACION DATASTORE OK"
+else
+  echo "ERROR EN SIMULACION"
+  tail -n 12 "$HOME/cassandra-dryrun.log"
+fi
