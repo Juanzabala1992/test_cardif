@@ -280,6 +280,33 @@ jq -r '
     (.status.error.message // "-")
   ] | @tsv'
 
+
+
+
+
+
+*****************************************
+
+
+echo "=== CANTIDAD SNAPSHOTS ==="
+oc get volumesnapshot -A --no-headers | wc -l
+
+echo "=== CONTENIDOS SNAPSHOT ==="
+oc get volumesnapshotcontent --no-headers | wc -l
+
+echo "=== LOGS CONTROLADOR ==="
+oc logs deployment/csi-snapshot-controller \
+  -n openshift-cluster-storage-operator \
+  --since=20m \
+  --tail=300 |
+grep -Ei 'error|failed|cassandra-rg-test|timeout' |
+tail -30
+
+echo "=== SNAPSHOT DE PRUEBA ==="
+oc get volumesnapshot cassandra-rg-test \
+  -n apigee \
+  -o jsonpath='{.status.readyToUse}{"\n"}'
+
 echo "=== ESTADO FINAL ==="
 oc get volumesnapshot cassandra-rg-test \
   -n apigee
