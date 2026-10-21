@@ -1,3 +1,18 @@
 oc get cm authentication -o yaml
 
 oc get deployment authentication -o yaml | grep -A10 -B3 -E 'env:|envFrom:|configMapRef|SERVER_SSL_ENABLED'
+
+
+**************************
+
+
+oc set env deployment/authentication -c authentication-dev SERVER_SSL_ENABLED=true
+
+
+oc set env deployment/authentication --list | grep SERVER_SSL_ENABLED
+
+oc rollout status deployment/authentication
+
+
+oc get pods | grep authentication
+
