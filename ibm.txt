@@ -77,3 +77,12 @@ echo "=== ESTADO CONTENEDOR ==="
 oc get pod "$P" \
   -n openshift-marketplace -o json |
 jq '.status.containerStatuses'
+
+
+
+**********************************
+
+
+oc logs -n openshift-marketplace certified-operators-1 --previous --tail=60
+oc describe pod -n openshift-marketplace certified-operators-1 | tail -n 45
+
