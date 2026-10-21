@@ -472,29 +472,24 @@ jq -r '.[] | select(.status != "deployed") |
 ******************************
 
 
-echo "=== ESTADO DE APIGEE ENV ==="
+LOG=$(ls -t "$HOME"/apigee-runtime-lote/paso-*-3.log 2>/dev/null | head -1)
 
-oc get apigeeenv -n apigee -o json |
-jq -r '
-.items[] |
-[
-  .metadata.name,
-  (.status.state // "SIN_ESTADO"),
-  (.status.message // .status.reason // "-" | tostring | .[0:120])
-] | @tsv
-'
+echo "=== ERROR PASO 3 ==="
+if [ -n "$LOG" ]; then
+  grep -Ei \
+    'SIGUIENTE RELEASE|DETENIDO|ERROR|FALLO|failed|timeout' \
+    "$LOG" | tail -15
+  tail -n 8 "$LOG"
+else
+  echo "No se encontro el log"
+fi
 
-echo "=== PODS NO SALUDABLES ==="
+echo "=== APIGEE ENV ==="
+oc get apigeeenv -n apigee \
+  -o custom-columns=NAME:.metadata.name,STATE:.status.state
 
-oc get pods -n apigee -o json |
-jq -r '
-.items[]
-| select((.metadata.ownerReferences // [] |
-    any(.kind=="Job")) | not)
-| select(
-    .status.phase != "Running" or
-    ([.status.containerStatuses[]?.ready] | any(. == false))
-  )
-| [.metadata.name, .status.phase, .spec.nodeName]
-| @tsv
-' | head -30
+echo "=== ESTADO HELM ==="
+helm list -n apigee -o json |
+jq -r '.[] |
+  select(.status != "deployed") |
+  [.name,.status] | @tsv'
