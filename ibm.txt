@@ -98,3 +98,24 @@ oc exec -n apigee apigee-cassandra-default-0 \
   -c apigee-cassandra -- sh -c \
   'nodetool -u "$APIGEE_JMX_USER" -pw "$APIGEE_JMX_PASSWORD" status'
 
+
+
+*******************
+
+echo "=== NODOS ==="
+oc get nodes
+
+echo "=== OPERADORES ==="
+oc get co
+
+echo "=== PODS CON PROBLEMAS ==="
+oc get pods -A \
+  --field-selector=status.phase!=Running,status.phase!=Succeeded
+
+echo "=== CASSANDRA ==="
+oc get sts -n apigee apigee-cassandra-default
+
+echo "=== ANILLO CASSANDRA ==="
+oc exec -n apigee apigee-cassandra-default-0 \
+  -c apigee-cassandra -- sh -c \
+  'nodetool -u "$APIGEE_JMX_USER" -pw "$APIGEE_JMX_PASSWORD" status'
