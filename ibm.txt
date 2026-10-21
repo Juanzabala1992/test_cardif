@@ -210,6 +210,18 @@ for HOST in localhost kubernetes.default.svc.cluster.local "$NODE"; do
   echo "EXIT_CODE=$?"
 done
 
+
+*************************
+
+
+CH="$HOME/apigee-rhcos-prod-por-release/datastore"
+
+helm upgrade datastore "$CH" \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
+  --timeout 30m
+
 echo "===== CONFIGURACION DNS CASSANDRA ====="
 oc exec -n apigee apigee-cassandra-default-0 \
   -c apigee-cassandra -- cat /etc/resolv.conf
