@@ -92,3 +92,9 @@ ibmcloud oc worker ls --cluster "$CL"
 oc get nodes \
   -L ibm-cloud.kubernetes.io/worker-pool-name \
   -L topology.kubernetes.io/zone  
+
+
+**********************************
+
+
+bash ~/Migracion_RHCOS_Integration_PROD_Asistida.sh preflight
