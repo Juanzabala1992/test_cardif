@@ -157,4 +157,36 @@ oc get apigeeenv -n apigee
 
 oc get nodes
 
+************************
+
+echo "=== ALMACENAMIENTO DEL REGISTRY ==="
+oc get configs.imageregistry.operator.openshift.io/cluster \
+  -o json | jq '{
+    managementState: .spec.managementState,
+    replicas: .spec.replicas,
+    storage: .spec.storage
+  }'
+
+echo "=== DISPONIBILIDAD REGISTRY ==="
+oc get deployment image-registry \
+  -n openshift-image-registry \
+  -o json | jq '{
+    deseadas: .spec.replicas,
+    disponibles: (.status.availableReplicas // 0)
+  }'
+
+echo "=== CONTROLADOR CSI ==="
+oc get sts ibm-vpc-block-csi-controller \
+  -n kube-system \
+  -o wide
+
+
+
+
+
+oc adm drain 10.110.44.4 \
+  --ignore-daemonsets \
+  --delete-emptydir-data \
+  --timeout=10m
+
 
