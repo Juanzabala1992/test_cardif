@@ -300,3 +300,12 @@ oc get pods -n apigee -o wide | grep 'apigee-cassandra-default-'
 echo "=== SELECTOR CONFIGURADO ==="
 oc get sts -n apigee apigee-cassandra-default \
 -o jsonpath='{.spec.template.spec.nodeSelector}{"\n"}'
+
+
+*****************************
+
+
+oc exec -n apigee apigee-cassandra-default-0 \
+-c apigee-cassandra -- nodetool status
+
+oc get pvc -n apigee | grep cassandra-data
