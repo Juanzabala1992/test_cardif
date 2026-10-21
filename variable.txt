@@ -1,18 +1,130 @@
-oc get cm authentication -o yaml
-
-oc get deployment authentication -o yaml | grep -A10 -B3 -E 'env:|envFrom:|configMapRef|SERVER_SSL_ENABLED'
-
-
-**************************
-
-
-oc set env deployment/authentication -c authentication-dev SERVER_SSL_ENABLED=true
-
-
-oc set env deployment/authentication --list | grep SERVER_SSL_ENABLED
-
-oc rollout status deployment/authentication
+--cluster	ibmcloud oc cluster ls
+--flavor	ibmcloud oc worker-pool get --cluster "$CL" --worker-pool "$OLD_POOL"
+--size-per-zone	ibmcloud oc worker-pool zones --cluster "$CL" --worker-pool "$OLD_POOL"
+--kms-instance	ibmcloud oc kms instance ls
+--crk	ibmcloud oc kms crk ls --instance-id "$KMS_INSTANCE"
+--kms-account-id	ibmcloud account show o ibmcloud account list
+--vpc-id	ibmcloud oc cluster get --cluster "$CL"
+--subnet-id	ibmcloud oc worker-pool zones --cluster "$CL" --worker-pool "$OLD_POOL"
+--zone	ibmcloud oc worker-pool zones --cluster "$CL" --worker-pool "$OLD_POOL"
+--label	ibmcloud oc worker-pool get --cluster "$CL" --worker-pool "$OLD_POOL"
 
 
-oc get pods | grep authentication
+
+Repetir este bloque cada vez que se abra una Cloud Shell nueva o expire la sesión de IBM Cloud. IBM Cloud Shell puede mostrarse en otra localización; la región de las instancias la establece el cluster/target.
+
+
+export CL="<NOMBRE_EXACTO_PROD>"
+export OLD_POOL="<POOL_RHEL_PROD>"
+export NEW_POOL="<POOL_RHCOS_PROD>"
+ibmcloud login --sso
+ibmcloud target -r br-sao
+# Si corresponde, target -g <RESOURCE_GROUP_REAL_PROD>
+ibmcloud target
+ibmcloud oc cluster config --cluster "$CL" --admin
+oc whoami --show-server
+ibmcloud oc cluster get --cluster "$CL"
+
+
+Inventario exportable del pool original
+
+
+ibmcloud oc worker-pool ls --cluster "$CL"
+ibmcloud oc worker-pool get --cluster "$CL" --worker-pool "$OLD_POOL"
+ibmcloud oc worker-pool zones --cluster "$CL" --worker-pool "$OLD_POOL"
+ibmcloud oc worker ls --cluster "$CL"
+oc get nodes -o wide
+oc get nodes -L ibm-cloud.kubernetes.io/worker-pool-name \
+  -L topology.kubernetes.io/zone
+oc get co | awk 'NR==1 || $3!="True" || $5!="False"'
+
+
+Disco, afinidad y compatibilidad zonal
+
+
+oc get pvc -A
+oc get pv -o json | jq -r '
+.items[] | select(.spec.claimRef != null) |
+[.spec.claimRef.namespace, .spec.claimRef.name,
+ .spec.persistentVolumeReclaimPolicy,
+ ([.spec.nodeAffinity.required.nodeSelectorTerms[]?.matchExpressions[]?
+   | select(.key | contains("zone")) | .values[]] | unique | join(","))]
+| @tsv'
+oc get volumesnapshot -A 2>/dev/null || true
+
+
+
+
+export FLAVOR="<FLAVOR_DEL_POOL_ORIGINAL>"
+export SIZE_PER_ZONE="<N_WORKERS_POR_ZONA>"
+export KMS_ID="<KMS_INSTANCE_PROD>"
+export CRK_ID="<CRK_PROD>"
+export KMS_ACCOUNT="<KMS_ACCOUNT_ID_PROD>"
+# Para Integration incluir el label real usado por Apigee:
+EXTRA_LABEL=()   # por defecto, sin label adicional
+# INTEGRATION: EXTRA_LABEL=(--label 'apigee-nodepool=<VALOR_PROD>')
+
+
+
+
+ibmcloud oc worker-pool create vpc-gen2 \
+  --cluster "$CL" --name "$NEW_POOL" \
+  --flavor "$FLAVOR" --size-per-zone "$SIZE_PER_ZONE" \
+  --operating-system RHCOS \
+  --kms-instance "$KMS_ID" --crk "$CRK_ID" \
+  --kms-account-id "$KMS_ACCOUNT" \
+  "${EXTRA_LABEL[@]}"
+
+
+Agregar una zona por subred PROD 
+
+
+ibmcloud oc zone add vpc-gen2 \
+  --cluster "$CL" --worker-pool "$NEW_POOL" \
+  --zone "<ZONA_1_REAL>" --subnet-id "<SUBNET_1_PROD>"
+ibmcloud oc zone add vpc-gen2 \
+  --cluster "$CL" --worker-pool "$NEW_POOL" \
+  --zone "<ZONA_2_REAL>" --subnet-id "<SUBNET_2_PROD>"
+# Repetir SOLO si existe zona 3 requerida en PROD.
+
+
+
+Corregir los PDB BLOQUEANTES antes de empezar
+
+oc get deploy downloads -n openshift-console
+oc get pdb downloads -n openshift-console
+oc get pods -n openshift-console -o wide | grep downloads
+oc logs -n openshift-console <POD_FALLIDO> --previous --tail=80
+oc describe pod <POD_FALLIDO> -n openshift-console | tail -45
+
+
+
+comandos DNS
+
+
+oc debug node/"$NODE" -- chroot /host sh -ec '
+  cp -n /etc/hosts /etc/hosts.pre-apigee-rhcos
+  # Agregar la asociación IP / hostname si falta
+'
+
+
+
+oc get nodes \
+  -o custom-columns=NAME:.metadata.name,IP:.status.addresses[?(@.type=="InternalIP")].address \
+  --no-headers |
+while read -r NODE IP; do
+  case "$NODE" in kube-*) ;; *) continue ;; esac
+
+  oc debug node/"$NODE" -- chroot /host sh -ec '
+    cp -n /etc/hosts /etc/hosts.pre-apigee-rhcos
+    grep -Fq "$1 $2" /etc/hosts ||
+      printf "%s %s\n" "$1" "$2" >> /etc/hosts
+    getent hosts "$2"
+  ' sh "$IP" "$NODE"
+done
+
+
+
+
+
 
