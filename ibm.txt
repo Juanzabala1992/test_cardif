@@ -125,6 +125,17 @@ grep -nE 'CHART_HOME=|localchart=' "$FIX"
 echo "=== VALIDACION ==="
 bash -n "$FIX" && echo "SCRIPT CORREGIDO OK"
 
+
+*****************************
+
+FIX="$HOME/Migracion_RHCOS_Integration_PROD_POR_RELEASE.sh"
+
+echo "=== PLAN CORREGIDO ==="
+bash "$FIX" plan
+
+echo "=== PREFLIGHT FINAL ==="
+bash "$FIX" preflight
+
 echo "=== CHART OPERATOR ==="
 test -f "$HOME/apigee-rhcos-prod-por-release/operator/Chart.yaml" \
   && echo "CHART RECUPERADO OK"
