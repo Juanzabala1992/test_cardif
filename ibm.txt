@@ -424,3 +424,28 @@ bash -n ~/migracion_runtime_lote_seguro.sh \
   && echo "SINTAXIS OK"
 
 wc -l ~/migracion_runtime_lote_seguro.sh
+
+
+**********************************
+
+F="$HOME/migracion_runtime_lote_seguro.sh"
+
+cp "$F" "$F.bak.$(date +%Y%m%d_%H%M%S)"
+
+sed -i '1{/^ntegration/d;}' "$F"
+
+sed -i \
+  's/helm list -n "\$NS" -a -o json/helm list -n "\$NS" -o json/g' \
+  "$F"
+
+echo "=== VALIDACION ==="
+
+grep -n 'helm list' "$F"
+
+if grep -qx 'set -Eeuo pipefail' "$F" &&
+   bash -n "$F" &&
+   helm list -n apigee -o json >/dev/null; then
+  echo "SCRIPT LISTO PARA REANUDAR"
+else
+  echo "ERROR: NO EJECUTAR EL LOTE"
+fi
