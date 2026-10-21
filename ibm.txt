@@ -62,3 +62,30 @@ else
 fi
 
 
+
+*********************************
+
+
+echo "=== HELM DATASTORE ==="
+helm status datastore -n apigee
+
+echo "=== SELECTOR ACTUAL ==="
+helm get values datastore -n apigee -o json |
+jq -r '.nodeSelector.apigeeData.value'
+
+echo "=== RESULTADO SIMULACION ==="
+grep -Ei 'error|failed' \
+  "$HOME/cassandra-dryrun.log" | head -10
+
+
+
+
+oc get pods -n apigee -o wide |
+grep -E '^NAME|apigee-cassandra-default-[0-9]+'
+
+oc get sts apigee-cassandra-default -n apigee
+
+oc get apigeedatastores -n apigee
+
+oc get pvc -n apigee |
+grep cassandra-data
