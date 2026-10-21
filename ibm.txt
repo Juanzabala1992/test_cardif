@@ -1,18 +1,23 @@
-echo "=== RELEASES HELM ==="
-helm list -n apigee -o json |
-jq -r '
-.[] | select(.status=="deployed")
-| [.name,.chart] | @tsv'
+echo "=== NODOS, POOLS Y ZONAS ==="
+oc get nodes \
+  -L ibm-cloud.kubernetes.io/worker-pool-name \
+  -L topology.kubernetes.io/zone
 
-echo "=== SELECTORES DATASTORE ==="
-helm get values datastore -n apigee -o json |
-jq '.nodeSelector'
+echo "=== PV CASSANDRA Y AFINIDADES ==="
+oc get pv -o json | jq -r '
+.items[]
+| select(.spec.claimRef.namespace? == "apigee")
+| select((.spec.claimRef.name // "")
+  | startswith("cassandra-data-"))
+| [
+    .spec.claimRef.name,
+    .metadata.name,
+    ([.spec.nodeAffinity.required.nodeSelectorTerms[]?
+      .matchExpressions[]?
+      | select(.key | contains("zone"))
+      | .values[]?] | unique | join(","))
+  ] | @tsv'
 
-echo "=== ESTRATEGIA CASSANDRA ==="
-oc get sts apigee-cassandra-default \
-  -n apigee -o json |
-jq '{
-  strategy: .spec.updateStrategy,
-  replicas: .spec.replicas,
-  affinity: .spec.template.spec.affinity.nodeAffinity
-}'
+echo "=== SELECTOR RELEASE RUNTIME ==="
+helm get values prod-br-env -n apigee -o json |
+jq '{nodeSelector, affinity}'
