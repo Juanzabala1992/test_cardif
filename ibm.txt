@@ -416,3 +416,11 @@ for R in $(helm list -n apigee -o json |
     echo "YA ACTUALIZADO: $R"
   fi
 done
+
+
+******************************
+
+bash -n ~/migracion_runtime_lote_seguro.sh \
+  && echo "SINTAXIS OK"
+
+wc -l ~/migracion_runtime_lote_seguro.sh
