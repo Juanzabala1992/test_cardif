@@ -865,3 +865,27 @@ for R in apigee-latam-prd prod-br-env prod-br-group telemetry; do
 done
 
 
+**************************************
+
+
+OUT="$HOME/apigee-rhcos-prod-por-release"
+LOG="$HOME/helm-dryruns-recuperados"
+
+mkdir -p "$LOG"
+chmod 700 "$LOG"
+umask 077
+
+for R in apigee-latam-prd prod-br-env prod-br-group telemetry; do
+
+  if helm upgrade "$R" "$OUT/$R" \
+    -n apigee \
+    --reuse-values \
+    --set-string nodeSelector.apigeeRuntime.value=apigee-runtime-rhcos \
+    --dry-run=server \
+    --hide-secret > "$LOG/$R.log" 2>&1; then
+
+    echo "OK: $R"
+  else
+    echo "FALLO: $R"
+  fi
+done
