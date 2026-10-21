@@ -937,3 +937,71 @@ echo "FALLIDOS: $FAIL"
 echo "=== ESTADO DE POOLS ==="
 ibmcloud oc worker-pool ls \
   --cluster carla-prd-latam-ocw01
+
+****************************************************
+
+
+
+(
+set -euo pipefail
+
+CL=carla-prd-latam-ocw01
+declare -A SUBNETS
+
+[[ "$(oc config current-context)" == "$CL/"* ]] || {
+  echo "ERROR: contexto incorrecto"
+  exit 1
+}
+
+ibmcloud target | grep -q 'CARLA-PRD-INTEGRATION' || {
+  echo "ERROR: cuenta incorrecta"
+  exit 1
+}
+
+ibmcloud target | grep -Eq 'Region:[[:space:]]*br-sao' || {
+  echo "ERROR: region incorrecta"
+  exit 1
+}
+
+for P in apigee-data-rhcos apigee-runtime-rhcos; do
+  ZONAS=$(ibmcloud oc worker-pool zones \
+    --cluster "$CL" --worker-pool "$P")
+
+  if echo "$ZONAS" | grep -Eq '^br-sao-[123][[:space:]]'; then
+    echo "DETENIDO: $P ya tiene zonas configuradas"
+    exit 1
+  fi
+done
+
+for Z in br-sao-1 br-sao-2 br-sao-3; do
+  SD=$(ibmcloud oc worker-pool zones \
+    --cluster "$CL" --worker-pool apigee-data |
+    awk -v z="$Z" '$1==z {print $2; exit}')
+
+  SR=$(ibmcloud oc worker-pool zones \
+    --cluster "$CL" --worker-pool apigee-runtime |
+    awk -v z="$Z" '$1==z {print $2; exit}')
+
+  [[ -n "$SD" && "$SD" == "$SR" ]] || {
+    echo "ERROR: subredes de $Z no coinciden"
+    exit 1
+  }
+
+  SUBNETS[$Z]="$SD"
+  echo "VALIDADO: $Z -> $SD"
+done
+
+for Z in br-sao-1 br-sao-2 br-sao-3; do
+  for P in apigee-data-rhcos apigee-runtime-rhcos; do
+    echo "=== APROVISIONANDO $P EN $Z ==="
+
+    ibmcloud oc zone add vpc-gen2 \
+      --cluster "$CL" \
+      --worker-pool "$P" \
+      --zone "$Z" \
+      --subnet-id "${SUBNETS[$Z]}"
+  done
+done
+
+echo "=== SOLICITUDES FINALIZADAS ==="
+)
