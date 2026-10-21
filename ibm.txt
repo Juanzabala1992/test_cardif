@@ -100,3 +100,40 @@ oc get job cassandra-backup-rhcos-test -n apigee
 
 echo "=== ESTADO DE LOS CATALOGOS ==="
 oc get catalogsource -n openshift-marketplace
+
+***************************************
+
+echo "=== SELECTOR MARKETPLACE ==="
+oc get pod certified-operators-1-nss4t \
+  -n openshift-marketplace \
+  -o json | jq '{
+    nodeSelector: .spec.nodeSelector,
+    nodeAffinity: .spec.affinity.nodeAffinity
+  }'
+
+echo "=== ROLES NODOS ==="
+oc get nodes -o json | jq -r '
+.items[] |
+[
+  .metadata.name,
+  (.metadata.labels |
+    has("node-role.kubernetes.io/master")),
+  (.metadata.labels |
+    has("node-role.kubernetes.io/worker")),
+  (.spec.unschedulable // false)
+] | @tsv'
+
+
+
+
+echo "=== SNAPSHOTS CASSANDRA ==="
+
+oc get volumesnapshot -n apigee -o json |
+jq -r '
+.items[]
+| select(.metadata.name | startswith("pvc-dc-"))
+| [
+    .metadata.name,
+    (.status.readyToUse // false),
+    (.status.error.message // "-")
+  ] | @tsv'
