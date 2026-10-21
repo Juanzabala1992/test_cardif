@@ -285,3 +285,18 @@ helm upgrade datastore "$CH" \
 
 
 oc get pods -n apigee -o wide | grep -E 'apigee-cassandra-default|guardrail-datastore'
+
+
+
+****************************************
+
+
+echo "=== ESTADO CASSANDRA ==="
+oc get sts -n apigee apigee-cassandra-default
+
+echo "=== UBICACION DE PODS ==="
+oc get pods -n apigee -o wide | grep 'apigee-cassandra-default-'
+
+echo "=== SELECTOR CONFIGURADO ==="
+oc get sts -n apigee apigee-cassandra-default \
+-o jsonpath='{.spec.template.spec.nodeSelector}{"\n"}'
