@@ -54,3 +54,26 @@ oc get pods -n openshift-marketplace -o wide
 oc get catalogsource certified-operators-1 \
   -n openshift-marketplace \
   -o jsonpath='{.spec.grpcPodConfig.nodeSelector}{"\n"}'
+
+***************************
+
+
+P=$(oc get pods -n openshift-marketplace -o json |
+jq -r '.items[].metadata.name |
+select(startswith("certified-operators-1-"))' |
+head -1)
+
+echo "=== ERROR DEL CONTENEDOR ==="
+oc logs "$P" \
+  -n openshift-marketplace \
+  --previous --tail=50
+
+echo "=== EVENTOS ==="
+oc describe pod "$P" \
+  -n openshift-marketplace |
+sed -n '/Events:/,$p' | tail -20
+
+echo "=== ESTADO CONTENEDOR ==="
+oc get pod "$P" \
+  -n openshift-marketplace -o json |
+jq '.status.containerStatuses'
