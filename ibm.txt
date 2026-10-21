@@ -1,3 +1,12 @@
+ibmcloud target -r br-sao
+
+ibmcloud target
+
+ibmcloud oc cluster ls
+
+
+
+
 CL="<NOMBRE_EXACTO_TSP_PROD>"
 
 ibmcloud oc cluster config --cluster "$CL" --admin
