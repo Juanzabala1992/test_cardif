@@ -69,3 +69,14 @@ for P in apigee-data-rhcos apigee-runtime-rhcos; do
 
 done
 
+
+**************************
+
+find "$HOME" -maxdepth 4 \
+  -name 'Migracion_RHCOS_Integration_PROD_Asistida.sh'
+
+
+
+bash -n ~/Migracion_RHCOS_Integration_PROD_Asistida.sh
+
+bash ~/Migracion_RHCOS_Integration_PROD_Asistida.sh plan
