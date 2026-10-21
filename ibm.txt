@@ -303,3 +303,39 @@ echo "=== LOGS RECIENTES CONTROLADOR ==="
 oc logs deployment/csi-snapshot-controller \
   -n openshift-cluster-storage-operator \
   --since=15m --tail=60 2>&1
+
+
+
+***************************************
+
+
+oc get cronjob apigee-cassandra-backup \
+  -n apigee \
+  -o custom-columns=NAME:.metadata.name,SUSPEND:.spec.suspend,ACTIVE:.status.active
+
+
+
+
+oc patch cronjob apigee-cassandra-backup \
+  -n apigee \
+  --type=merge \
+  -p '{"spec":{"suspend":true}}'
+
+
+oc patch cronjob apigee-cassandra-backup \
+  -n apigee \
+  --type=merge \
+  -p '{"spec":{"suspend":false}}'
+
+
+
+oc get jobs -n apigee -o json |
+jq -r '
+.items[]
+| select(.metadata.name |
+    startswith("apigee-cassandra-backup-"))
+| select((.status.active // 0) > 0)
+| [.metadata.name,
+   (.status.active // 0),
+   (.status.failed // 0)] | @tsv'
+
