@@ -595,3 +595,35 @@ oc get apigeeenv -n apigee \
 echo "=== PROCESOS ==="
 ps -eo etime,args | grep -E \
 '[h]elm upgrade|[m]igracion_runtime'
+
+******************
+
+echo "=== ULTIMOS AVANCES ==="
+L=$(ls -t ~/apigee-runtime-lote/ejecucion-*.log | head -1)
+grep -E 'COMPLETADO HELM|PASO [0-9]+ / RUNTIME|DETENIDO' "$L" | tail -10
+
+echo "=== CONTEO ACTUAL ==="
+OK=0
+PEND=0
+
+while read -r R; do
+  [ -z "$R" ] && continue
+
+  V=$(helm get values "$R" -n apigee -o json 2>/dev/null) || {
+    echo "NO VERIFICADO: $R"
+    continue
+  }
+
+  S=$(echo "$V" | jq -r '.nodeSelector.apigeeRuntime.value // ""')
+
+  if [ "$S" = "apigee-runtime-rhcos" ]; then
+    OK=$((OK+1))
+  else
+    PEND=$((PEND+1))
+    echo "PENDIENTE: $R"
+  fi
+done < <(helm list -n apigee -o json | jq -r '.[] | select(.name != "datastore") | .name')
+
+echo "ACTUALIZADOS: $OK"
+echo "PENDIENTES: $PEND"
+echo "ESTIMACION A 15 MIN CADA UNO: $((PEND*15)) minutos"
