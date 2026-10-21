@@ -354,3 +354,67 @@ oc patch cronjob apigee-cassandra-backup \
 oc get cronjob apigee-cassandra-backup \
   -n apigee
 
+
+*******************************
+
+
+
+echo "=== 1. PODS DE SERVICIO CON PROBLEMAS ==="
+
+oc get pods -A -o json | jq -r '
+(["NAMESPACE","POD","ESTADO","READY","CAUSA","NODO"] | @tsv),
+(.items[]
+ | select(any(.metadata.ownerReferences[]?; .kind=="Job") | not)
+ | . as $p
+ | ([.status.containerStatuses[]?] | length) as $total
+ | ([.status.containerStatuses[]? | select(.ready==true)] | length) as $ready
+ | ([.status.containerStatuses[]?.state.waiting.reason,
+     .status.initContainerStatuses[]?.state.waiting.reason]
+    | map(select(. != null)) | unique | join(",")) as $cause
+ | select(.status.phase!="Running" or $total==0 or $ready<$total)
+ | [
+     $p.metadata.namespace,
+     $p.metadata.name,
+     ($p.status.phase // "-"),
+     "\($ready)/\($total)",
+     (if $cause=="" then ($p.status.reason // "-") else $cause end),
+     ($p.spec.nodeName // "-")
+   ] | @tsv)'
+
+echo "=== 2. DEPLOYMENTS Y STATEFULSETS SIN REPLICAS LISTAS ==="
+
+oc get deployments,statefulsets -A -o json | jq -r '
+.items[]
+| select((.spec.replicas // 1) > (.status.readyReplicas // 0))
+| [
+    .metadata.namespace,
+    .kind,
+    .metadata.name,
+    (.status.readyReplicas // 0),
+    (.spec.replicas // 1)
+  ] | @tsv'
+
+echo "=== 3. OPERADORES CON PROBLEMAS ==="
+
+oc get co | awk \
+'NR==1 || $3!="True" || $4!="False" || $5!="False"'
+
+echo "=== 4. APIGEE Y CASSANDRA ==="
+
+oc get apigeeenv,apigeedatastore -n apigee
+oc get sts apigee-cassandra-default -n apigee
+
+echo "=== 5. BACKUPS CASSANDRA ==="
+
+oc get cronjob apigee-cassandra-backup -n apigee
+
+oc get jobs -n apigee -o json | jq -r '
+[.items[]
+ | select(.metadata.name | startswith("apigee-cassandra-backup-"))
+ | select((.status.active // 0)>0)]
+| "JOBS_BACKUP_ACTIVOS: \(length)"'
+
+echo "=== 6. NODOS ==="
+
+oc get nodes
+
