@@ -467,3 +467,34 @@ echo "=== RELEASES HELM CON PROBLEMAS ==="
 helm list -n apigee -o json |
 jq -r '.[] | select(.status != "deployed") |
   [.name,.status] | @tsv'
+
+
+******************************
+
+
+echo "=== ESTADO DE APIGEE ENV ==="
+
+oc get apigeeenv -n apigee -o json |
+jq -r '
+.items[] |
+[
+  .metadata.name,
+  (.status.state // "SIN_ESTADO"),
+  (.status.message // .status.reason // "-" | tostring | .[0:120])
+] | @tsv
+'
+
+echo "=== PODS NO SALUDABLES ==="
+
+oc get pods -n apigee -o json |
+jq -r '
+.items[]
+| select((.metadata.ownerReferences // [] |
+    any(.kind=="Job")) | not)
+| select(
+    .status.phase != "Running" or
+    ([.status.containerStatuses[]?.ready] | any(. == false))
+  )
+| [.metadata.name, .status.phase, .spec.nodeName]
+| @tsv
+' | head -30
