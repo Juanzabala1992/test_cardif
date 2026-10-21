@@ -163,3 +163,26 @@ oc get pod certified-operators-1-dk67b -n openshift-marketplace \
 
 oc get scc apigee-scc-apigee \
   -o jsonpath='RUNAS={.runAsUser}{"\n"}FSGROUP={.fsGroup}{"\n"}'
+
+**************************
+
+
+oc auth can-i use scc/restricted-v2 \
+  --as=system:serviceaccount:openshift-marketplace:certified-operators-1 \
+  -n openshift-marketplace
+
+
+
+oc get catalogsource certified-operators-1 \
+  -n openshift-marketplace -o yaml \
+  > ~/certified-operators-1-backup.yaml
+
+oc annotate catalogsource certified-operators-1 \
+  -n openshift-marketplace \
+  openshift.io/required-scc=restricted-v2 \
+  --overwrite
+
+
+
+
+oc get pods -n openshift-marketplace -o wide
