@@ -80,23 +80,21 @@ done
 
 ************************
 
-ibmcloud oc worker-pool rm \
-  --cluster carla-prd-latam-ocw01 \
-  --worker-pool apigee-data
+echo "=== NODOS ==="
+oc get nodes
 
+echo "=== OPERADORES ==="
+oc get co
 
+echo "=== PODS CON PROBLEMAS ==="
+oc get pods -A \
+  --field-selector=status.phase!=Running,status.phase!=Succeeded
 
-oc adm cordon 10.110.12.11
-oc adm drain 10.110.12.11 --ignore-daemonsets --timeout=15m
+echo "=== CASSANDRA ==="
+oc get sts -n apigee apigee-cassandra-default
 
-oc adm cordon 10.110.28.10
-oc adm drain 10.110.28.10 --ignore-daemonsets --timeout=15m
-
-oc adm cordon 10.110.44.9
-oc adm drain 10.110.44.9 --ignore-daemonsets --timeout=15m
-
-
-ibmcloud oc worker-pool ls --cluster carla-prd-latam-ocw01
-ibmcloud oc worker ls --cluster carla-prd-latam-ocw01
-
+echo "=== ANILLO CASSANDRA ==="
+oc exec -n apigee apigee-cassandra-default-0 \
+  -c apigee-cassandra -- sh -c \
+  'nodetool -u "$APIGEE_JMX_USER" -pw "$APIGEE_JMX_PASSWORD" status'
 
