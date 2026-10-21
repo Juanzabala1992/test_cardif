@@ -1,18 +1,18 @@
-echo "=== ESTADO CASSANDRA ==="
-oc get sts apigee-cassandra-default -n apigee
+echo "=== RELEASES HELM ==="
+helm list -n apigee -o json |
+jq -r '
+.[] | select(.status=="deployed")
+| [.name,.chart] | @tsv'
 
-echo "=== PODS CASSANDRA ==="
-oc get pods -n apigee -o wide |
-grep apigee-cassandra-default-
+echo "=== SELECTORES DATASTORE ==="
+helm get values datastore -n apigee -o json |
+jq '.nodeSelector'
 
-echo "=== ANILLO CASSANDRA ==="
-oc exec -n apigee apigee-cassandra-default-0 \
-  -c apigee-cassandra -- \
-  bash -c 'nodetool -u cassandra -pw "$CASS_PASSWORD" status'
-
-echo "=== PVC CASSANDRA ==="
-oc get pvc -n apigee |
-grep cassandra-data
-
-echo "=== PDB CASSANDRA ==="
-oc get pdb apigee-cassandra-default -n apigee
+echo "=== ESTRATEGIA CASSANDRA ==="
+oc get sts apigee-cassandra-default \
+  -n apigee -o json |
+jq '{
+  strategy: .spec.updateStrategy,
+  replicas: .spec.replicas,
+  affinity: .spec.template.spec.affinity.nodeAffinity
+}'
