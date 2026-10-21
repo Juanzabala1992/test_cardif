@@ -662,3 +662,33 @@ else
     echo "SIMULACION FALLO"
     tail -15 "$LOG"
 fi
+
+**************************************
+
+CH="$HOME/apigee-rhcos-prod-charts"
+DIR="$HOME/helm-dryruns"
+umask 077
+mkdir -p "$DIR"
+
+helm list -n apigee -o json |
+jq -r '
+  .[]
+  | select(.status=="deployed" and .name!="datastore")
+  | [.name, (.chart | sub("-1[.]15[.]1$"; ""))]
+  | @tsv
+' |
+while IFS=$'\t' read -r REL CHART; do
+  if helm upgrade "$REL" "$CH/$CHART" \
+    -n apigee \
+    --reuse-values \
+    --set-string nodeSelector.apigeeRuntime.value=apigee-runtime-rhcos \
+    --dry-run=server \
+    --hide-secret \
+    > "$DIR/$REL.log" 2>&1; then
+    echo "OK: $REL"
+  else
+    echo "FALLO: $REL"
+  fi
+done
+
+echo "=== SIMULACIONES FINALIZADAS ==="
