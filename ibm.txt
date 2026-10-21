@@ -80,3 +80,16 @@ find "$HOME" -maxdepth 4 \
 bash -n ~/Migracion_RHCOS_Integration_PROD_Asistida.sh
 
 bash ~/Migracion_RHCOS_Integration_PROD_Asistida.sh plan
+
+
+************************
+
+
+find "$HOME" -maxdepth 4 \
+  -name 'Migracion_RHCOS_Integration_PROD_Asistida.sh'
+
+
+
+bash -n ~/Migracion_RHCOS_Integration_PROD_Asistida.sh
+
+bash ~/Migracion_RHCOS_Integration_PROD_Asistida.sh plan
