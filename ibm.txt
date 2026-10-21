@@ -194,3 +194,22 @@ while read -r NODE IP; do
       ;;
   esac
 done
+
+
+********************************
+
+
+NODE=$(oc get pod -n apigee \
+  apigee-hybrid-helm-guardrail-datastore \
+  -o jsonpath='{.spec.nodeName}')
+
+for HOST in localhost kubernetes.default.svc.cluster.local "$NODE"; do
+  echo "===== $HOST ====="
+  oc exec -n apigee apigee-cassandra-default-0 \
+    -c apigee-cassandra -- getent hosts "$HOST"
+  echo "EXIT_CODE=$?"
+done
+
+echo "===== CONFIGURACION DNS CASSANDRA ====="
+oc exec -n apigee apigee-cassandra-default-0 \
+  -c apigee-cassandra -- cat /etc/resolv.conf
