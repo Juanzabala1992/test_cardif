@@ -768,3 +768,100 @@ for R in apigee-latam-prd prod-br-env prod-br-group telemetry; do
       | if length > 0 then .[] else "NO ENCONTRADOS" end
     '
 done
+
+
+
+
+**********************************
+
+
+
+(
+set -euo pipefail
+umask 077
+
+SRC="$HOME/apigee-rhcos-prod-charts"
+OUT="$HOME/apigee-rhcos-prod-por-release"
+
+mkdir -p "$OUT"
+chmod 700 "$OUT"
+
+helm list -n apigee -o json |
+jq -r '
+  .[]
+  | select(.status=="deployed")
+  | [.name, (.chart | sub("-1[.]15[.]1$"; ""))]
+  | @tsv
+' |
+while IFS=$'\t' read -r R C; do
+
+  [ -d "$SRC/$C" ] || {
+    echo "FALTA CHART: $C"
+    exit 1
+  }
+
+  DEST="$OUT/$R"
+  mkdir -p "$DEST"
+  chmod 700 "$DEST"
+  cp -a "$SRC/$C/." "$DEST/"
+
+  SEC=$(oc get secrets -n apigee \
+    -l "owner=helm,name=$R,status=deployed" \
+    -o json |
+    jq -r '.items |
+      sort_by((.metadata.labels.version // "0") | tonumber) |
+      last | .metadata.name // empty')
+
+  [ -n "$SEC" ] || {
+    echo "SIN SECRET: $R"
+    exit 1
+  }
+
+  oc get secret "$SEC" -n apigee \
+    -o jsonpath='{.data.release}' |
+  base64 -d | base64 -d | gzip -dc |
+  jq -r '.chart.files[]? | [.name,.data] | @tsv' |
+  while IFS=$'\t' read -r F B64; do
+
+    case "$F" in
+      /*|../*|*/../*)
+        echo "RUTA INVALIDA: $R"
+        exit 1 ;;
+    esac
+
+    install -d -m 700 "$(dirname "$DEST/$F")"
+    printf '%s' "$B64" | base64 -d > "$DEST/$F"
+    chmod 600 "$DEST/$F"
+  done
+
+  echo "OK: $R"
+done
+)
+
+
+
+
+
+OUT="$HOME/apigee-rhcos-prod-por-release"
+LOG="$HOME/helm-dryruns-recuperados"
+
+mkdir -p "$LOG"
+chmod 700 "$LOG"
+umask 077
+
+for R in apigee-latam-prd prod-br-env prod-br-group telemetry; do
+
+  if helm upgrade "$R" "$OUT/$R" \
+    -n apigee \
+    --reuse-values \
+    --set-string nodeSelector.apigeeRuntime.value=apigee-runtime-rhcos \
+    --dry-run=server \
+    --hide-secret > "$LOG/$R.log" 2>&1; then
+
+    echo "OK: $R"
+  else
+    echo "FALLO: $R"
+  fi
+done
+
+
