@@ -202,3 +202,58 @@ AUTO_APPLY_RUNTIME=1 bash \
   runtime-next
 
 
+
+******************************************
+
+python3 - <<'PY'
+from pathlib import Path
+
+src = Path.home() / "Migracion_RHCOS_Integration_PROD_POR_RELEASE.sh"
+dst = Path.home() / "Migracion_RHCOS_Integration_PROD_AUTO_RUNTIME.sh"
+
+if not src.is_file():
+    raise SystemExit("ERROR: script original no encontrado")
+
+s = src.read_text()
+
+if ('apigee-rhcos-prod-por-release' not in s
+        or 'localchart="$rel"' not in s):
+    raise SystemExit("ERROR: falta correccion de charts por release")
+
+old = '  confirm "APLICAR-$rel"'
+
+if s.count(old) != 1:
+    raise SystemExit("ERROR: confirmacion no encontrada")
+
+new = '''  if [[ "$which" == "runtime" && "${AUTO_APPLY_RUNTIME:-0}" == "1" ]]; then
+    say "AUTO-APLICANDO RUNTIME: $rel"
+  else
+    confirm "APLICAR-$rel"
+  fi'''
+
+s = s.replace(old, new, 1)
+
+old_dry = '  if ! helm upgrade "$rel" "$CHART_HOME/$localchart" -n "$NS"'
+
+if s.count(old_dry) != 2:
+    raise SystemExit("ERROR: estructura Helm inesperada")
+
+pos = s.index(old_dry)
+
+if '--dry-run=server' not in s[pos:pos+250]:
+    raise SystemExit("ERROR: no se identifico el dry-run")
+
+s = s[:pos] + s[pos:].replace(
+    'if ! helm upgrade',
+    'if ! timeout -k 15s 5m helm upgrade',
+    1
+)
+
+dst.write_text(s)
+dst.chmod(0o700)
+
+print("SCRIPT AUTOMATICO CREADO")
+PY
+
+bash -n ~/Migracion_RHCOS_Integration_PROD_AUTO_RUNTIME.sh \
+  && echo "SINTAXIS OK"
