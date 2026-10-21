@@ -130,3 +130,12 @@ oc logs -n openshift-marketplace certified-operators-1-dk67b -c registry-server 
 oc get catalogsource certified-operators-1 -n openshift-marketplace -o jsonpath='{.spec.image}{"\n"}{.spec.grpcPodConfig.securityContextConfig}{"\n"}'
 
 oc get pod certified-operators-1-dk67b -n openshift-marketplace -o jsonpath='{.metadata.annotations.openshift\.io/scc}{"\n"}'
+
+
+*******************
+
+oc get pod certified-operators-1-dk67b -n openshift-marketplace \
+  -o jsonpath='SA={.spec.serviceAccountName}{"\n"}POD_SECURITY={.spec.securityContext}{"\n"}CONTAINER_SECURITY={.spec.containers[0].securityContext}{"\n"}MOUNTS={.spec.containers[0].volumeMounts}{"\n"}'
+
+oc get scc apigee-scc-apigee \
+  -o jsonpath='RUNAS={.runAsUser}{"\n"}FSGROUP={.fsGroup}{"\n"}'
