@@ -100,3 +100,22 @@ POD=$(oc get pods -n openshift-marketplace -o name | grep '^pod/certified-operat
 oc get clusterversion version -o jsonpath='{.status.desired.version}{"\n"}'
 
 oc get catalogsource -n openshift-marketplace -o custom-columns=NAME:.metadata.name,IMAGE:.spec.image
+
+***************************
+
+
+oc get catalogsource -n openshift-marketplace -o yaml > ~/catalogsource-backup.yaml
+
+
+oc get subscriptions -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,SOURCE:.spec.source,CHANNEL:.spec.channel
+
+
+
+oc patch catalogsource certified-operators-1 \
+  -n openshift-marketplace \
+  --type=merge \
+  -p '{"spec":{"image":"registry.redhat.io/redhat/certified-operator-index:v4.18"}}'
+
+
+oc get pods -n openshift-marketplace -o wide
+oc get catalogsource -n openshift-marketplace
