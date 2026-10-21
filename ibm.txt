@@ -102,98 +102,129 @@ bash ~/Migracion_RHCOS_Integration_PROD_Asistida.sh plan
 
 
 
-#!/usr/bin/env bash
-# MIGRACION ASISTIDA: IBM OpenShift -> RHCOS, Apigee Hybrid 1.15.1 (Integration PROD).
-# Modos: plan | charts | preflight | runtime-next | runtime-one RELEASE | cassandra | drain NODO | estado.
-# No crea workers, no borra PVC/PV, no elimina pools, no cambia backups.
-# Un Helm upgrade exitoso NO garantiza que los pods ya se hayan movido.
-set -Eeuo pipefail
-umask 077
-
-CL='carla-prd-latam-ocw01'
-NS='apigee'
-OLD_DATA='apigee-data'
-OLD_RUNTIME='apigee-runtime'
-NEW_DATA="${NEW_DATA:-apigee-data-rhcos}"
-NEW_RUNTIME="${NEW_RUNTIME:-apigee-runtime-rhcos}"
-ACCOUNT='CARLA-PRD-INTEGRATION'
-CHART_VERSION='1.15.1'
-CHART_HOME="${CHART_HOME:-$HOME/apigee-rhcos-prod-charts}"
-LOG_HOME="${LOG_HOME:-$HOME/apigee-rhcos-prod-ejecucion}"
-LABEL_POOL='ibm-cloud.kubernetes.io/worker-pool-name'
-MODE="${1:-help}"
-
-say(){ printf '\n>>> %s\n' "$*"; }
-stop(){ printf '\nDETENIDO: %s\n' "$*" >&2; exit 1; }
-require(){ command -v "$1" >/dev/null 2>&1 || stop "falta el comando $1"; }
-confirm(){ local expected="$1" text; printf '\nESCRIBE EXACTAMENTE [%s] PARA CONTINUAR: ' "$expected"; read -r text; [[ "$text" == "$expected" ]] || stop 'no se confirmó la operación'; }
-help_text(){ cat <<'HELP'
-  INTEGRATION PROD / APIGEE 1.15.1 - MIGRACION RHEL8 -> RHCOS (ASISTIDA)
-
-  bash Migracion_RHCOS_Integration_PROD_Asistida.sh plan
-       Inventario de releases Helm, selectores y configuración. NO CAMBIA NADA.
-
-  bash Migracion_RHCOS_Integration_PROD_Asistida.sh charts
-       Descarga charts oficiales Apigee 1.15.1 en Cloud Shell (NO cambia cluster).
-       Si el chart requiere archivos JSON PROD, deben proceder de la bóveda autorizada.
-
-  bash Migracion_RHCOS_Integration_PROD_Asistida.sh preflight
-       Requiere los 6 workers NUEVOS listos, correctamente etiquetados y cifrados.
-
-  bash Migracion_RHCOS_Integration_PROD_Asistida.sh runtime-next
-       Simula y, tras confirmar, actualiza UN release de runtime pendiente.
-       Repetir hasta que plan no muestre releases runtime pendientes.
-
-  bash Migracion_RHCOS_Integration_PROD_Asistida.sh runtime-one NOMBRE_RELEASE
-       Simula y actualiza solo el release indicado (no datastore).
-
-  bash Migracion_RHCOS_Integration_PROD_Asistida.sh cassandra
-       Simula / actualiza datastore (NO reinicia ni borra pods a la fuerza).
-       Requiere aceptación específica del riesgo SIN backup reciente.
-
-  bash Migracion_RHCOS_Integration_PROD_Asistida.sh drain NOMBRE_NODO_ANTIGUO
-       Cordona + intenta evacuar un nodo RHEL antiguo, con PDB, sin --force.
-       Ejecutar sólo al final, uno a la vez.
-
-  bash Migracion_RHCOS_Integration_PROD_Asistida.sh estado
-       Resumen de workers, Cassandra, Apigee, pods restantes en nodos antiguos.
-
-IMPORTANTE:
- - Verificar cuenta / contexto de producción y ejecutar ibmcloud target -r br-sao ANTES.
- - Los nombres de nuevos pools pueden sobreescribirse con NEW_DATA y NEW_RUNTIME.
- - NO CONTINUAR sin change aprobada y pruebas funcionales de negocio.
- - Sin backup reciente recuperable, una perdida de datos puede NO TENER REVERSA.
- - Ninguna fase elimina los pools viejos: esa decisión es manual tras estabilización.
-HELP
-}
-
-check_context(){
-  require oc; require ibmcloud; require jq; require helm
-  local ctx target server
-  ctx=$(oc config current-context) || stop 'no hay contexto OpenShift'
-  [[ "$ctx" == "$CL/"* ]] || stop "oc apunta a '$ctx' y no a $CL (ibmcloud oc cluster config --cluster $CL --admin)"
-  target=$(ibmcloud target 2>&1) || stop 'no hay sesión IBM Cloud válida'
-  grep -Fq "$ACCOUNT" <<<"$target" || stop "la cuenta IBM Cloud no es $ACCOUNT"
-  grep -Eq 'Region:[[:space:]]*br-sao([[:space:]]|$)' <<<"$target" || stop 'la región IBM no es br-sao; ejecutar ibmcloud target -r br-sao'
-  server=$(oc whoami --show-server) || stop 'oc no conectado'
-  [[ "$server" == *'.br-sao.'* ]] || stop "API inesperada: $server"
-  say "CUENTA CORRECTA: $ACCOUNT | CLUSTER: $CL | REGION: br-sao"
-}
-
-# Evita aceptar pool con VPC/cifrado distintos o con nodos de menos.
-check_pool_spec(){
-  local old="$1" new="$2" old_info new_info key a b oldz newz
-  old_info=$(ibmcloud oc worker-pool get --cluster "$CL" --worker-pool "$old") || stop "no se pudo consultar $old"
-  new_info=$(ibmcloud oc worker-pool get --cluster "$CL" --worker-pool "$new") || stop "no existe/no se puede consultar $new"
-  grep -Eq '^Operating System:[[:space:]]*RHCOS' <<<"$new_info" || stop "pool $new NO aparece como RHCOS"
-  for key in VPC Flavor KMS CRK 'KMS Account ID'; do
-    a=$(awk -F: -v k="$key" '$1==k {sub(/^[^:]*:[[:space:]]*/,"");print;exit}' <<<"$old_info")
-    b=$(awk -F: -v k="$key" '$1==k {sub(/^[^:]*:[[:space:]]*/,"");print;exit}' <<<"$new_info")
-    [[ -n "$a" && -n "$b" ]] || stop "no pude comparar $key entre $old y $new: revisar manualmente antes de proceder"
-    [[ "$a" == "$b" ]] || stop "DIFERENCIA $key ($old vs $new): $a / $b"
+  [[ $(wc -l <<<"$oldhosts") == 3 ]] || stop 'no pude registrar 3 Host IDs antes del movimiento'
+  apply_release datastore data
+  echo 'Esperar reconciliación de ApigeeDatastore. NO BORRAR PODS MANUALMENTE.'
+  echo 'Si Cassandra no se mueve: revisar estrategia STS y estado operador. STOP; no repetir Helm a ciegas.'
+  say 'ESPERANDO CASSANDRA UN / 3 PODS EN POOL NUEVO (máximo 30 min)'
+  local n good=0
+  for ((n=0;n<90;n++)); do
+    if oc get pods -n "$NS" -o json | jq -e --arg pool "$NEW_DATA" '
+      [.items[]|select(.metadata.name|test("^apigee-cassandra-default-[0-9]+$"))] as $p
+      | ($p|length)==3
+      and all($p[]; .status.phase=="Running" and
+         (.status.containerStatuses|all(.ready==true)) and
+         .spec.nodeName!="")' >/dev/null 2>&1 &&
+       [[ $(oc get pods -n "$NS" -o json | jq -r '[.items[]|select(.metadata.name|test("^apigee-cassandra-default-[0-9]+$"))|.spec.nodeName] | length') == 3 ]] &&
+       check_cassandra_placement; then good=1; break; fi
+    sleep 20
   done
-  oldz=$(ibmcloud oc worker-pool zones --cluster "$CL" --worker-pool "$old" | awk '/^br-sao-[0-9]+[[:space:]]+/{print $1,$2}' | sort)
-  newz=$(ibmcloud oc worker-pool zones --cluster "$CL" --worker-pool "$new" | awk '/^br-sao-[0-9]+[[:space:]]+/{print $1,$2}' | sort)
-  [[ -n "$oldz" && "$oldz" == "$newz" ]] || stop "las zonas/subredes del pool $new NO coinciden con $old"
-  printf '%s -> %s: VPC, flavor, KMS, CRK, cuenta y subredes coinciden\n' "$old" "$new"
+  [[ "$good" -eq 1 ]] || stop 'Cassandra NO terminó de reprogramarse en el pool RHCOS; NO drenar pool RHEL'
+  check_ring
+  newpvc=$(pvc_fingerprint); newhosts=$(ring_host_ids)
+  [[ "$newpvc" == "$oldpvc" ]] || stop 'HA CAMBIADO la asociación PVC->PV de Cassandra; STOP y revisar'
+  [[ "$newhosts" == "$oldhosts" ]] || stop 'CAMBIARON LOS HOST IDS CASSANDRA; STOP, posible pérdida/reinicialización de datos'
+  echo 'Cassandra en workers nuevos; dc-1 y dc-2 saludables, mismos PV y Host IDs locales. Validar APIs antes de drenar.' 
 }
+
+check_cassandra_placement(){
+  local nodes
+  nodes=$(oc get nodes -l "$LABEL_POOL=$NEW_DATA" -o json | jq -c '[.items[].metadata.name]') || return 1
+  oc get pods -n "$NS" -o json | jq -e --argjson nodes "$nodes" '
+    [.items[] | select(.metadata.name|test("^apigee-cassandra-default-[0-9]+$"))] as $p
+    | ($p|length)==3
+      and all($p[]; (.spec.nodeName // "") as $n | ($nodes | index($n)) != null)
+  ' >/dev/null
+}
+
+# El drenaje no se permite si cualquier release Apigee conserva la selección antigua.
+check_runtime_values_migrated(){
+  local r chart status key val pending=0
+  while IFS=$'\t' read -r _ chart r status; do
+    key=$(get_release_property "$r" apigeeRuntime key)
+    val=$(get_release_property "$r" apigeeRuntime value)
+    if [[ "$status" != deployed || "$key" != "$LABEL_POOL" || "$val" != "$NEW_RUNTIME" ]]; then
+      echo "BLOQUEO RUNTIME: $r ($chart) Helm=$status selector=$key=$val"
+      pending=1
+    fi
+  done < <(order_runtime)
+  [[ "$pending" -eq 0 ]] || stop 'existen releases Runtime sin migrar o con afinidad no verificada'
+}
+
+drain_node(){
+  local node="${1:-}" pool oldn r
+  [[ -n "$node" ]] || stop 'debe indicar el nodo RHEL antiguo (no una IP sin comprobar)'
+  check_context
+  check_pool_spec "$OLD_DATA" "$NEW_DATA"; check_ready_pool "$NEW_DATA" "$OLD_DATA"
+  check_pool_spec "$OLD_RUNTIME" "$NEW_RUNTIME"; check_ready_pool "$NEW_RUNTIME" "$OLD_RUNTIME"
+  pool=$(oc get node "$node" -o json | jq -r '.metadata.labels["ibm-cloud.kubernetes.io/worker-pool-name"] // ""') || stop 'nodo no encontrado'
+  [[ "$pool" == "$OLD_DATA" || "$pool" == "$OLD_RUNTIME" ]] || stop "el nodo $node no pertenece a un pool RHEL antiguo: $pool"
+  # Nunca usar drain como método para mover Cassandra con backups no recuperables.
+  if oc get pods -n "$NS" -o json | jq -e --arg node "$node" '
+    any(.items[]; (.spec.nodeName==$node) and (.metadata.name|test("^apigee-cassandra-default-[0-9]+$")))' >/dev/null; then
+    stop 'CASSANDRA AUN EN NODO ANTIGUO. Drenaje bloqueado; mover por operador/Helm con verificación UN.'
+  fi
+  if [[ "$pool" == "$OLD_RUNTIME" ]]; then
+    check_runtime_values_migrated
+  else
+    [[ $(get_release_property datastore apigeeData value) == "$NEW_DATA" ]] \
+      || stop 'datastore aun apunta al pool viejo'
+    check_cassandra_placement || stop 'Cassandra aun tiene pods fuera de NEW_DATA'
+    check_ring
+  fi
+  check_operators; check_app_pods
+  local active_backups
+  active_backups=$(oc get jobs -n "$NS" -o json | jq '[.items[] | select((.metadata.name|startswith("apigee-cassandra-backup-")) and ((.status.active//0)>0))]|length')
+  if [[ "$active_backups" -gt 0 ]]; then
+    echo "ALERTA: $active_backups jobs Cassandra backup CSI siguen activos (no es un backup verificable)."
+    confirm 'ACEPTO-DRENAR-CON-BACKUPS-BLOQUEADOS'
+  fi
+  echo "DRENAR: $node (pool antiguo $pool). Puede interrumpir servicios y borrar emptyDir temporal."
+  echo 'Se respetarán PDB; NO se usarán --force ni --disable-eviction.'
+  confirm "DRENAR-$node"
+  oc adm drain "$node" --ignore-daemonsets --delete-emptydir-data --timeout=15m \
+    || stop 'drain bloqueado/timeout; NO eliminar worker ni ignorar PDB. Revisar salida.'
+  say 'DRENADO; verificando operadores'
+  check_operators
+  oc get nodes
+  echo 'Comprobar redis/runtime/synchronizer e ingreso de APIs antes del siguiente nodo.'
+}
+
+status(){
+  check_context
+  say 'IBM POOLS'; ibmcloud oc worker-pool ls --cluster "$CL"
+  say 'NODOS Y POOLS'; oc get nodes -L "$LABEL_POOL" -L topology.kubernetes.io/zone
+  say 'APIGEE DATASTORE / CASSANDRA'; oc get apigeedatastores -n "$NS"
+  oc get sts apigee-cassandra-default -n "$NS"
+  oc get pods -n "$NS" -o wide | grep -E 'apigee-cassandra-default-[0-9]+|apigee-redis-default' || true
+  say 'APIGEE ORG Y ENVS'; oc get apigeeorg,apigeeenv -n "$NS" || true
+  say 'PODS APIGEE RESIDUALES EN RHEL (EXCLUYE JOBS)'
+  oc get pods -n "$NS" -o json | jq -r '
+   .items[] | select((.metadata.ownerReferences//[]|any(.kind=="Job"))|not)
+   | [.spec.nodeName,.metadata.name,.status.phase] | @tsv' | while IFS=$'\t' read -r node pod phase; do
+    [[ -n "$node" ]] || continue
+    local p
+    p=$(oc get node "$node" -o json | jq -r '.metadata.labels["ibm-cloud.kubernetes.io/worker-pool-name"]//""') || continue
+    if [[ "$p" == "$OLD_DATA" || "$p" == "$OLD_RUNTIME" ]]; then
+      printf '%s\t%s\t%s\t%s\n' "$node" "$p" "$pod" "$phase"
+    fi
+  done
+  say 'PDB sin interrupciones permitidas'
+  oc get pdb -A -o json | jq -r '.items[]|select((.status.disruptionsAllowed//0)==0)|[.metadata.namespace,.metadata.name]|@tsv' | head -30
+  say 'OPERADORES'; oc get co | awk 'NR==1 || $3!="True" || $5!="False"'
+  echo 'NOTA: revisar pruebas de negocio y respaldo ausente. NO se borran pools.'
+}
+
+case "$MODE" in
+  help|-h|--help) help_text ;;
+  plan) plan ;;
+  charts) prepare_charts ;;
+  preflight) check_preflight ;;
+  runtime-next) runtime_next ;;
+  runtime-one) check_context; check_pool_spec "$OLD_RUNTIME" "$NEW_RUNTIME"; check_ready_pool "$NEW_RUNTIME" "$OLD_RUNTIME"; apply_release "${2:-}" runtime ;;
+  cassandra) cassandra ;;
+  drain) drain_node "${2:-}" ;;
+  estado|status) status ;;
+  *) help_text; stop "modo desconocido: $MODE" ;;
+esac
+
