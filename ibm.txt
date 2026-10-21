@@ -1,25 +1,18 @@
-CL=carla-prd-latam-ocw01
+echo "=== ESTADO CASSANDRA ==="
+oc get sts apigee-cassandra-default -n apigee
 
-ibmcloud target -r br-sao
+echo "=== PODS CASSANDRA ==="
+oc get pods -n apigee -o wide |
+grep apigee-cassandra-default-
 
-ibmcloud oc cluster config \
-  --cluster "$CL" --admin
+echo "=== ANILLO CASSANDRA ==="
+oc exec -n apigee apigee-cassandra-default-0 \
+  -c apigee-cassandra -- \
+  bash -c 'nodetool -u cassandra -pw "$CASS_PASSWORD" status'
 
-echo "=== CUENTA Y REGION ==="
-ibmcloud target
+echo "=== PVC CASSANDRA ==="
+oc get pvc -n apigee |
+grep cassandra-data
 
-echo "=== CLUSTER ==="
-ibmcloud oc cluster get --cluster "$CL"
-
-echo "=== POOLS ==="
-ibmcloud oc worker-pool ls --cluster "$CL"
-
-echo "=== NODOS ==="
-oc get nodes \
-  -L ibm-cloud.kubernetes.io/worker-pool-name
-
-echo "=== OPERADORES CON PROBLEMAS ==="
-oc get co | awk 'NR==1 || $3!="True" || $5!="False"'
-
-echo "=== APIGEE DATASTORE ==="
-oc get apigeedatastores -n apigee
+echo "=== PDB CASSANDRA ==="
+oc get pdb apigee-cassandra-default -n apigee
