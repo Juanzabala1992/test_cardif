@@ -132,3 +132,21 @@ oc get cronjob -n apigee \
 echo "=== SECRET REGISTRY ==="
 oc get secret -n apigee secret-reg-apigee \
 --ignore-not-found
+
+
+**************************
+
+
+oc patch cronjob apigee-cassandra-backup \
+  -n apigee --type=json -p='[
+  {
+    "op":"replace",
+    "path":"/spec/jobTemplate/spec/template/spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms/0/matchExpressions/0/values",
+    "value":["apigee-runtime-rhcos"]
+  },
+  {
+    "op":"replace",
+    "path":"/spec/jobTemplate/spec/template/spec/affinity/nodeAffinity/preferredDuringSchedulingIgnoredDuringExecution/0/preference/matchExpressions/0/values",
+    "value":["apigee-runtime-rhcos"]
+  }
+]'
