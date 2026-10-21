@@ -147,3 +147,58 @@ test -f "$HOME/apigee-rhcos-prod-por-release/operator/Chart.yaml" \
 bash ~/Migracion_RHCOS_Integration_PROD_POR_RELEASE.sh runtime-next
 
 bash ~/Migracion_RHCOS_Integration_PROD_POR_RELEASE.sh runtime-next
+
+
+***********************************
+
+
+
+python3 - <<'PY'
+from pathlib import Path
+
+src = Path.home() / "Migracion_RHCOS_Integration_PROD_POR_RELEASE.sh"
+dst = Path.home() / "Migracion_RHCOS_Integration_PROD_AUTO_RUNTIME.sh"
+
+s = src.read_text()
+
+old = '  confirm "APLICAR-$rel"\n'
+
+new = '''  if [[ "$which" == "runtime" && "${AUTO_APPLY_RUNTIME:-0}" == "1" ]]; then
+    say "AUTO-APLICANDO RUNTIME: $rel"
+  else
+    confirm "APLICAR-$rel"
+  fi
+'''
+
+if s.count(old) != 1:
+    raise SystemExit("ERROR: confirmacion no encontrada")
+
+s = s.replace(old, new)
+
+old_dry = '  if ! helm upgrade "$rel" "$CHART_HOME/$localchart" -n "$NS" \\\n'
+
+if s.count(old_dry) != 1:
+    raise SystemExit("ERROR: simulacion no encontrada")
+
+s = s.replace(
+    old_dry,
+    '  if ! timeout -k 15s 5m helm upgrade "$rel" "$CHART_HOME/$localchart" -n "$NS" \\\n'
+)
+
+dst.write_text(s)
+dst.chmod(0o700)
+
+print("SCRIPT AUTOMATICO CREADO")
+PY
+
+command -v timeout
+bash -n ~/Migracion_RHCOS_Integration_PROD_AUTO_RUNTIME.sh \
+  && echo "SINTAXIS OK"
+
+
+
+AUTO_APPLY_RUNTIME=1 bash \
+  ~/Migracion_RHCOS_Integration_PROD_AUTO_RUNTIME.sh \
+  runtime-next
+
+
