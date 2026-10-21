@@ -61,3 +61,30 @@ for N in 10.110.12.4 10.110.28.4 10.110.44.4; do
     ] | @tsv
   '
 done
+
+********************************
+
+
+
+echo "=== PDB DEL CLUSTER ==="
+oc get pdb -A
+
+echo "=== OPERADORES ==="
+oc get co
+
+echo "=== JOBS CASSANDRA BACKUP ==="
+oc get jobs -n apigee -o json |
+jq -r '
+.items[]
+| select(.metadata.name | startswith("apigee-cassandra-backup-"))
+| [
+    .metadata.name,
+    (.status.active // 0),
+    (.status.succeeded // 0),
+    (.status.failed // 0)
+  ] | @tsv
+' | tail -15
+
+echo "=== ESTADO WORKERS IBM ==="
+ibmcloud oc worker ls \
+  --cluster carla-prd-latam-ocw01
