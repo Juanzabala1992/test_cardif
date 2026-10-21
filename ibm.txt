@@ -1,17 +1,33 @@
 CL=carla-prd-latam-ocw01
 
-for P in apigee-data apigee-runtime; do
+ibmcloud target -g CARLA-PRD-WORKLOAD-RG
 
-  echo "=== POOL: $P ==="
+ibmcloud oc worker-pool create vpc-gen2 \
+  --cluster "$CL" \
+  --name apigee-data-rhcos \
+  --flavor bx2.4x16 \
+  --size-per-zone 1 \
+  --operating-system RHCOS \
+  --label apigee-nodepool=apigee-data \
+  --kms-instance 0c52fc9e-96a9-4c63-8226-50bdc1612186 \
+  --crk ccf17122-cb29-4a3e-ad68-7a827078a63b \
+  --kms-account-id f284a6766c2345e09d255d74e18c67c5
 
-  ibmcloud oc worker-pool get \
-    --cluster "$CL" \
-    --worker-pool "$P"
 
-  echo "=== ZONAS Y SUBREDES: $P ==="
 
-  ibmcloud oc worker-pool zones \
-    --cluster "$CL" \
-    --worker-pool "$P"
+ibmcloud oc worker-pool create vpc-gen2 \
+  --cluster "$CL" \
+  --name apigee-runtime-rhcos \
+  --flavor mx2.8x64 \
+  --size-per-zone 1 \
+  --operating-system RHCOS \
+  --label apigee-nodepool=apigee-runtime \
+  --kms-instance 0c52fc9e-96a9-4c63-8226-50bdc1612186 \
+  --crk ccf17122-cb29-4a3e-ad68-7a827078a63b \
+  --kms-account-id f284a6766c2345e09d255d74e18c67c5
 
-done
+
+
+
+ibmcloud oc worker-pool ls --cluster "$CL"
+
