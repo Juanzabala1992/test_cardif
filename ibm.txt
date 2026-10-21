@@ -137,3 +137,25 @@ jq -r '
     (.status.readyToUse // false),
     (.status.error.message // "-")
   ] | @tsv'
+
+
+*************************
+
+
+echo "=== VERSION CSI ==="
+ibmcloud oc cluster addon ls \
+  --cluster carla-prd-latam-ocw01 |
+grep -i vpc-block
+
+echo "=== SNAPSHOT CLASS ==="
+oc get volumesnapshotclass hybrid-snapshot-v3 \
+  -o json |
+jq '{
+  driver,
+  deletionPolicy,
+  parameters
+}'
+
+echo "=== RESOURCE GROUP ==="
+ibmcloud resource groups |
+grep -i CARLA-PRD-WORKLOAD
