@@ -44,3 +44,15 @@ oc create job -n apigee \
 
 oc get job cassandra-backup-rhcos-test -n apigee
 oc get pods -n apigee -o wide | grep cassandra-backup-rhcos-test
+
+
+************************
+
+oc wait --for=condition=complete \
+  job/cassandra-backup-rhcos-test \
+  -n apigee --timeout=20m
+
+
+
+
+oc logs -n apigee job/cassandra-backup-rhcos-test --tail=50
