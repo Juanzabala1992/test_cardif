@@ -101,3 +101,22 @@ helm upgrade datastore "$CH" \
   --reuse-values \
   --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
   --timeout 30m
+
+
+***********************************
+
+
+oc get pod -n apigee apigee-hybrid-helm-guardrail-datastore \
+-o jsonpath='{.spec.nodeName}{" hostNetwork="}{.spec.hostNetwork}{" podIP="}{.status.podIP}{"\n"}'
+
+
+
+oc get pods -n apigee -o wide | grep -E 'cassandra-default|guardrail'
+
+
+
+
+for i in 0 1 2; do
+  echo "===== Cassandra $i ====="
+  oc exec -n apigee "apigee-cassandra-default-$i" -- hostname -i
+done
