@@ -89,3 +89,15 @@ oc get apigeedatastores -n apigee
 
 oc get pvc -n apigee |
 grep cassandra-data
+
+
+*******************************
+
+
+CH="$HOME/apigee-rhcos-prod-por-release/datastore"
+
+helm upgrade datastore "$CH" \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
+  --timeout 30m
