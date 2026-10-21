@@ -1,0 +1,3 @@
+oc get cm authentication -o yaml
+
+oc get deployment authentication -o yaml | grep -A10 -B3 -E 'env:|envFrom:|configMapRef|SERVER_SSL_ENABLED'
