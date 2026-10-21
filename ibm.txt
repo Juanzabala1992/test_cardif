@@ -225,3 +225,10 @@ helm upgrade datastore "$CH" \
 echo "===== CONFIGURACION DNS CASSANDRA ====="
 oc exec -n apigee apigee-cassandra-default-0 \
   -c apigee-cassandra -- cat /etc/resolv.conf
+
+
+******************
+
+
+oc get pods -n apigee -o wide | grep cassandra
+helm status datastore -n apigee
