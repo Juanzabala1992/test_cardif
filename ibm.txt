@@ -271,6 +271,8 @@ AUTO_APPLY_RUNTIME=1 bash \
 
 *******************************
 
+migracion_runtime_lote_seguro.sh
+
 
 #!/usr/bin/env bash
 # Integration PROD: procesa un release de Runtime por ciclo y genera un resumen.
