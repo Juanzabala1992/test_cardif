@@ -237,3 +237,18 @@ else
   echo "ERROR EN SIMULACION"
   tail -n 12 "$HOME/cassandra-dryrun.log"
 fi
+
+
+*********************************
+
+echo "=== HELM DATASTORE ==="
+helm status datastore -n apigee
+
+echo "=== SELECTOR ACTUAL ==="
+helm get values datastore -n apigee -o json |
+jq -r '.nodeSelector.apigeeData.value'
+
+echo "=== RESULTADO SIMULACION ==="
+grep -Ei 'error|failed' \
+  "$HOME/cassandra-dryrun.log" | head -10
+
