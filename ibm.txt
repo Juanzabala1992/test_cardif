@@ -258,21 +258,28 @@ oc get volumesnapshot cassandra-rg-test \
 *************************************
 
 
+echo "=== OPERADOR SNAPSHOT ==="
+oc get co csi-snapshot-controller
 
-echo "=== RESULTADO SNAPSHOT ==="
+echo "=== CONTROLADOR SNAPSHOT ==="
+oc get deployments,pods \
+  -n openshift-cluster-storage-operator |
+grep -E 'NAME|snapshot-controller'
+
+echo "=== CONTENIDO DEL SNAPSHOT ==="
+oc get volumesnapshotcontent -o json |
+jq -r '
+.items[]
+| select(
+    .spec.volumeSnapshotRef.name=="cassandra-rg-test"
+    and .spec.volumeSnapshotRef.namespace=="apigee"
+  )
+| [
+    .metadata.name,
+    (.status.readyToUse // false),
+    (.status.error.message // "-")
+  ] | @tsv'
+
+echo "=== ESTADO FINAL ==="
 oc get volumesnapshot cassandra-rg-test \
-  -n apigee -o json | jq '{
-    readyToUse: .status.readyToUse,
-    error: .status.error,
-    snapshotContent: .status.boundVolumeSnapshotContentName
-  }'
-
-echo "=== EVENTOS DEL SNAPSHOT ==="
-oc describe volumesnapshot cassandra-rg-test \
-  -n apigee | tail -25
-
-echo "=== PODS CSI ==="
-oc get pods -n kube-system |
-grep -E 'vpc-block-csi|snapshot'
-
-
+  -n apigee
