@@ -257,3 +257,13 @@ PY
 
 bash -n ~/Migracion_RHCOS_Integration_PROD_AUTO_RUNTIME.sh \
   && echo "SINTAXIS OK"
+
+
+******************************
+
+
+pgrep -af 'helm upgrade' || true
+
+AUTO_APPLY_RUNTIME=1 bash \
+  ~/Migracion_RHCOS_Integration_PROD_AUTO_RUNTIME.sh \
+  runtime-next
