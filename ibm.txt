@@ -196,3 +196,36 @@ oc get pods -n openshift-marketplace \
 
 oc describe pod community-operators-1-d4w6c \
   -n openshift-marketplace | tail -n 18
+
+
+****************************
+
+
+NS=openshift-marketplace
+
+for cs in community-operators-1 redhat-marketplace-1 redhat-operators-1; do
+  oc get catalogsource "$cs" -n "$NS" -o yaml > "$HOME/${cs}-backup.yaml"
+done
+
+for cs in community-operators-1 redhat-marketplace-1 redhat-operators-1; do
+
+  case "$cs" in
+    community-operators-1) img=community-operator-index ;;
+    redhat-marketplace-1) img=redhat-marketplace-index ;;
+    redhat-operators-1) img=redhat-operator-index ;;
+  esac
+
+  oc patch catalogsource "$cs" -n "$NS" --type=merge \
+    -p "{\"spec\":{\"image\":\"registry.redhat.io/redhat/${img}:v4.18\",\"grpcPodConfig\":{\"nodeSelector\":{\"node-role.kubernetes.io/master\":null,\"node-role.kubernetes.io/worker\":\"\"},\"securityContextConfig\":\"restricted\"}}}"
+
+  oc annotate catalogsource "$cs" -n "$NS" \
+    openshift.io/required-scc=restricted-v2 --overwrite
+
+done
+
+
+
+oc get pods -n openshift-marketplace -o wide
+
+oc get catalogsource -n openshift-marketplace \
+  -o custom-columns=NAME:.metadata.name,IMAGE:.spec.image
