@@ -453,6 +453,22 @@ fi
 ***********************************
 
 
+R="$HOME/apigee-runtime-lote/RESUMEN-20261021_064204.txt"
+L="$HOME/apigee-runtime-lote/ejecucion-20261021_064204.log"
+
+echo "=== RESULTADO ==="
+head -n 12 "$R"
+
+echo "=== ULTIMOS EVENTOS ==="
+grep -E \
+'SIGUIENTE RELEASE|COMPLETADO HELM|DETENIDO|ERROR|FALLO|HEALTHY' \
+"$L" | tail -20
+
+echo "=== AMBIENTES APIGEE ==="
+oc get apigeeenv -n apigee \
+  -o custom-columns=NAME:.metadata.name,STATE:.status.state
+
+
 F="$HOME/apigee-runtime-lote/paso-20261021_060548-2.log"
 
 echo "=== ERROR PASO 2 ==="
