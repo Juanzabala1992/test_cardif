@@ -56,3 +56,26 @@ oc wait --for=condition=complete \
 
 
 oc logs -n apigee job/cassandra-backup-rhcos-test --tail=50
+
+
+
+************************
+
+echo "=== MARKETPLACE ==="
+oc get pods -n openshift-marketplace -o wide
+
+echo "=== MOTIVO DEL ERROR ==="
+P=$(oc get pods -n openshift-marketplace \
+  --field-selector=status.phase=Pending \
+  -o jsonpath='{.items[0].metadata.name}')
+
+if [ -n "$P" ]; then
+  oc describe pod "$P" -n openshift-marketplace |
+    sed -n '/Events:/,$p'
+fi
+
+echo "=== ESTADO DEL BACKUP NUEVO ==="
+oc get job cassandra-backup-rhcos-test -n apigee
+
+echo "=== ESTADO DE LOS CATALOGOS ==="
+oc get catalogsource -n openshift-marketplace
