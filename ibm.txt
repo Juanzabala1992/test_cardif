@@ -1,23 +1,17 @@
-echo "=== NODOS, POOLS Y ZONAS ==="
-oc get nodes \
-  -L ibm-cloud.kubernetes.io/worker-pool-name \
-  -L topology.kubernetes.io/zone
+CL=carla-prd-latam-ocw01
 
-echo "=== PV CASSANDRA Y AFINIDADES ==="
-oc get pv -o json | jq -r '
-.items[]
-| select(.spec.claimRef.namespace? == "apigee")
-| select((.spec.claimRef.name // "")
-  | startswith("cassandra-data-"))
-| [
-    .spec.claimRef.name,
-    .metadata.name,
-    ([.spec.nodeAffinity.required.nodeSelectorTerms[]?
-      .matchExpressions[]?
-      | select(.key | contains("zone"))
-      | .values[]?] | unique | join(","))
-  ] | @tsv'
+for P in apigee-data apigee-runtime; do
 
-echo "=== SELECTOR RELEASE RUNTIME ==="
-helm get values prod-br-env -n apigee -o json |
-jq '{nodeSelector, affinity}'
+  echo "=== POOL: $P ==="
+
+  ibmcloud oc worker-pool get \
+    --cluster "$CL" \
+    --worker-pool "$P"
+
+  echo "=== ZONAS Y SUBREDES: $P ==="
+
+  ibmcloud oc worker-pool zones \
+    --cluster "$CL" \
+    --worker-pool "$P"
+
+done
