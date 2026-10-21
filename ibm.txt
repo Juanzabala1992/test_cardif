@@ -92,3 +92,11 @@ oc describe pod -n openshift-marketplace certified-operators-1 | tail -n 45
 
 
 POD=$(oc get pods -n openshift-marketplace -o name | grep '^pod/certified-operators-1-' | head -1); echo "$POD"; oc logs -n openshift-marketplace "$POD" -c registry-server --previous --tail=60
+
+
+**************************************
+
+
+oc get clusterversion version -o jsonpath='{.status.desired.version}{"\n"}'
+
+oc get catalogsource -n openshift-marketplace -o custom-columns=NAME:.metadata.name,IMAGE:.spec.image
