@@ -493,3 +493,30 @@ helm list -n apigee -o json |
 jq -r '.[] |
   select(.status != "deployed") |
   [.name,.status] | @tsv'
+
+
+******************************
+
+
+ENV=apigee-latam-pr-prod-cl-mtls-e173ce0
+
+echo "=== ESTADO ACTUAL ==="
+oc get apigeeenv "$ENV" -n apigee
+
+echo "=== CONDICIONES DEL RECURSO ==="
+oc get apigeeenv "$ENV" -n apigee -o json |
+jq '{
+  state: .status.state,
+  conditions: .status.conditions,
+  message: .status.message,
+  generation: .metadata.generation,
+  observedGeneration: .status.observedGeneration
+}'
+
+echo "=== DETALLE Y EVENTOS ==="
+oc describe apigeeenv "$ENV" -n apigee |
+tail -n 50
+
+echo "=== PODS CL-MTLS ==="
+oc get pods -n apigee -o wide |
+grep -E "NAME|cl-mtls-e173ce0"
