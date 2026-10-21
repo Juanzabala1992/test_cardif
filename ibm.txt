@@ -150,3 +150,11 @@ oc patch cronjob apigee-cassandra-backup \
     "value":["apigee-runtime-rhcos"]
   }
 ]'
+
+
+
+***********************
+
+
+oc get cronjob clean-snapshot -n apigee \
+  -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].command}{"\n"}{.spec.jobTemplate.spec.template.spec.containers[0].args}{"\n"}'
