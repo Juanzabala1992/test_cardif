@@ -224,4 +224,35 @@ oc get co
 echo "=== APIGEE ==="
 oc get apigeeenv -n apigee
 
+*******************************
 
+
+N=10.110.44.4
+
+echo "=== PODS NO DAEMONSET ==="
+
+oc get pods -A \
+  --field-selector "spec.nodeName=$N" \
+  -o json | jq -r '
+[
+  .items[]
+  | select(
+      ([.metadata.ownerReferences[]?.kind] |
+      index("DaemonSet")) == null
+    )
+  | select(.status.phase != "Succeeded"
+           and .status.phase != "Failed")
+  | [
+      .metadata.namespace,
+      .metadata.name,
+      (.metadata.ownerReferences[0].kind // "SIN_OWNER"),
+      .status.phase
+    ] | @tsv
+]
+| if length == 0 then
+    "SIN PODS NO-DAEMONSET ACTIVOS"
+  else .[] end
+'
+
+echo "=== ESTADO NODO ==="
+oc get node "$N"
