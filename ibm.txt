@@ -739,3 +739,32 @@ echo "=== TODOS LOS ERRORES HELM ==="
 grep -hoE \
   "'[^']+' is either an empty file or unreachable" \
   "$HOME"/helm-dryruns/*.log | sort -u
+
+
+
+*************************************************************
+
+
+
+for R in apigee-latam-prd prod-br-env prod-br-group telemetry; do
+  echo "=== RELEASE: $R ==="
+
+  SEC=$(oc get secrets -n apigee \
+    -l "owner=helm,name=$R,status=deployed" \
+    -o json |
+    jq -r '.items[0].metadata.name // empty')
+
+  if [ -z "$SEC" ]; then
+    echo "SIN SECRET HELM"
+    continue
+  fi
+
+  oc get secret "$SEC" -n apigee \
+    -o jsonpath='{.data.release}' |
+    base64 -d | base64 -d | gzip -dc |
+    jq -r '
+      [.chart.files[]?.name |
+       select(test("watcher[.]json|udca[.]json|metrics[.]json|keystore_prod-mtls-(26|27)[.]pem"))]
+      | if length > 0 then .[] else "NO ENCONTRADOS" end
+    '
+done
