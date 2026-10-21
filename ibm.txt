@@ -122,3 +122,39 @@ oc get pods -n apigee -o json | jq -r '
     | index($n) != null)
 | [.metadata.name,.status.phase,.spec.nodeName]
 | @tsv'
+
+********************************
+
+
+N=10.110.44.4
+
+oc get pods -n apigee \
+  --field-selector spec.nodeName="$N" \
+  -o json | jq -r '
+.items[]
+| select(.metadata.name |
+    startswith("apigee-cassandra-backup-"))
+| [.metadata.name,.status.phase] | @tsv'
+
+
+
+oc adm cordon 10.110.44.4
+
+
+
+oc adm drain 10.110.44.4 \
+  --ignore-daemonsets \
+  --timeout=10m
+
+
+oc get pods -A \
+  --field-selector spec.nodeName=10.110.44.4 \
+  -o wide
+
+oc get co
+
+oc get apigeeenv -n apigee
+
+oc get nodes
+
+
