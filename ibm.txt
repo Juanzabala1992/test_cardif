@@ -610,3 +610,33 @@ case "$MODE" in
   estado|status) status ;;
   *) help_text; stop "modo desconocido: $MODE" ;;
 esac
+
+
+
+
+
+********************************************
+
+
+
+F="$HOME/Migracion_RHCOS_Integration_PROD_Asistida.sh"
+
+cp "$F" "$F.bak"
+
+sed -i '1s/^GRACION ASISTIDA:/# MIGRACION ASISTIDA:/' "$F"
+
+sed -i '1i#!/usr/bin/env bash' "$F"
+
+
+
+
+
+head -n 3 "$F"
+
+wc -lc "$F"
+
+bash -n "$F" && echo "SINTAXIS OK"
+
+
+
+bash "$F" plan
