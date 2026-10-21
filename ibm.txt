@@ -666,3 +666,26 @@ grep -E '[m]igracion_runtime_lote|[h]elm upgrade'
 echo "=== NODOS ==="
 oc get nodes \
 -L ibm-cloud.kubernetes.io/worker-pool-name
+
+
+*********************************************
+
+
+echo "=== PODS EN WORKERS ANTIGUOS ==="
+
+for NODE in 10.110.12.4 10.110.28.4 10.110.44.4; do
+  echo "===== $NODE ====="
+  oc get pods -A \
+    --field-selector spec.nodeName="$NODE" \
+    -o wide
+done
+
+echo "=== ESTADO APIGEE ==="
+oc get apigeeenv -n apigee
+
+echo "=== PDB ==="
+oc get pdb -n apigee
+
+echo "=== POOLS ==="
+ibmcloud oc worker-pool ls \
+  --cluster carla-prd-latam-ocw01
