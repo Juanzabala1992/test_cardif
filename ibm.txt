@@ -196,8 +196,3 @@ oc get pods -n openshift-marketplace \
 
 oc describe pod community-operators-1-d4w6c \
   -n openshift-marketplace | tail -n 18
-
-oc get pods -n openshift-marketplace -o wide
-
-POD=$(oc get pods -n openshift-marketplace -o name | grep '^pod/certified-operators-1-' | head -1)
-oc get -n openshift-marketplace "$POD" -o jsonpath='{.metadata.annotations.openshift\.io/scc}{"\n"}'
