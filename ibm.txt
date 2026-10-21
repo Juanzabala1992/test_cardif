@@ -137,3 +137,60 @@ oc get nodes \
 oc get co
 
 oc get apigeeenv -n apigee
+
+************************************
+
+
+
+ibmcloud target -r br-sao \
+  -g CARLA-PRD-WORKLOAD-RG
+
+echo "=== WORKERS DATA RHCOS ==="
+oc get nodes \
+  -l ibm-cloud.kubernetes.io/worker-pool-name=apigee-data-rhcos \
+  -L topology.kubernetes.io/zone
+
+echo "=== CASSANDRA PODS ==="
+oc get pods -n apigee -o wide |
+grep -E '^NAME|^apigee-cassandra-default-[0-9]+ '
+
+echo "=== STATEFULSET ==="
+oc get sts apigee-cassandra-default -n apigee \
+  -o json | jq '{
+    replicas: .spec.replicas,
+    ready: .status.readyReplicas,
+    strategy: .spec.updateStrategy
+  }'
+
+echo "=== PVC CASSANDRA ==="
+oc get pvc -n apigee |
+grep cassandra-data
+
+echo "=== PV Y ZONAS ==="
+oc get pv -o json | jq -r '
+.items[]
+| select(.spec.claimRef.namespace=="apigee"
+  and ((.spec.claimRef.name // "")
+  | startswith("cassandra-data-apigee-cassandra-default-")))
+| [
+    .spec.claimRef.name,
+    .metadata.name,
+    ([.spec.nodeAffinity.required.nodeSelectorTerms[]?.matchExpressions[]?
+    | select(.key | contains("zone"))
+    | .values[]] | unique | join(","))
+  ] | @tsv'
+
+echo "=== SELECTOR DATASTORE ==="
+helm get values datastore -n apigee -o json |
+jq '.nodeSelector.apigeeData'
+
+echo "=== PDB CASSANDRA ==="
+oc get pdb apigee-cassandra-default -n apigee
+
+echo "=== APIGEE DATASTORE ==="
+oc get apigeedatastores -n apigee
+
+echo "=== ANILLO CASSANDRA ==="
+oc exec -n apigee apigee-cassandra-default-0 \
+  -c apigee-cassandra -- \
+  bash -c 'nodetool -u cassandra -pw "$CASS_PASSWORD" status'
