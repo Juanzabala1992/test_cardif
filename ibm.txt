@@ -41,3 +41,20 @@ echo "=== NODOS OPENSHIFT ==="
 oc get nodes \
   -L ibm-cloud.kubernetes.io/worker-pool-name \
   -L topology.kubernetes.io/zone
+
+
+
+***************************************
+
+
+echo "=== ROUTES OPENSHIFT ==="
+oc get routes -A \
+  -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,HOST:.spec.host,TLS:.spec.tls.termination'
+
+echo "=== SERVICIOS INGRESS APIGEE ==="
+oc get svc -n apigee -o wide |
+grep -Ei 'ingress|gateway|NAME'
+
+echo "=== VIRTUALHOSTS APIGEE ==="
+helm list -n apigee |
+grep -E 'virtualhost|group|NAME'
