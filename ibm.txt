@@ -627,3 +627,25 @@ done < <(helm list -n apigee -o json | jq -r '.[] | select(.name != "datastore")
 echo "ACTUALIZADOS: $OK"
 echo "PENDIENTES: $PEND"
 echo "ESTIMACION A 15 MIN CADA UNO: $((PEND*15)) minutos"
+
+
+********************************
+
+
+echo "=== PROCESOS ACTIVOS ==="
+ps -eo pid,ppid,stat,etime,args |
+grep -E '[m]igracion_runtime_lote|[h]elm upgrade|[t]ee -a'
+
+echo "=== ESTADO HELM ==="
+helm status prod-mx-mtls-env -n apigee
+
+echo "=== SELECTOR ==="
+helm get values prod-mx-mtls-env -n apigee -o json |
+jq -r '.nodeSelector.apigeeRuntime.value // "SIN SELECTOR"'
+
+echo "=== APIGEE ENV ==="
+oc get apigeeenv -n apigee \
+-o custom-columns=NAME:.metadata.name,STATE:.status.state
+
+echo "=== MEMORIA CLOUD SHELL ==="
+free -h
