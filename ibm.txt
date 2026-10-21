@@ -889,3 +889,51 @@ for R in apigee-latam-prd prod-br-env prod-br-group telemetry; do
     echo "FALLO: $R"
   fi
 done
+
+
+
+###################
+
+
+OUT="$HOME/apigee-rhcos-prod-por-release"
+LOG="$HOME/helm-dryruns-recuperados"
+umask 077
+mkdir -p "$LOG"
+
+OK=0
+FAIL=0
+
+mapfile -t RELEASES < <(
+  helm list -n apigee -o json |
+  jq -r '.[] |
+    select(.status=="deployed" and .name!="datastore") |
+    .name'
+)
+
+echo "TOTAL RELEASES: ${#RELEASES[@]}"
+
+for R in "${RELEASES[@]}"; do
+  if [ ! -f "$OUT/$R/Chart.yaml" ]; then
+    echo "FALLO: $R (chart ausente)"
+    FAIL=$((FAIL+1))
+  elif helm upgrade "$R" "$OUT/$R" \
+    -n apigee \
+    --reuse-values \
+    --set-string nodeSelector.apigeeRuntime.value=apigee-runtime-rhcos \
+    --dry-run=server \
+    --hide-secret > "$LOG/$R.log" 2>&1; then
+    echo "OK: $R"
+    OK=$((OK+1))
+  else
+    echo "FALLO: $R"
+    FAIL=$((FAIL+1))
+  fi
+done
+
+echo "=== RESULTADO FINAL ==="
+echo "EXITOSOS: $OK"
+echo "FALLIDOS: $FAIL"
+
+echo "=== ESTADO DE POOLS ==="
+ibmcloud oc worker-pool ls \
+  --cluster carla-prd-latam-ocw01
