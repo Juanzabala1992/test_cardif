@@ -30,3 +30,27 @@ jq '.spec | {
 echo "=== WORKERS ==="
 oc get nodes \
   -L node-role.kubernetes.io/worker
+
+
+*******************************
+
+
+umask 077
+
+oc get catalogsource certified-operators-1 \
+  -n openshift-marketplace -o yaml \
+  > "$HOME/certified-operators-1-backup.yaml"
+
+oc patch catalogsource certified-operators-1 \
+  -n openshift-marketplace \
+  --type=json \
+  -p '[{"op":"replace","path":"/spec/grpcPodConfig/nodeSelector","value":{"kubernetes.io/os":"linux","node-role.kubernetes.io/worker":""}}]'
+
+
+
+
+oc get pods -n openshift-marketplace -o wide
+
+oc get catalogsource certified-operators-1 \
+  -n openshift-marketplace \
+  -o jsonpath='{.spec.grpcPodConfig.nodeSelector}{"\n"}'
