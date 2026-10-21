@@ -339,3 +339,18 @@ jq -r '
    (.status.active // 0),
    (.status.failed // 0)] | @tsv'
 
+
+*****************************
+
+
+oc patch cronjob apigee-cassandra-backup \
+  -n apigee \
+  --type=merge \
+  -p '{"spec":{"suspend":true}}'
+
+
+
+
+oc get cronjob apigee-cassandra-backup \
+  -n apigee
+
