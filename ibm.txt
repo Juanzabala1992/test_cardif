@@ -7,3 +7,26 @@ oc get pods -n openshift-marketplace \
     selector: .spec.nodeSelector,
     affinity: .spec.affinity.nodeAffinity
   }'
+
+
+*******************************
+
+echo "=== CATALOGOS ==="
+oc get catalogsources -n openshift-marketplace \
+  -o json | jq -r '
+.items[]
+| [
+    .metadata.name,
+    (.spec.grpcPodConfig.nodeSelector // {} | tojson)
+  ] | @tsv'
+
+echo "=== CONFIGURACION OPERATORHUB ==="
+oc get operatorhub cluster -o json |
+jq '.spec | {
+  disableAllDefaultSources,
+  sources
+}'
+
+echo "=== WORKERS ==="
+oc get nodes \
+  -L node-role.kubernetes.io/worker
