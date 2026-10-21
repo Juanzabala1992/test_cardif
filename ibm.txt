@@ -279,3 +279,9 @@ helm upgrade datastore "$CH" \
   --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
   --timeout 30m \
   --wait
+
+
+*************************
+
+
+oc get pods -n apigee -o wide | grep -E 'apigee-cassandra-default|guardrail-datastore'
