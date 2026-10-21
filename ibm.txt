@@ -140,3 +140,10 @@ echo "=== CHART OPERATOR ==="
 test -f "$HOME/apigee-rhcos-prod-por-release/operator/Chart.yaml" \
   && echo "CHART RECUPERADO OK"
 
+
+*******************************
+
+
+bash ~/Migracion_RHCOS_Integration_PROD_POR_RELEASE.sh runtime-next
+
+bash ~/Migracion_RHCOS_Integration_PROD_POR_RELEASE.sh runtime-next
