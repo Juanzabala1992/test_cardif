@@ -102,20 +102,18 @@ oc exec -n apigee apigee-cassandra-default-0 \
 
 *******************
 
-echo "=== NODOS ==="
-oc get nodes
+eecho "===== BACKUP CASSANDRA ====="
 
-echo "=== OPERADORES ==="
-oc get co
+B=$(oc get pods -n apigee -o name | \
+grep '/apigee-cassandra-backup-' | head -1)
 
-echo "=== PODS CON PROBLEMAS ==="
-oc get pods -A \
-  --field-selector=status.phase!=Running,status.phase!=Succeeded
+oc describe -n apigee "$B" | \
+sed -n '/Events:/,$p'
 
-echo "=== CASSANDRA ==="
-oc get sts -n apigee apigee-cassandra-default
+echo "===== CLEAN SNAPSHOT ====="
 
-echo "=== ANILLO CASSANDRA ==="
-oc exec -n apigee apigee-cassandra-default-0 \
-  -c apigee-cassandra -- sh -c \
-  'nodetool -u "$APIGEE_JMX_USER" -pw "$APIGEE_JMX_PASSWORD" status'
+S=$(oc get pods -n apigee -o name | \
+grep '/clean-snapshot-' | head -1)
+
+oc describe -n apigee "$S" | \
+sed -n '/Events:/,$p'
