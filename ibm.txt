@@ -255,3 +255,24 @@ oc get volumesnapshot cassandra-rg-test \
   -o custom-columns=NAME:.metadata.name,READY:.status.readyToUse,ERROR:.status.error.message
 
 
+*************************************
+
+
+
+echo "=== RESULTADO SNAPSHOT ==="
+oc get volumesnapshot cassandra-rg-test \
+  -n apigee -o json | jq '{
+    readyToUse: .status.readyToUse,
+    error: .status.error,
+    snapshotContent: .status.boundVolumeSnapshotContentName
+  }'
+
+echo "=== EVENTOS DEL SNAPSHOT ==="
+oc describe volumesnapshot cassandra-rg-test \
+  -n apigee | tail -25
+
+echo "=== PODS CSI ==="
+oc get pods -n kube-system |
+grep -E 'vpc-block-csi|snapshot'
+
+
