@@ -54,59 +54,23 @@ oc adm cordon 10.110.28.4
 *******************************
 
 
-echo "=== NODO DRENADO ==="
-oc get node 10.110.28.4
+ibmcloud oc worker ls \
+  --cluster carla-prd-latam-ocw01 \
+  --worker-pool apigee-runtime
 
-echo "=== PODS RESTANTES ==="
-oc get pods -A \
-  --field-selector spec.nodeName=10.110.28.4 \
-  -o wide
+
+
+
+echo "=== BACKUPS ULTIMO NODO ==="
+
+oc get pods -n apigee \
+  --field-selector spec.nodeName=10.110.12.4 \
+  -o wide | grep -E 'NAME|cassandra-backup|bastion'
 
 echo "=== APIGEE ==="
 oc get apigeeenv -n apigee
 
 echo "=== OPERADORES CON PROBLEMAS ==="
-oc get co | awk 'NR==1 || $3!="True" || $4!="False" || $5!="False"'
+oc get co | awk \
+'NR==1 || $3!="True" || $4!="False" || $5!="False"'
 
-echo "=== REGISTRY Y CSI ==="
-oc get deploy image-registry -n openshift-image-registry
-oc get sts ibm-vpc-block-csi-controller -n kube-system
-
-echo "=== BACKUPS DESALOJADOS ==="
-oc get jobs -n apigee \
-  apigee-cassandra-backup-29867280 \
-  apigee-cassandra-backup-29875920 \
-  -o custom-columns=NAME:.metadata.name,ACTIVE:.status.active,SUCCEEDED:.status.succeeded,FAILED:.status.failed
-
-
-
-
-ibmcloud oc worker ls \
-  --cluster carla-prd-latam-ocw01 \
-  --worker-pool apigee-runtime
-
-
-
-ibmcloud target -r br-sao \
-  -g CARLA-PRD-WORKLOAD-RG
-
-ibmcloud oc zone rm \
-  --cluster carla-prd-latam-ocw01 \
-  --worker-pool apigee-runtime \
-  --zone br-sao-2
-
-
-
-ibmcloud oc worker ls \
-  --cluster carla-prd-latam-ocw01 \
-  --worker-pool apigee-runtime
-
-oc get nodes
-
-oc get apigeeenv -n apigee
-
-
-oc adm drain 10.110.28.4 \
-  --ignore-daemonsets \
-  --delete-emptydir-data \
-  --timeout=10m
