@@ -536,3 +536,13 @@ tail -n 50
 echo "=== PODS CL-MTLS ==="
 oc get pods -n apigee -o wide |
 grep -E "NAME|cl-mtls-e173ce0"
+
+
+************************
+
+ibmcloud target -r br-sao \
+  -g CARLA-PRD-WORKLOAD-RG
+
+ibmcloud target
+
+oc config current-context
