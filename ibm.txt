@@ -584,3 +584,14 @@ L=$(ls -t "$HOME"/apigee-runtime-lote/paso-*.log 2>/dev/null | head -1)
 if [ -n "$L" ]; then
   tail -n 15 "$L"
 fi
+
+**********************
+
+
+echo "=== ESTADO APIGEE ==="
+oc get apigeeenv -n apigee \
+  -o custom-columns=NAME:.metadata.name,STATE:.status.state
+
+echo "=== PROCESOS ==="
+ps -eo etime,args | grep -E \
+'[h]elm upgrade|[m]igracion_runtime'
