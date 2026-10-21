@@ -232,3 +232,50 @@ oc exec -n apigee apigee-cassandra-default-0 \
 
 oc get pods -n apigee -o wide | grep cassandra
 helm status datastore -n apigee
+
+
+***************************
+
+
+mapfile -t NODES < <(oc get nodes -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}' | grep '^kube-')
+
+OK=0
+
+if [ "${#NODES[@]}" -ne 6 ]; then
+  echo "DETENER: se esperaban 6 nodos RHCOS"
+else
+  for LINE in "${NODES[@]}"; do
+    read -r NODE IP <<< "$LINE"
+    echo "Corrigiendo $NODE ($IP)"
+
+    if oc debug "node/$NODE" -- chroot /host sh -ec '
+      [ -f /etc/hosts.pre-apigee-rhcos ] ||
+        cp /etc/hosts /etc/hosts.pre-apigee-rhcos
+
+      grep -Fqx "$1 $2" /etc/hosts ||
+        printf "%s %s\n" "$1" "$2" >> /etc/hosts
+
+      getent hosts "$2"
+    ' -- "$IP" "$NODE"; then
+      OK=$((OK+1))
+    else
+      echo "ERROR: $NODE. Deteniendo."
+      break
+    fi
+  done
+fi
+
+echo "Nodos corregidos: $OK de 6"
+
+
+
+
+
+CH="$HOME/apigee-rhcos-prod-por-release/datastore"
+
+helm upgrade datastore "$CH" \
+  -n apigee \
+  --reuse-values \
+  --set-string nodeSelector.apigeeData.value=apigee-data-rhcos \
+  --timeout 30m \
+  --wait
