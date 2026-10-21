@@ -190,3 +190,38 @@ oc adm drain 10.110.44.4 \
   --timeout=10m
 
 
+**********************
+
+echo "=== API OPENSHIFT ==="
+
+for i in 1 2 3; do
+  echo "Intento $i"
+  oc --request-timeout=10s get --raw=/readyz
+  sleep 10
+done
+
+
+
+echo "=== NODO ==="
+oc get node 10.110.44.4
+
+echo "=== PODS RESTANTES ==="
+oc get pods -A \
+  --field-selector spec.nodeName=10.110.44.4 \
+  -o wide
+
+echo "=== REGISTRY ==="
+oc get deployment image-registry \
+  -n openshift-image-registry
+
+echo "=== CSI ==="
+oc get sts ibm-vpc-block-csi-controller \
+  -n kube-system
+
+echo "=== OPERADORES ==="
+oc get co
+
+echo "=== APIGEE ==="
+oc get apigeeenv -n apigee
+
+
