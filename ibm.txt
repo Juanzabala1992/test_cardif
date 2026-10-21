@@ -169,3 +169,28 @@ oc get pod -n apigee apigee-cassandra-default-0 \
 echo "===== RESOLUCION HOSTNAME ====="
 oc exec -n apigee apigee-cassandra-default-0 \
 -c apigee-cassandra -- getent hosts "$NODE"
+
+
+
+
+****************************
+
+
+
+oc get nodes -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}' |
+while read -r NODE IP; do
+  case "$NODE" in
+    kube-*)
+      RESULT=$(oc exec -n apigee \
+        apigee-cassandra-default-0 \
+        -c apigee-cassandra -- \
+        getent hosts "$NODE" 2>/dev/null)
+
+      if [ -n "$RESULT" ]; then
+        echo "OK: $IP $NODE -> $RESULT"
+      else
+        echo "FALLA: $IP $NODE"
+      fi
+      ;;
+  esac
+done
