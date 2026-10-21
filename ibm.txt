@@ -27,6 +27,30 @@ jq '.spec | {
   sources
 }'
 
+
+**********************************
+
+
+oc auth can-i use scc/restricted-v2 \
+  --as=system:serviceaccount:openshift-marketplace:certified-operators-1 \
+  --as-group=system:authenticated \
+  -n openshift-marketplace
+
+
+
+oc get catalogsource certified-operators-1 \
+  -n openshift-marketplace -o yaml \
+  > ~/certified-operators-1-before-scc.yaml
+
+oc annotate catalogsource certified-operators-1 \
+  -n openshift-marketplace \
+  openshift.io/required-scc=restricted-v2 \
+  --overwrite
+
+
+
+oc get pods -n openshift-marketplace -o wide
+
 echo "=== WORKERS ==="
 oc get nodes \
   -L node-role.kubernetes.io/worker
