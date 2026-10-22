@@ -73,6 +73,19 @@ oc get pdb -A
 
 
 
+# Localizar PackageServer
+oc get pods -n openshift-operator-lifecycle-manager -o wide | grep packageserver
+
+# Verificar dónde puede ejecutarse Keycloak
+NS=$(oc get pods -A --no-headers | awk '$2=="keycloak-2"{print $1;exit}')
+
+oc get pod keycloak-2 -n "$NS" \
+  -o jsonpath='NodeSelector={.spec.nodeSelector}{"\n"}Affinity={.spec.affinity}{"\n"}'
+
+
+
+
+
 oc adm drain 10.140.44.19 \
   --ignore-daemonsets \
   --delete-emptydir-data \
