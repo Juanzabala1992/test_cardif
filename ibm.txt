@@ -9,3 +9,30 @@ oc get nodes -o wide
 oc get co dns network storage ingress
 
 oc get pods -n kube-system -o wide | grep -E 'ibm-vpc-block-csi-node|file-csi'
+
+
+
+
+**********************
+
+
+
+# 1. Revisar PDB
+oc get pdb -A
+
+# 2. Revisar volúmenes persistentes
+oc get pvc -A
+
+# 3. Identificar aplicaciones en cada worker RHEL
+for NODE in 10.140.12.20 10.140.28.19 10.140.44.19; do
+  echo "===== WORKER $NODE ====="
+  oc get pods -A \
+    --field-selector spec.nodeName="$NODE" \
+    -o custom-columns=NS:.metadata.namespace,POD:.metadata.name,STATUS:.status.phase
+done
+
+# 4. Comprobar componentes críticos
+oc get co dns storage network ingress
+
+oc get pods -n kube-system -o wide | grep -E 'ibm-vpc-block-csi-node|file-csi'
+
