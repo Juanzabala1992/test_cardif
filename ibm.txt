@@ -68,3 +68,12 @@ oc get pod keycloak-2 -n "$NS" \
 oc get pdb -A
 
 
+
+****************************************
+
+
+
+oc adm drain 10.140.44.19 \
+  --ignore-daemonsets \
+  --delete-emptydir-data \
+  --timeout=15m
