@@ -5,6 +5,7 @@
 # Uso: bash auditoria_workers_dev.sh
 #      CPU_MIN_M=10 MEM_MIN_MI=10 REINICIOS_MAX=100 bash auditoria_workers_dev.sh
 #      MODO=alguno bash auditoria_workers_dev.sh  # CPU > umbral O memoria > umbral
+# Reporte: UN archivo .txt en formato de tabla legible con 'less -S'.
 set -euo pipefail
 export LC_ALL=C
 
@@ -216,67 +217,148 @@ FILENAME == ARGV[2] {
 }
 AWK
 
-echo '[5/5] Generando CSV y resumen...'
-# Unico separador: punto y coma (compatible con Excel en español).
-PODS_CSV="$SALIDA/01_consumo_pods_dev.csv"
-DEP_CSV="$SALIDA/02_consumo_por_deployment_dev.csv"
-ERR_CSV="$SALIDA/03_pods_errores_dev.csv"
-MISS_CSV="$SALIDA/04_pods_sin_metricas_dev.csv"
-{
-  echo 'namespace;deployment_o_workload;tipo_workload;pod;nodo;cpu_m;memoria_Mi'
-  if [[ -s "$TEMP/consumo_pods.tmp" ]]; then sort -t ';' -k6,6nr "$TEMP/consumo_pods.tmp"; fi
-} > "$PODS_CSV"
-{
-  echo 'namespace;deployment_o_workload;tipo_workload;cantidad_pods;nodos;cpu_total_m;memoria_total_Mi'
-  if [[ -s "$TEMP/consumo_deployments.tmp" ]]; then sort -t ';' -k6,6nr "$TEMP/consumo_deployments.tmp"; fi
-} > "$DEP_CSV"
-{
-  echo 'namespace;pod;tipo_workload;deployment_o_workload;nodo;fase;reinicios;motivos'
-  if [[ -s "$TEMP/errores.tmp" ]]; then sort -t ';' -k7,7nr "$TEMP/errores.tmp"; fi
-} > "$ERR_CSV"
-{
-  echo 'namespace;deployment_o_workload;tipo_workload;pod;nodo;fase'
-  if [[ -s "$TEMP/sin_metricas.tmp" ]]; then sort -t ';' -k1,1 -k4,4 "$TEMP/sin_metricas.tmp"; fi
-} > "$MISS_CSV"
+echo '[5/5] Generando reporte TXT con tablas...' 
+# Los archivos internos del mktemp usan ';' como separador, pero la salida
+# definitiva es UN solo TXT. No se generan archivos CSV.
+PODS_ORD="$TEMP/consumo_pods_ordenado.tmp"
+DEP_ORD="$TEMP/consumo_deployments_ordenado.tmp"
+ERR_ORD="$TEMP/errores_ordenados.tmp"
+MISS_ORD="$TEMP/sin_metricas_ordenado.tmp"
+if [[ -s "$TEMP/consumo_pods.tmp" ]]; then sort -t ';' -k6,6nr "$TEMP/consumo_pods.tmp" > "$PODS_ORD"; else : > "$PODS_ORD"; fi
+if [[ -s "$TEMP/consumo_deployments.tmp" ]]; then sort -t ';' -k6,6nr "$TEMP/consumo_deployments.tmp" > "$DEP_ORD"; else : > "$DEP_ORD"; fi
+if [[ -s "$TEMP/errores.tmp" ]]; then sort -t ';' -k7,7nr "$TEMP/errores.tmp" > "$ERR_ORD"; else : > "$ERR_ORD"; fi
+if [[ -s "$TEMP/sin_metricas.tmp" ]]; then sort -t ';' -k1,1 -k4,4 "$TEMP/sin_metricas.tmp" > "$MISS_ORD"; else : > "$MISS_ORD"; fi
 
-# Recuento, sin exigir wc.
-contar() { awk 'END{print (NR>0 ? NR-1 : 0)}' "$1"; }
-NUM_PODS="$(contar "$PODS_CSV")"
-NUM_DEP="$(contar "$DEP_CSV")"
-NUM_ERR="$(contar "$ERR_CSV")"
-NUM_MISS="$(contar "$MISS_CSV")"
+# Dibuja tablas ASCII de ancho automatico, evitando truncar namespace/deployment.
+# El TXT puede ser ancho porque los nombres OpenShift suelen ser muy largos.
+# Con less -S la tabla se desplaza horizontalmente sin partir las filas.
+tabla() {
+  local encabezados="$1" filas="$2"
+  awk -F ';' -v titulos="$encabezados" '
+    BEGIN {
+      n=split(titulos,head,";");
+      for(i=1;i<=n;i++) ancho[i]=length(head[i]);
+    }
+    {
+      for(i=1;i<=n;i++) {
+        valor[NR,i]=$i;
+        if(length($i)>ancho[i]) ancho[i]=length($i)
+      }
+    }
+    function raya(   i,j,total) {
+      total=1;
+      for(i=1;i<=n;i++) total+=ancho[i]+3;
+      for(j=1;j<=total;j++) printf "-";
+      printf "\n"
+    }
+    function fila(pos,esTitulo,   i,v) {
+      printf "|";
+      for(i=1;i<=n;i++) {
+        v=esTitulo?head[i]:valor[pos,i];
+        printf " %-*s |", ancho[i],v;
+      }
+      printf "\n"
+    }
+    END {
+      if(NR==0) {print "(Sin registros que cumplan los filtros)";exit}
+      raya(); fila(0,1); raya();
+      for(r=1;r<=NR;r++) fila(r,0);
+      raya()
+    }
+  ' "$filas"
+}
+
+# Tabla de errores sin columna "motivo" para evitar una linea de cientos de
+# caracteres; cada motivo aparece debajo de su fila, identificado por numero.
+tabla_errores() {
+  awk -F ';' '
+    BEGIN { OFS=";" }
+    {
+      nodo=$5; sub(/\..*$/,"",nodo);
+      printf "%d;%s;%s;%s;%s;%d;%s\n", NR,$1,$4,$2,$6,$7,nodo
+    }
+  ' "$ERR_ORD" > "$TEMP/errores_para_tabla.tmp"
+  tabla 'N;NAMESPACE;DEPLOYMENT/WORKLOAD;POD;ESTADO;REINICIOS;NODO' "$TEMP/errores_para_tabla.tmp"
+  if [[ -s "$ERR_ORD" ]]; then
+    echo
+    echo 'DETALLE DE MOTIVOS (numero correspondiente a la tabla):'
+    awk -F ';' '{printf "  [%d] %s / %s\n       %s\n", NR, $1, $2, $8}' "$ERR_ORD"
+  fi
+}
+
+NUM_PODS="$(awk 'END{print NR+0}' "$PODS_ORD")"
+NUM_DEP="$(awk 'END{print NR+0}' "$DEP_ORD")"
+NUM_ERR="$(awk 'END{print NR+0}' "$ERR_ORD")"
+NUM_MISS="$(awk 'END{print NR+0}' "$MISS_ORD")"
 NUM_DEV="$(awk 'END{print NR+0}' "$TEMP/pods_dev.tsv")"
 NUM_NODOS="$(awk 'END{print NR+0}' "$TEMP/nodos_dev.txt")"
-RESUMEN="$SALIDA/05_resumen.txt"
+if [[ "$MODO" == "ambos" ]]; then FILTRO_CONJUNCION="Y"; else FILTRO_CONJUNCION="O"; fi
+
+# Reordenar campos para facilitar la lectura visual de las tablas.
+# Acortar hostname a la primera etiqueta (workerdevN), sin modificar el dato
+# original consultado a OpenShift.
+awk -F ';' '{n=$5; sub(/\..*$/, "", n); printf "%s;%s;%s;%s;%s;%s;%s\n",$1,$2,$4,n,$6,$7,$3}' "$PODS_ORD" > "$TEMP/pods_tabla.tmp"
+awk -F ';' '{printf "%s;%s;%d;%s;%s;%s\n",$1,$2,$4,$6,$7,$5}' "$DEP_ORD" > "$TEMP/dep_tabla.tmp"
+awk -F ';' '{n=$5; sub(/\..*$/, "", n); printf "%s;%s;%s;%s;%s\n",$1,$2,$4,n,$6}' "$MISS_ORD" > "$TEMP/miss_tabla.tmp"
+
+REPORTE="$SALIDA/reporte_workers_dev.txt"
 {
-  echo 'AUDITORIA OPENSHIFT - WORKERS DEV (SOLO LECTURA)'
+  echo '========================================================================'
+  echo ' AUDITORIA OPENSHIFT - WORKERS DEV - SOLO LECTURA'
+  echo '========================================================================'
   echo "Fecha: $(date '+%Y-%m-%d %H:%M:%S')"
   echo "Contexto: $(oc config current-context 2>/dev/null || echo 'No disponible')"
-  echo "Nodos: $NUM_NODOS (nombre inicia por workerdev)"
+  echo "Nodos encontrados: $NUM_NODOS (nombre inicia con workerdev)"
   echo "Pods en namespaces DEV: $NUM_DEV (namespace contiene c-dev)"
-  echo 'Excluir servicios Redis/Mashery: SI para consumo; NO para errores'
-  echo "Consumo: CPU > ${CPU_MIN_M}m Y/O memoria > ${MEM_MIN_MI}Mi; modo=${MODO}"
-  echo "Errores: CrashLoopBackOff, Error, OOMKilled, fallas de imagen, Unschedulable o >${REINICIOS_MAX} reinicios"
+  echo "Filtro de consumo: CPU > ${CPU_MIN_M}m ${FILTRO_CONJUNCION} memoria > ${MEM_MIN_MI}Mi (modo: ${MODO})"
+  echo '  MODO=ambos (por defecto) exige superar los dos umbrales.'
+  echo '  MODO=alguno exige superar por lo menos uno de los umbrales.'
+  echo 'Excluir Redis/Mashery: SI para consumo, NO para errores.'
+  echo "Errores: CrashLoopBackOff, Error, OOMKilled, error de imagen, Unschedulable y >${REINICIOS_MAX} reinicios."
   echo "Metricas disponibles: $METRICAS_OK"
-  echo 'NOTA: se muestra uso actual (metrics), NO requests/limits de oc describe node.'
-  echo 'NOTA: error se consulta en todos los namespaces DEV, tambien pods sin nodo.'
-  echo 'NOTA: consumo agrupado suma todas las replicas con metricas en workerdev.'
-  echo 'NOTA: los pods sin metricas NO se contabilizan como uso cero.'
-  echo
-  echo 'NODOS INCLUIDOS:'
-  cat "$TEMP/nodos_dev.txt"
+  echo 'CPU/memoria: CONSUMO REAL de oc adm top, NO requests/limits.'
+  echo 'Los valores por deployment suman sus replicas en workers DEV.'
+  echo 'Los errores abarcan todos los namespaces c-dev, incluso pods sin nodo.'
   echo
   echo 'RESUMEN:'
-  echo "Pods por encima de umbrales: $NUM_PODS"
-  echo "Deployments/workloads por encima de umbrales (sumados): $NUM_DEP"
-  echo "Pods DEV con errores o >${REINICIOS_MAX} reinicios: $NUM_ERR"
-  echo "Pods en workers DEV sin metricas: $NUM_MISS"
+  echo "  Deployments/workloads que superan umbrales (suma): $NUM_DEP"
+  echo "  Pods que superan umbrales:                      $NUM_PODS"
+  echo "  Pods con errores o reinicios > ${REINICIOS_MAX}:               $NUM_ERR"
+  echo "  Pods DEV de workerdev sin metricas:            $NUM_MISS"
   echo
-  echo 'ARCHIVOS:'
-  echo "$PODS_CSV"
-  echo "$DEP_CSV"
-  echo "$ERR_CSV"
-  echo "$MISS_CSV"
-} > "$RESUMEN"
-cat "$RESUMEN"
+  echo 'NODOS INCLUIDOS:'
+  sed 's/\..*$//' "$TEMP/nodos_dev.txt" | awk '{printf "  - %s\n",$0}'
+  echo
+  echo '========================================================================'
+  echo ' 1. CONSUMO TOTAL AGRUPADO POR DEPLOYMENT / WORKLOAD'
+  echo '========================================================================'
+  tabla 'NAMESPACE;DEPLOYMENT/WORKLOAD;PODS;CPU_TOTAL(m);MEM_TOTAL(Mi);NODOS' "$TEMP/dep_tabla.tmp"
+  echo
+  echo '========================================================================'
+  echo ' 2. PODS CON CONSUMO SUPERIOR A LOS UMBRALES'
+  echo '========================================================================'
+  tabla 'NAMESPACE;DEPLOYMENT/WORKLOAD;POD;NODO;CPU(m);MEM(Mi);TIPO' "$TEMP/pods_tabla.tmp"
+  echo
+  echo '========================================================================'
+  echo " 3. PODS DEV CON ERRORES O MAS DE ${REINICIOS_MAX} REINICIOS"
+  echo '========================================================================'
+  tabla_errores
+  echo
+  echo '========================================================================'
+  echo ' 4. PODS DEV EN WORKERDEV SIN METRICAS'
+  echo '========================================================================'
+  tabla 'NAMESPACE;DEPLOYMENT/WORKLOAD;POD;NODO;FASE' "$TEMP/miss_tabla.tmp"
+  if [[ "$METRICAS_OK" == no ]]; then
+    echo
+    echo 'ADVERTENCIA: oc adm top no pudo obtener metricas.'
+    sed -n '1,3p' "$TEMP/metricas_error.txt"
+  fi
+  echo
+  echo 'FIN DE REPORTE - No se modifico ningun recurso del cluster.'
+} > "$REPORTE"
+
+printf '\nREPORTE TXT GENERADO: %s\n' "$REPORTE"
+printf 'Consulta desde bastion: less -S "%s"\n' "$REPORTE"
+printf 'Si less no esta instalado: cat "%s"\n' "$REPORTE"
+echo "Deployments: $NUM_DEP | Pods consumo: $NUM_PODS | Pods error/reinicios: $NUM_ERR | Sin metricas: $NUM_MISS"
 echo '=== LISTO: no se modifico ningun recurso del cluster ==='
