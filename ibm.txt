@@ -9,3 +9,43 @@ oc get co
 ibmcloud oc worker-pool get \
   --cluster "$CL" \
   --worker-pool default
+
+
+*******************************
+
+CL="carla-prd-tsp-ocw"
+NEW_POOL="default-rhcos"
+
+VPC_ID="<VPC_DEL_POOL_DEFAULT>"
+KMS_INSTANCE="<KMS_DEL_POOL_DEFAULT>"
+CRK_ID="<CRK_DEL_POOL_DEFAULT>"
+KMS_ACCOUNT="<KMS_ACCOUNT_ID_DEL_POOL_DEFAULT>"
+
+
+
+ibmcloud oc worker-pool get \
+  --cluster "$CL" \
+  --worker-pool default
+
+
+ibmcloud oc worker-pool create vpc-gen2 \
+  --cluster "$CL" \
+  --name "$NEW_POOL" \
+  --flavor bx2.4x16 \
+  --size-per-zone 1 \
+  --operating-system RHCOS \
+  --vpc-id "$VPC_ID" \
+  --kms-instance "$KMS_INSTANCE" \
+  --crk "$CRK_ID" \
+  --kms-account-id "$KMS_ACCOUNT"
+
+
+
+
+ibmcloud oc worker-pool get \
+  --cluster "$CL" \
+  --worker-pool "$NEW_POOL"
+
+
+
+
