@@ -78,5 +78,41 @@ ibmcloud oc worker-pool get \
   --worker-pool "$NEW_POOL"
 
 
+******************************
+
+
+ibmcloud oc worker-pool zones \
+  --cluster "$CL" \
+  --worker-pool default
+
+
+
+ibmcloud oc zone add vpc-gen2 \
+  --cluster "$CL" \
+  --worker-pool "$NEW_POOL" \
+  --zone br-sao-1 \
+  --subnet-id "$SUBNET1"
+
+
+
+ibmcloud oc zone add vpc-gen2 \
+  --cluster "$CL" \
+  --worker-pool "$NEW_POOL" \
+  --zone br-sao-2 \
+  --subnet-id "$SUBNET2"
+
+
+ibmcloud oc zone add vpc-gen2 \
+  --cluster "$CL" \
+  --worker-pool "$NEW_POOL" \
+  --zone br-sao-3 \
+  --subnet-id "$SUBNET3"
+
+
+
+ibmcloud oc worker ls --cluster "$CL"
+
+oc get nodes -o wide
+
 
 
