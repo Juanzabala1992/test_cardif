@@ -21,3 +21,16 @@ oc adm drain 10.140.28.19 \
   --ignore-daemonsets \
   --delete-emptydir-data \
   --timeout=15m
+
+
+
+*************************
+
+
+oc get nodes
+
+oc get pods -n carla-prd-tsp-ap84509-websso -o wide
+
+oc get pods -A --field-selector=status.phase=Pending
+
+oc get co
