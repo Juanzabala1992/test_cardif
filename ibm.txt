@@ -11,3 +11,24 @@ oc get pods -n carla-prd-tsp-ap84509-websso -o wide
 oc get pods -A --field-selector=status.phase=Pending
 
 oc get co
+
+
+
+************************
+
+
+oc adm drain 10.140.12.20 \
+  --ignore-daemonsets \
+  --delete-emptydir-data \
+  --timeout=15m
+
+
+
+
+oc get nodes
+
+oc get pods -n carla-prd-tsp-ap84509-websso -o wide
+
+oc get pods -A --field-selector=status.phase=Pending
+
+oc get co
