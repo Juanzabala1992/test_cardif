@@ -83,6 +83,8 @@ oc get pod keycloak-2 -n "$NS" \
   -o jsonpath='NodeSelector={.spec.nodeSelector}{"\n"}Affinity={.spec.affinity}{"\n"}'
 
 
+***************************
+
 
 
 
@@ -90,3 +92,15 @@ oc adm drain 10.140.44.19 \
   --ignore-daemonsets \
   --delete-emptydir-data \
   --timeout=15m
+
+
+
+oc get nodes
+
+oc get pods -n carla-prd-tsp-ap84509-websso -o wide
+
+oc get pods -A --field-selector=status.phase=Pending
+
+oc get co
+
+
