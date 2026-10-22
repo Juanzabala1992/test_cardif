@@ -1,73 +1,11 @@
-# Revisar selectores de los catálogos
-oc get catalogsource -n openshift-marketplace \
-  -o custom-columns=NAME:.metadata.name,SELECTOR:.spec.grpcPodConfig.nodeSelector
+ibmcloud oc worker-pool ls \
+  --cluster carla-prd-tsp-ocw
 
-# Localizar pods del último worker que exigen master
-oc get pods -A \
-  --field-selector spec.nodeName=10.140.28.19 \
-  -o json | jq -r '
-.items[] |
-select(
-  .spec.nodeSelector["node-role.kubernetes.io/master"] != null
-  or
-  ([.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[]?.matchExpressions[]?
-    | select(.key=="node-role.kubernetes.io/master")] | length > 0)
-) |
-[.metadata.namespace,.metadata.name] | @tsv'
-
-
-
-oc adm drain 10.140.28.19 \
-  --ignore-daemonsets \
-  --delete-emptydir-data \
-  --timeout=15m
-
-
-
-*************************
-
+ibmcloud oc worker ls \
+  --cluster carla-prd-tsp-ocw
 
 oc get nodes
-
-oc get pods -n carla-prd-tsp-ap84509-websso -o wide
 
 oc get pods -A --field-selector=status.phase=Pending
 
 oc get co
-
-
-********************************
-
-
-for NODE in 10.140.12.20 10.140.28.19 10.140.44.19; do
-  echo "===== $NODE ====="
-  oc get pods -A --field-selector spec.nodeName="$NODE" -o json |
-    jq -r '.items[] |
-      select(.status.phase != "Succeeded") |
-      select(([.metadata.ownerReferences[]?.kind] | index("DaemonSet")) == null) |
-      [.metadata.namespace, .metadata.name,
-       (.metadata.ownerReferences[0].kind // "SIN_OWNER"),
-       .status.phase] | @tsv'
-done
-
-
-
-
-oc get pods -n openshift-marketplace \
-  -o custom-columns=NAME:.metadata.name,READY:.status.containerStatuses[0].ready,SELECTOR:.spec.nodeSelector,NODE:.spec.nodeName
-
-
-
-ibmcloud oc worker-pool rm \
-  --cluster carla-prd-tsp-ocw \
-  --worker-pool default
-
-
-
-ibmcloud oc worker-pool ls --cluster carla-prd-tsp-ocw
-
-ibmcloud oc worker ls --cluster carla-prd-tsp-ocw
-
-oc get nodes
-oc get co
-
