@@ -94,3 +94,189 @@ function cpu_m(s, v) {
 function mem_mi(s) {
   if (s ~ /Ki$/) {sub(/Ki$/, "", s); return (s+0)/1024}
   if (s ~ /Mi$/) {sub(/Mi$/, "", s); return s+0}
+  if (s ~ /Gi$/) {sub(/Gi$/, "", s); return (s+0)*1024}
+  if (s ~ /Ti$/) {sub(/Ti$/, "", s); return (s+0)*1048576}
+  if (s ~ /k$/) {sub(/k$/, "", s); return (s+0)*1000/1048576}
+  if (s ~ /M$/) {sub(/M$/, "", s); return (s+0)*1000000/1048576}
+  if (s ~ /G$/) {sub(/G$/, "", s); return (s+0)*1000000000/1048576}
+  if (s ~ /^[0-9]+([.][0-9]+)?$/) return (s+0)/1048576
+  return -1
+}
+function pasa(c, m) {return modo=="alguno" ? (c>cpuLim || m>memLim) : (c>cpuLim && m>memLim)}
+function excluir(ns, pod, wl,     s) {
+  s=tolower(ns " " pod " " wl)
+  return (s ~ /redis/ || s ~ /mashery/)
+}
+function shortnode(n) {sub(/\..*$/, "", n); return n}
+FILENAME == ARGV[1] {nodes[$1]=1; next}
+FILENAME == ARGV[2] {
+  if ($3=="Deployment") rs[$1 SUBSEP $2]=$4
+  next
+}
+FILENAME == ARGV[3] {
+  ns=$1; pod=$2; node=$3
+  if (!(node in nodes)) next
+  kind=$6; owner=$7
+  if (kind=="ReplicaSet" && ((ns SUBSEP owner) in rs)) {
+    kind="Deployment"; wl=rs[ns SUBSEP owner]
+  } else if (kind!="" && owner!="") {wl=owner}
+  else {kind="Pod"; wl=pod}
+  if (excluir(ns, pod, wl)) next
+  key=ns SUBSEP pod
+  metadata[key]=ns OFS wl OFS kind OFS pod OFS node
+  group[key]=ns SUBSEP kind SUBSEP wl
+  podnode[key]=shortnode(node)
+  phase[key]=$4
+  next
+}
+FILENAME == ARGV[4] {
+  ncols=split($0, metric, /[[:space:]]+/)
+  if (ncols<4 || metric[1]=="NAMESPACE") next
+  ns=metric[1]; pod=metric[2]
+  key=ns SUBSEP pod
+  if (!(key in metadata)) next
+  c=cpu_m(metric[3]); m=mem_mi(metric[4])
+  if (c<0 || m<0) next
+  seen[key]=1
+  if (pasa(c,m)) printf "%s;%.3f;%.3f\n",metadata[key],c,m >> podsOut
+  g=group[key]
+  cpuTotal[g]+=c; memTotal[g]+=m; replicas[g]++
+  if (index("|" nodos[g] "|", "|" podnode[key] "|")==0) {
+    if (nodos[g]!="") nodos[g]=nodos[g] "|"
+    nodos[g]=nodos[g] podnode[key]
+  }
+  next
+}
+END {
+  for (g in cpuTotal) {
+    if (!pasa(cpuTotal[g],memTotal[g])) continue
+    split(g, a, SUBSEP)
+    printf "%s;%s;%s;%d;%s;%.3f;%.3f\n", a[1],a[3],a[2],replicas[g],nodos[g],cpuTotal[g],memTotal[g] >> depOut
+  }
+  for (key in metadata) {
+    if (!seen[key]) printf "%s;%s\n",metadata[key],phase[key] >> missOut
+  }
+}
+AWK
+
+# 03: errores en TODOS los namespaces c-dev, incluidos pods Pending sin nodo.
+# Redis y Mashery NO se excluyen de este informe de errores.
+awk -F '\t' -v OFS=';' -v limite="$REINICIOS_MAX" \
+    -f /dev/stdin "$TEMP/rs.tsv" "$TEMP/pods_dev.tsv" <<'AWK' > "$TEMP/errores.tmp"
+function agregar(m) {
+  if (m=="") return
+  if (index("|" motivos "|", "|" m "|")==0) {
+    if (motivos!="") motivos=motivos " | "
+    motivos=motivos m
+  }
+}
+function estado(raw, origin,    n,i,c,cols,r,waiting,ended,previous,txt) {
+  n=split(raw,c,";")
+  for(i=1;i<=n;i++) {
+    if(c[i]=="") continue
+    split(c[i],cols,":")
+    if(cols[1]=="") continue
+    r=cols[2]+0; reinicios+=r
+    waiting=cols[3]; ended=cols[4]; previous=cols[5]
+    txt=tolower(waiting)
+    if (txt ~ /(crashloop|backoff|error|failed|invalid|cannotrun|errimage|oomkilled)/)
+      agregar(origin "/" cols[1] ":" waiting)
+    if (ended=="Error" || ended=="OOMKilled" || ended=="ContainerCannotRun")
+      agregar(origin "/" cols[1] ":terminado/" ended)
+    if (previous=="OOMKilled")
+      agregar(origin "/" cols[1] ":OOMKilled_previo")
+  }
+}
+FILENAME == ARGV[1] {
+  if ($3=="Deployment") rs[$1 SUBSEP $2]=$4
+  next
+}
+FILENAME == ARGV[2] {
+  ns=$1; pod=$2; node=$3; phase=$4; podReason=$5
+  kind=$6; owner=$7
+  if (kind=="ReplicaSet" && ((ns SUBSEP owner) in rs)) {
+    kind="Deployment"; wl=rs[ns SUBSEP owner]
+  } else if (kind!="" && owner!="") wl=owner
+  else {kind="Pod"; wl=pod}
+  motivos=""; reinicios=0
+  if (phase=="Failed" || phase=="Unknown") agregar("Fase=" phase)
+  if (tolower(podReason) ~ /(error|failed|evicted|lost|deadline)/) agregar("Pod=" podReason)
+  estado($8,"container")
+  estado($9,"init")
+  n=split($10,conditions,";")
+  for(i=1;i<=n;i++) {
+    split(conditions[i],parts,":")
+    if (parts[1]=="PodScheduled" && parts[2]=="False" && parts[3]=="Unschedulable")
+      agregar("Scheduling/Unschedulable")
+  }
+  if (reinicios>limite) agregar("Reinicios>" limite)
+  if (motivos=="") next
+  if (node=="") node="SIN_NODO"
+  printf "%s;%s;%s;%s;%s;%s;%d;%s\n", ns,pod,kind,wl,node,phase,reinicios,motivos
+}
+AWK
+
+echo '[5/5] Generando CSV y resumen...'
+# Unico separador: punto y coma (compatible con Excel en español).
+PODS_CSV="$SALIDA/01_consumo_pods_dev.csv"
+DEP_CSV="$SALIDA/02_consumo_por_deployment_dev.csv"
+ERR_CSV="$SALIDA/03_pods_errores_dev.csv"
+MISS_CSV="$SALIDA/04_pods_sin_metricas_dev.csv"
+{
+  echo 'namespace;deployment_o_workload;tipo_workload;pod;nodo;cpu_m;memoria_Mi'
+  if [[ -s "$TEMP/consumo_pods.tmp" ]]; then sort -t ';' -k6,6nr "$TEMP/consumo_pods.tmp"; fi
+} > "$PODS_CSV"
+{
+  echo 'namespace;deployment_o_workload;tipo_workload;cantidad_pods;nodos;cpu_total_m;memoria_total_Mi'
+  if [[ -s "$TEMP/consumo_deployments.tmp" ]]; then sort -t ';' -k6,6nr "$TEMP/consumo_deployments.tmp"; fi
+} > "$DEP_CSV"
+{
+  echo 'namespace;pod;tipo_workload;deployment_o_workload;nodo;fase;reinicios;motivos'
+  if [[ -s "$TEMP/errores.tmp" ]]; then sort -t ';' -k7,7nr "$TEMP/errores.tmp"; fi
+} > "$ERR_CSV"
+{
+  echo 'namespace;deployment_o_workload;tipo_workload;pod;nodo;fase'
+  if [[ -s "$TEMP/sin_metricas.tmp" ]]; then sort -t ';' -k1,1 -k4,4 "$TEMP/sin_metricas.tmp"; fi
+} > "$MISS_CSV"
+
+# Recuento, sin exigir wc.
+contar() { awk 'END{print (NR>0 ? NR-1 : 0)}' "$1"; }
+NUM_PODS="$(contar "$PODS_CSV")"
+NUM_DEP="$(contar "$DEP_CSV")"
+NUM_ERR="$(contar "$ERR_CSV")"
+NUM_MISS="$(contar "$MISS_CSV")"
+NUM_DEV="$(awk 'END{print NR+0}' "$TEMP/pods_dev.tsv")"
+NUM_NODOS="$(awk 'END{print NR+0}' "$TEMP/nodos_dev.txt")"
+RESUMEN="$SALIDA/05_resumen.txt"
+{
+  echo 'AUDITORIA OPENSHIFT - WORKERS DEV (SOLO LECTURA)'
+  echo "Fecha: $(date '+%Y-%m-%d %H:%M:%S')"
+  echo "Contexto: $(oc config current-context 2>/dev/null || echo 'No disponible')"
+  echo "Nodos: $NUM_NODOS (nombre inicia por workerdev)"
+  echo "Pods en namespaces DEV: $NUM_DEV (namespace contiene c-dev)"
+  echo 'Excluir servicios Redis/Mashery: SI para consumo; NO para errores'
+  echo "Consumo: CPU > ${CPU_MIN_M}m Y/O memoria > ${MEM_MIN_MI}Mi; modo=${MODO}"
+  echo "Errores: CrashLoopBackOff, Error, OOMKilled, fallas de imagen, Unschedulable o >${REINICIOS_MAX} reinicios"
+  echo "Metricas disponibles: $METRICAS_OK"
+  echo 'NOTA: se muestra uso actual (metrics), NO requests/limits de oc describe node.'
+  echo 'NOTA: error se consulta en todos los namespaces DEV, tambien pods sin nodo.'
+  echo 'NOTA: consumo agrupado suma todas las replicas con metricas en workerdev.'
+  echo 'NOTA: los pods sin metricas NO se contabilizan como uso cero.'
+  echo
+  echo 'NODOS INCLUIDOS:'
+  cat "$TEMP/nodos_dev.txt"
+  echo
+  echo 'RESUMEN:'
+  echo "Pods por encima de umbrales: $NUM_PODS"
+  echo "Deployments/workloads por encima de umbrales (sumados): $NUM_DEP"
+  echo "Pods DEV con errores o >${REINICIOS_MAX} reinicios: $NUM_ERR"
+  echo "Pods en workers DEV sin metricas: $NUM_MISS"
+  echo
+  echo 'ARCHIVOS:'
+  echo "$PODS_CSV"
+  echo "$DEP_CSV"
+  echo "$ERR_CSV"
+  echo "$MISS_CSV"
+} > "$RESUMEN"
+cat "$RESUMEN"
+echo '=== LISTO: no se modifico ningun recurso del cluster ==='
