@@ -1,11 +1,17 @@
-ibmcloud oc worker-pool ls \
-  --cluster carla-prd-tsp-ocw
+CL="carla-prd-tsp-ocw"
 
-ibmcloud oc worker ls \
-  --cluster carla-prd-tsp-ocw
+# Confirmar que solo queda el pool RHCOS
+ibmcloud oc worker-pool ls --cluster "$CL"
 
-oc get nodes
+# Confirmar los tres workers nuevos
+ibmcloud oc worker ls --cluster "$CL"
 
+# Comprobar nodos registrados en OpenShift
+oc get nodes -o wide
+
+# Confirmar las tres réplicas de Keycloak
+oc get pods -n carla-prd-tsp-ap84509-websso -o wide
+
+# Verificar cargas y operadores
 oc get pods -A --field-selector=status.phase=Pending
-
 oc get co
