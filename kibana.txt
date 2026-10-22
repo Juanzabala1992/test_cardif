@@ -1,4 +1,189 @@
-for n in $(oc get nodes -o name | grep 'workerdev'); do
-  echo "========== $n =========="
-  oc describe "$n" | sed -n '/Allocated resources:/,/Events:/p'
+#!/usr/bin/env bash
+# Identifica Deployments con pods fallando SOLO en namespaces *-c-dev(-*)
+# y permite escalarlos a 0 con confirmación explícita.
+# Requiere: bash 4+, oc, awk, sort y GNU date. No usa Python ni jq.
+set -euo pipefail
+LC_ALL=C
+
+MODO="${1:---previsualizar}"
+MINUTOS_ATASCADO="${MINUTOS_ATASCADO:-15}"
+case "$MODO" in
+  --previsualizar|--aplicar) ;;
+  *) echo "Uso: $0 [--previsualizar|--aplicar]"; exit 2 ;;
+esac
+[[ "$MINUTOS_ATASCADO" =~ ^[0-9]+$ ]] || { echo "MINUTOS_ATASCADO debe ser un número entero"; exit 2; }
+for cmd in oc awk sort date mktemp; do
+  command -v "$cmd" >/dev/null 2>&1 || { echo "Falta comando: $cmd"; exit 1; }
 done
+oc whoami >/dev/null 2>&1 || { echo "ERROR: no hay sesión válida de oc"; exit 1; }
+
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+FECHA=$(date +%Y%m%d_%H%M%S)
+CARPETA="escalado_dev_${FECHA}_$$"
+mkdir -p "$CARPETA"
+REPORTE="$CARPETA/plan_escalado_dev.txt"
+RESTAURAR="$CARPETA/restaurar_deployments_dev.sh"
+
+if ! oc get pods -A --no-headers > "$TMP/pods"; then
+  echo "ERROR: no fue posible listar los pods de todos los namespaces" >&2
+  exit 1
+fi
+
+# Guarda namespace / deployment / pod de referencia / estado. Nunca toca otros namespaces.
+: > "$TMP/candidatos"
+: > "$TMP/omitidos"
+AHORA=$(date -u +%s)
+while read -r ns pod ready estado resto; do
+  [[ -n "${ns:-}" && -n "${pod:-}" ]] || continue
+  # Coincide: x-c-dev, x-c-dev-sufijo, c-dev; NO coincide con c-devops ni prod.
+  [[ "$ns" =~ (^|-)c-dev($|-) ]] || continue
+
+  requiere_edad=0
+  case "$estado" in
+    CrashLoopBackOff|Error|ImagePullBackOff|ErrImagePull|CreateContainerConfigError|CreateContainerError|RunContainerError|InvalidImageName|OOMKilled|Init:CrashLoopBackOff|Init:Error|Init:ImagePullBackOff|Init:ErrImagePull|Init:CreateContainerConfigError|Init:CreateContainerError|Init:RunContainerError|Init:InvalidImageName)
+      ;;
+    Pending|ContainerCreating|PodInitializing|Init:*) requiere_edad=1 ;;
+    Running)
+      # Sólo si lleva tiempo con contenedores NO ready (p.ej. 0/1, 1/2).
+      if [[ "$ready" =~ ^([0-9]+)/([0-9]+)$ ]] && (( 10#${BASH_REMATCH[1]} < 10#${BASH_REMATCH[2]} )); then
+        requiere_edad=1
+        estado="Running_no_Ready"
+      else
+        continue
+      fi ;;
+    *) continue ;;
+  esac
+
+  # Usar el ReplicaSet dueño, no deducir el deployment por el nombre del pod.
+  datos=$(oc get pod "$pod" -n "$ns" -o jsonpath='{.metadata.creationTimestamp}{"|"}{.metadata.ownerReferences[?(@.kind=="ReplicaSet")].name}' 2>/dev/null) || {
+    printf '%s\t%s\t%s\t%s\n' "$ns" "$pod" "$estado" "pod_no_consultable" >> "$TMP/omitidos"
+    continue
+  }
+  IFS='|' read -r creado rs <<< "$datos"
+  if [[ "$requiere_edad" == 1 ]]; then
+    creacion_epoch=$(date -u -d "${creado:-}" +%s 2>/dev/null) || continue
+    edad_min=$(( (AHORA - creacion_epoch) / 60 ))
+    (( edad_min >= MINUTOS_ATASCADO )) || continue
+  fi
+  if [[ -z "${rs:-}" ]]; then
+    printf '%s\t%s\t%s\t%s\n' "$ns" "$pod" "$estado" "no_es_de_ReplicaSet" >> "$TMP/omitidos"
+    continue
+  fi
+  deploy=$(oc get rs "$rs" -n "$ns" -o jsonpath='{.metadata.ownerReferences[?(@.kind=="Deployment")].name}' 2>/dev/null) || deploy=""
+  if [[ -z "$deploy" ]]; then
+    printf '%s\t%s\t%s\t%s\n' "$ns" "$pod" "$estado" "sin_Deployment_dueno" >> "$TMP/omitidos"
+    continue
+  fi
+  printf '%s\t%s\t%s\t%s\n' "$ns" "$deploy" "$pod" "$estado" >> "$TMP/candidatos"
+done < "$TMP/pods"
+
+# Cada Deployment se escala una sola vez, aunque tenga muchos pods en error.
+sort -t $'\t' -k1,1 -k2,2 "$TMP/candidatos" | awk -F '\t' '!seen[$1 FS $2]++' > "$TMP/unicos"
+: > "$TMP/plan"
+declare -A HPA_CACHE
+while IFS=$'\t' read -r ns deploy pod estado; do
+  [[ -n "${ns:-}" ]] || continue
+  if ! reps=$(oc get deploy "$deploy" -n "$ns" -o jsonpath='{.spec.replicas}' 2>/dev/null); then
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$ns" "$deploy" "?" "$pod" "$estado" "OMITIR:no_se_pudo_leer_deploy" >> "$TMP/plan"
+    continue
+  fi
+  reps=${reps:-1}  # Kubernetes aplica 1 replica por defecto cuando no se especifica.
+  if ! [[ "$reps" =~ ^[0-9]+$ ]] || (( reps == 0 )); then
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$ns" "$deploy" "$reps" "$pod" "$estado" "OMITIR:ya_en_0_o_invalido" >> "$TMP/plan"
+    continue
+  fi
+
+  if [[ -z "${HPA_CACHE[$ns]+x}" ]]; then
+    if hpa_output=$(oc get hpa -n "$ns" -o jsonpath='{range .items[*]}{.spec.scaleTargetRef.kind}{"/"}{.spec.scaleTargetRef.name}{"\n"}{end}' 2>/dev/null); then
+      HPA_CACHE["$ns"]="$hpa_output"
+    else
+      HPA_CACHE["$ns"]="__NO_SE_PUDO_VALIDAR_HPA__"
+    fi
+  fi
+  motivo="LISTO"
+  if [[ "${HPA_CACHE[$ns]}" == "__NO_SE_PUDO_VALIDAR_HPA__" ]]; then
+    motivo="OMITIR:HPA_no_verificable"
+  elif printf '%s\n' "${HPA_CACHE[$ns]}" | grep -Fxq "Deployment/$deploy"; then
+    motivo="OMITIR:tiene_HPA"
+  else
+    propietario=$(oc get deploy "$deploy" -n "$ns" -o jsonpath='{.metadata.ownerReferences[*].kind}' 2>/dev/null) || propietario="NO_VERIFICABLE"
+    if [[ -n "$propietario" ]]; then
+      motivo="OMITIR:controlado_por_otro_recurso"
+    fi
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$ns" "$deploy" "$reps" "$pod" "$estado" "$motivo" >> "$TMP/plan"
+done < "$TMP/unicos"
+
+{
+  echo "AUDITORIA DE DEPLOYMENTS DEV CON PODS FALLANDO"
+  echo "Fecha: $(date '+%Y-%m-%d %H:%M:%S') | Modo: $MODO"
+  echo "Ámbito: namespaces que contienen c-dev como segmento (NO afecta PROD/UAT)"
+  echo "Estados inmediatos: CrashLoopBackOff, Error, OOMKilled, fallos de imagen/configuración e Init con error"
+  echo "Estados persistentes (>= ${MINUTOS_ATASCADO} min): Pending, ContainerCreating, Init sin terminar, Running sin readiness"
+  echo "Nota: Un pod defectuoso marca TODO su Deployment como candidato (incluye otras réplicas sanas)."
+  echo "Nota: Se omiten Deployments con HPA o ownerReference, o cuyo HPA no se pudo validar."
+  echo
+  printf '%-38s %-52s %8s %-52s %-25s %s\n' "NAMESPACE" "DEPLOYMENT" "REPLICAS" "POD_DE_EJEMPLO" "ESTADO" "ACCION"
+  printf '%s\n' '-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------'
+  if [[ ! -s "$TMP/plan" ]]; then
+    echo "No se encontraron Deployments candidatos (o no se pudieron determinar propietarios)."
+  else
+    while IFS=$'\t' read -r ns deploy reps pod estado motivo; do
+      printf '%-38s %-52s %8s %-52s %-25s %s\n' "$ns" "$deploy" "$reps" "$pod" "$estado" "$motivo"
+    done < "$TMP/plan"
+  fi
+  echo
+  echo "Pods no vinculados a un Deployment (Jobs, StatefulSets, etc.) u omitidos:"
+  if [[ -s "$TMP/omitidos" ]]; then
+    cat "$TMP/omitidos"
+  else
+    echo "Ninguno."
+  fi
+  echo
+  echo "IMPORTANTE: Pending sin nodo asignado no está consumiendo requests en un worker."
+  echo "Revisar administradores HPA/GitOps: pueden volver a escalar deployments automáticamente."
+} > "$REPORTE"
+
+cat "$REPORTE"
+echo
+echo "Reporte: $REPORTE"
+
+if [[ "$MODO" == "--previsualizar" ]]; then
+  echo "SIN CAMBIOS. Para aplicar: $0 --aplicar"
+  exit 0
+fi
+
+APLICABLES=$(awk -F '\t' '$6=="LISTO" {n++} END {print n+0}' "$TMP/plan")
+if (( APLICABLES == 0 )); then
+  echo "Sin Deployments seguros para escalar. No se modificó nada."
+  exit 0
+fi
+
+printf '\nATENCION: Se escalarán a 0 %s Deployments DEV completos.\n' "$APLICABLES"
+printf 'Escribe exactamente ESCALAR DEV para continuar: '
+read -r confirmacion
+if [[ "$confirmacion" != "ESCALAR DEV" ]]; then
+  echo "Cancelado. No se modificó nada."
+  exit 0
+fi
+
+{
+  echo '#!/usr/bin/env bash'
+  echo '# Restaurar réplicas ORIGINALES de Deployments escalados correctamente por este script.'
+  echo 'set -euo pipefail'
+} > "$RESTAURAR"
+chmod 700 "$RESTAURAR"
+
+echo -e '\nRESULTADO DE ESCALADO:' | tee -a "$REPORTE"
+while IFS=$'\t' read -r ns deploy reps pod estado motivo; do
+  [[ "$motivo" == "LISTO" ]] || continue
+  # Precondición evita escalar si alguien cambió las réplicas entre la lectura y la acción.
+  if oc scale "deployment/$deploy" -n "$ns" --current-replicas="$reps" --replicas=0; then
+    printf 'oc scale deployment/%q -n %q --replicas=%q\n' "$deploy" "$ns" "$reps" >> "$RESTAURAR"
+    echo "OK: $ns/$deploy ($reps -> 0)" | tee -a "$REPORTE"
+  else
+    echo "ERROR: $ns/$deploy NO escalado (revisar permisos o cambio de replicas)" | tee -a "$REPORTE"
+  fi
+done < "$TMP/plan"
+echo "Restaurar replicas (solo cambios exitosos): bash $RESTAURAR" | tee -a "$REPORTE"
