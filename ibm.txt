@@ -47,6 +47,23 @@ oc get pods -A -o wide | grep -Ei \
 # Volúmenes persistentes
 oc get pvc -A
 
+*****************************
+
+
+# Pods ubicados en el primer worker RHEL
+oc get pods -A \
+  --field-selector spec.nodeName=10.140.44.19 \
+  -o wide
+
+# Ubicación de los pods packageserver
+oc get pods -n openshift-operator-lifecycle-manager \
+  -o wide | grep -E 'NAME|packageserver'
+
+# Restricciones de scheduling de Keycloak
+NS=$(oc get pods -A --no-headers | awk '$2=="keycloak-2"{print $1;exit}')
+
+oc get pod keycloak-2 -n "$NS" \
+  -o jsonpath='Selector={.spec.nodeSelector}{"\n"}Affinity={.spec.affinity}{"\n"}'
 # Presupuestos de interrupción
 oc get pdb -A
 
