@@ -36,3 +36,18 @@ oc get co dns storage network ingress
 
 oc get pods -n kube-system -o wide | grep -E 'ibm-vpc-block-csi-node|file-csi'
 
+
+**************************
+
+
+# Aplicaciones críticas y nodo donde se ejecutan
+oc get pods -A -o wide | grep -Ei \
+'keycloak|nexus|postgres|packageserver'
+
+# Volúmenes persistentes
+oc get pvc -A
+
+# Presupuestos de interrupción
+oc get pdb -A
+
+
