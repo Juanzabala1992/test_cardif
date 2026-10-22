@@ -1,390 +1,96 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Auditoria OpenShift: workers DEV, consumo por pod/deployment y pods con errores.
-SOLO LECTURA: oc get, oc get --raw, oc adm top (respaldo).
-Requisitos: Python 3.8+ y oc con sesion iniciada en el cluster correcto.
-Ejecutar: python3 auditoria_workers_dev.py
-Opcional: python3 auditoria_workers_dev.py --cpu-m 10 --mem-mi 10 --reinicios 100
-"""
+#!/usr/bin/env bash
+# Auditoria de consumo y errores en OpenShift DEV - SOLO LECTURA.
+# Requisitos: bash, oc (logueado), awk, sort, sed, grep, mktemp y date.
+# No requiere Python, jq, sudo ni permisos de escritura en el cluster.
+# Uso: bash auditoria_workers_dev.sh
+#      CPU_MIN_M=10 MEM_MIN_MI=10 REINICIOS_MAX=100 bash auditoria_workers_dev.sh
+#      MODO=alguno bash auditoria_workers_dev.sh  # CPU > umbral O memoria > umbral
+set -euo pipefail
+export LC_ALL=C
 
-import argparse
-import csv
-import json
-import re
-import shutil
-import subprocess
-import sys
-from collections import defaultdict
-from datetime import datetime
-from decimal import Decimal, InvalidOperation
-from pathlib import Path
+CPU_MIN_M="${CPU_MIN_M:-10}"
+MEM_MIN_MI="${MEM_MIN_MI:-10}"
+REINICIOS_MAX="${REINICIOS_MAX:-100}"
+MODO="${MODO:-ambos}"  # ambos = CPU > 10m Y memoria > 10Mi
 
+for cmd in oc awk sort sed grep mktemp date; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "ERROR: falta el comando requerido: $cmd" >&2
+    exit 1
+  fi
+done
+if ! [[ "$CPU_MIN_M" =~ ^[0-9]+([.][0-9]+)?$ && "$MEM_MIN_MI" =~ ^[0-9]+([.][0-9]+)?$ && "$REINICIOS_MAX" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: umbrales invalidos. Ejemplo: CPU_MIN_M=10 MEM_MIN_MI=10 REINICIOS_MAX=100" >&2
+  exit 1
+fi
+if [[ "$MODO" != "ambos" && "$MODO" != "alguno" ]]; then
+  echo "ERROR: MODO debe ser 'ambos' o 'alguno'" >&2
+  exit 1
+fi
 
-SCALE_BYTES = {
-    '': Decimal(1),
-    'n': Decimal('0.000000001'), 'u': Decimal('0.000001'), 'µ': Decimal('0.000001'),
-    'm': Decimal('0.001'),
-    'k': Decimal(1000), 'K': Decimal(1000), 'M': Decimal(1000) ** 2,
-    'G': Decimal(1000) ** 3, 'T': Decimal(1000) ** 4,
-    'P': Decimal(1000) ** 5, 'E': Decimal(1000) ** 6,
-    'Ki': Decimal(1024), 'Mi': Decimal(1024) ** 2,
-    'Gi': Decimal(1024) ** 3, 'Ti': Decimal(1024) ** 4,
-    'Pi': Decimal(1024) ** 5, 'Ei': Decimal(1024) ** 6,
+SALIDA="${SALIDA:-$(pwd)/auditoria_dev_$(date +%Y%m%d_%H%M%S)}"
+mkdir -p "$SALIDA"
+TEMP="$(mktemp -d)"
+trap 'rm -rf "$TEMP"' EXIT
+
+echo "=== AUDITORIA OPENSHIFT DEV (SOLO LECTURA) ==="
+echo "Contexto: $(oc config current-context 2>/dev/null || echo 'No disponible')"
+echo "Resultados: $SALIDA"
+
+# Los nodos workerdev-mashery* se incluyen: el filtro redis/mashery se aplica
+# a SERVICIOS en el informe de consumo, no a nodos.
+echo '[1/5] Buscando nodos workerdev...'
+if ! oc get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' > "$TEMP/nodos_todos.txt"; then
+  echo 'ERROR: no se pudo consultar oc get nodes.' >&2
+  exit 1
+fi
+awk 'tolower($0) ~ /^workerdev/' "$TEMP/nodos_todos.txt" | sort -u > "$TEMP/nodos_dev.txt"
+if [[ ! -s "$TEMP/nodos_dev.txt" ]]; then
+  echo 'ERROR: no se encontraron nodos workerdev (incluidos workerdev-mashery).' >&2
+  exit 1
+fi
+
+echo '[2/5] Consultando pods de todos los namespaces...'
+# Una fila por pod; los campos de estados de contenedores se separan con ;
+# y los subcampos internos con : (son nombres/razones de Kubernetes).
+POD_JSONPATH='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.spec.nodeName}{"\t"}{.status.phase}{"\t"}{.status.reason}{"\t"}{.metadata.ownerReferences[0].kind}{"\t"}{.metadata.ownerReferences[0].name}{"\t"}{range .status.containerStatuses[*]}{.name}{":"}{.restartCount}{":"}{.state.waiting.reason}{":"}{.state.terminated.reason}{":"}{.lastState.terminated.reason}{";"}{end}{"\t"}{range .status.initContainerStatuses[*]}{.name}{":"}{.restartCount}{":"}{.state.waiting.reason}{":"}{.state.terminated.reason}{":"}{.lastState.terminated.reason}{";"}{end}{"\t"}{range .status.conditions[*]}{.type}{":"}{.status}{":"}{.reason}{";"}{end}{"\n"}{end}'
+if ! oc get pods -A -o "jsonpath=$POD_JSONPATH" > "$TEMP/pods_todos.tsv"; then
+  echo 'ERROR: no se pudieron consultar pods de todos los namespaces.' >&2
+  exit 1
+fi
+# Contiene c-dev en cualquier posicion, p. ej. lam-c-dev y per-c-dev-app.
+awk -F '\t' 'tolower($1) ~ /c-dev/' "$TEMP/pods_todos.tsv" > "$TEMP/pods_dev.tsv"
+
+echo '[3/5] Asociando ReplicaSets con su Deployment...'
+RS_JSONPATH='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.metadata.ownerReferences[0].kind}{"\t"}{.metadata.ownerReferences[0].name}{"\n"}{end}'
+if ! oc get replicasets -A -o "jsonpath=$RS_JSONPATH" > "$TEMP/rs.tsv"; then
+  echo 'AVISO: sin permiso para listar ReplicaSets; se mostrara ReplicaSet en vez del Deployment.' >&2
+  : > "$TEMP/rs.tsv"
+fi
+
+echo '[4/5] Leyendo consumo REAL de CPU y memoria (oc adm top pods -A)...'
+METRICAS_OK=si
+if ! oc adm top pods -A > "$TEMP/top.txt" 2> "$TEMP/metricas_error.txt"; then
+  METRICAS_OK=no
+  : > "$TEMP/top.txt"
+  echo 'AVISO: no se pudieron obtener metricas; informes de consumo vacios y pods sin metricas listados.' >&2
+  sed -n '1,3p' "$TEMP/metricas_error.txt" >&2
+fi
+
+# 01: consumo individual, 02: agrupado por deployment/workload.
+# La agrupacion SUMA todas las replicas con metricas en workerdev, no solo
+# las replicas que superaron el umbral individual.
+awk -F '\t' -v OFS=';' -v cpuLim="$CPU_MIN_M" -v memLim="$MEM_MIN_MI" -v modo="$MODO" \
+    -v podsOut="$TEMP/consumo_pods.tmp" -v depOut="$TEMP/consumo_deployments.tmp" \
+    -v missOut="$TEMP/sin_metricas.tmp" \
+    -f /dev/stdin "$TEMP/nodos_dev.txt" "$TEMP/rs.tsv" "$TEMP/pods_dev.tsv" "$TEMP/top.txt" <<'AWK'
+function cpu_m(s, v) {
+  if (s ~ /m$/) {sub(/m$/, "", s); return s+0}
+  if (s ~ /u$/) {sub(/u$/, "", s); return (s+0)/1000}
+  if (s ~ /n$/) {sub(/n$/, "", s); return (s+0)/1000000}
+  if (s ~ /^[0-9]+([.][0-9]+)?$/) return (s+0)*1000
+  return -1
 }
-CPU_SCALE_M = {
-    '': Decimal(1000), 'm': Decimal(1), 'u': Decimal('0.001'),
-    'µ': Decimal('0.001'), 'n': Decimal('0.000001'),
-}
-QTY_RE = re.compile(r'^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)([a-zA-Zµ]*)$')
-
-
-def quantity(value, kind):
-    """Devuelve Decimal en millicores (CPU) o MiB (memoria)."""
-    m = QTY_RE.match(str(value).strip())
-    if not m:
-        raise ValueError(f'Cantidad de recursos no reconocida: {value!r}')
-    try:
-        num = Decimal(m.group(1))
-        suffix = m.group(2)
-        if kind == 'cpu':
-            return num * CPU_SCALE_M[suffix]
-        return num * SCALE_BYTES[suffix] / (Decimal(1024) ** 2)
-    except (KeyError, InvalidOperation) as exc:
-        raise ValueError(f'Unidad no reconocida para {kind}: {value!r}') from exc
-
-
-def oc(*args, allow_failure=False, timeout=150):
-    cmd = ['oc', *args]
-    try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(f'Tiempo agotado al ejecutar: {" ".join(cmd)}')
-    if p.returncode != 0:
-        if allow_failure:
-            return None
-        raise RuntimeError(f'Fallo: {" ".join(cmd)}\n{p.stderr.strip() or p.stdout.strip()}')
-    return p.stdout
-
-
-def oc_json(*args, allow_failure=False):
-    output = oc(*args, allow_failure=allow_failure)
-    if output is None:
-        return None
-    try:
-        return json.loads(output)
-    except ValueError as exc:
-        raise RuntimeError(f'La respuesta de oc no es JSON ({" ".join(args)}).') from exc
-
-
-def obj_name(item):
-    return item.get('metadata', {}).get('name', '')
-
-
-def namespace(item):
-    return item.get('metadata', {}).get('namespace', '')
-
-
-def owner_ref(item):
-    refs = item.get('metadata', {}).get('ownerReferences') or []
-    for ref in refs:
-        if ref.get('controller') is True:
-            return ref.get('kind', ''), ref.get('name', '')
-    if refs:
-        return refs[0].get('kind', ''), refs[0].get('name', '')
-    return '', ''
-
-
-def pod_workload(pod, rs_owners):
-    kind, name = owner_ref(pod)
-    if kind == 'ReplicaSet':
-        parent = rs_owners.get((namespace(pod), name))
-        if parent and parent[0] == 'Deployment':
-            return 'Deployment', parent[1]
-        return 'ReplicaSet', name
-    if kind and name:
-        return kind, name
-    return 'Pod', obj_name(pod)
-
-
-def is_dev_ns(value):
-    # Incluye lam-c-dev, per-c-dev-qhapax-be, etc., sin confundir con c-uat.
-    return 'c-dev' in value.casefold()
-
-
-def is_dev_worker(value):
-    # Incluye workerdev1..N y workerdev-mashery1..N del cluster fotografiado.
-    return value.split('.')[0].casefold().startswith('workerdev')
-
-
-def is_excluded_service(ns, pod, workload):
-    txt = f'{ns} {pod} {workload}'.casefold()
-    return 'redis' in txt or 'mashery' in txt
-
-
-def metrics_via_top():
-    # Contingencia cuando RBAC no permite oc get --raw metrics.k8s.io.
-    raw = oc('adm', 'top', 'pods', '-A', '--containers', allow_failure=True)
-    if not raw:
-        return {}, 'sin acceso a metrics.k8s.io y sin salida de oc adm top'
-    result = defaultdict(lambda: [Decimal(0), Decimal(0)])
-    for line in raw.splitlines():
-        parts = line.split()
-        if len(parts) < 5 or parts[0].upper() == 'NAMESPACE':
-            continue
-        ns, pod = parts[0], parts[1]
-        cpu_str, mem_str = parts[-2], parts[-1]
-        try:
-            cpu = quantity(cpu_str, 'cpu')
-            mem = quantity(mem_str, 'memory')
-        except ValueError:
-            continue
-        result[(ns, pod)][0] += cpu
-        result[(ns, pod)][1] += mem
-    return dict(result), 'oc adm top pods -A --containers (alternativa)'
-
-
-def get_metrics():
-    data = oc_json('get', '--raw', '/apis/metrics.k8s.io/v1beta1/pods', allow_failure=True)
-    if data is None or not isinstance(data.get('items'), list):
-        return metrics_via_top()
-    usage = {}
-    warnings = 0
-    for item in data['items']:
-        ns, name = namespace(item), obj_name(item)
-        if not ns or not name:
-            continue
-        cpu = Decimal(0)
-        mem = Decimal(0)
-        valid_containers = 0
-        for c in item.get('containers', []):
-            usage_obj = c.get('usage', {})
-            try:
-                cpu += quantity(usage_obj['cpu'], 'cpu')
-                mem += quantity(usage_obj['memory'], 'memory')
-                valid_containers += 1
-            except (ValueError, KeyError):
-                warnings += 1
-        if valid_containers:
-            usage[(ns, name)] = [cpu, mem]
-    if warnings:
-        print(f'AVISO: {warnings} muestras de contenedores sin cantidades válidas.', file=sys.stderr)
-    return usage, 'metrics.k8s.io/v1beta1/pods'
-
-
-def error_reasons(pod, restarts, threshold):
-    status = pod.get('status', {})
-    phase = status.get('phase', 'Unknown')
-    reasons = []
-    if phase in ('Failed', 'Unknown'):
-        reasons.append(f'Fase={phase}')
-    status_reason = status.get('reason') or ''
-    if any(k in status_reason.casefold() for k in ('error', 'failed', 'evicted', 'lost')):
-        reasons.append(status_reason)
-    all_status = (status.get('initContainerStatuses') or []) + (status.get('containerStatuses') or [])
-    for c in all_status:
-        c_name = c.get('name', '?')
-        state = c.get('state') or {}
-        waiting_reason = (state.get('waiting') or {}).get('reason') or ''
-        terminated_reason = (state.get('terminated') or {}).get('reason') or ''
-        # Solo razones que indican problemas, no ContainerCreating / PodInitializing.
-        if any(k in waiting_reason.casefold() for k in ('crashloop', 'error', 'backoff', 'failed', 'invalid', 'cannotrun', 'errimage')):
-            reasons.append(f'{c_name}:{waiting_reason}')
-        if terminated_reason and terminated_reason.casefold() in ('error', 'oomkilled', 'containercannotrun'):
-            reasons.append(f'{c_name}:Terminado/{terminated_reason}')
-        previous = (c.get('lastState') or {}).get('terminated') or {}
-        if (previous.get('reason') or '').casefold() == 'oomkilled':
-            reasons.append(f'{c_name}:OOMKilled_anterior')
-    # También considera Pending por falta de recursos / scheduling.
-    for c in status.get('conditions') or []:
-        if c.get('type') == 'PodScheduled' and c.get('status') == 'False':
-            if (c.get('reason') or '') in ('Unschedulable', 'SchedulingGated'):
-                reasons.append(f"Scheduling/{c['reason']}")
-    if restarts > threshold:
-        reasons.append(f'Reinicios>{threshold}')
-    # Eliminar duplicados en orden de aparición.
-    return list(dict.fromkeys(reasons))
-
-
-def write_csv(path, headings, rows):
-    # UTF-8 con BOM y delimitador ; para compatibilidad con Excel en español.
-    with open(path, 'w', encoding='utf-8-sig', newline='') as fh:
-        writer = csv.DictWriter(fh, fieldnames=headings, delimiter=';', extrasaction='ignore')
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def number(val):
-    return f'{val:.2f}'
-
-
-def main():
-    parser = argparse.ArgumentParser(description='Auditar consumo y errores en workers DEV de OpenShift (solo lectura).')
-    parser.add_argument('--cpu-m', type=float, default=10.0, help='Umbral de CPU en millicores (predeterminado: 10)')
-    parser.add_argument('--mem-mi', type=float, default=10.0, help='Umbral de memoria en MiB (predeterminado: 10)')
-    parser.add_argument('--reinicios', type=int, default=100, help='Umbral de reinicios, comparación estricta mayor que (predeterminado: 100)')
-    parser.add_argument('--salida', default=None, help='Carpeta de resultados (predeterminada: auditoria_dev_FECHA_HORA)')
-    args = parser.parse_args()
-
-    if args.cpu_m < 0 or args.mem_mi < 0 or args.reinicios < 0:
-        parser.error('Los umbrales no pueden ser negativos.')
-    if not shutil.which('oc'):
-        sys.exit('ERROR: oc no está instalado o no figura en PATH.')
-
-    try:
-        context = oc('config', 'current-context', allow_failure=True) or '(no disponible)'
-        print('Contexto OC:', context.strip())
-        print('Consultando nodos y pods...')
-        nodes = oc_json('get', 'nodes', '-o', 'json')['items']
-        pods = oc_json('get', 'pods', '-A', '-o', 'json')['items']
-        dev_nodes = {obj_name(n) for n in nodes if is_dev_worker(obj_name(n))}
-        if not dev_nodes:
-            sys.exit('No se encontraron nodos cuyo nombre comience con workerdev. No se generó reporte.')
-
-        # Los fallos de pods ya son visibles sin consultar Replicasets; si no se puede
-        # listar replicasets, se mostrará su controlador como ReplicaSet en vez de Deployment.
-        replicasets_data = oc_json('get', 'replicasets', '-A', '-o', 'json', allow_failure=True)
-        rs_owners = {}
-        if replicasets_data:
-            rs_owners = {(namespace(rs), obj_name(rs)): owner_ref(rs) for rs in replicasets_data.get('items', [])}
-        else:
-            print('AVISO: no se pudieron consultar ReplicaSets; algunos deployments aparecerán como ReplicaSet.')
-
-        print('Consultando métricas de CPU y memoria...')
-        metrics, metrics_origin = get_metrics()
-    except (RuntimeError, KeyError, TypeError) as exc:
-        sys.exit(f'ERROR: {exc}')
-
-    # Errores: TODOS los pods de namespaces DEV, incluso Pending sin nodo asignado.
-    dev_pods = [p for p in pods if is_dev_ns(namespace(p))]
-    dev_pods.sort(key=lambda p: (namespace(p), obj_name(p)))
-    # Consumo: solo pods desplegados en los workers DEV.
-    selected = [p for p in dev_pods if (p.get('spec', {}).get('nodeName') or '') in dev_nodes]
-    namespaces = sorted({namespace(p) for p in dev_pods})
-    threshold_cpu, threshold_mem = Decimal(str(args.cpu_m)), Decimal(str(args.mem_mi))
-
-    consumption_pods = []
-    errors = []
-    missing_metrics = []
-    # Agrupado por namespace / tipo / workload. Abarca todas las réplicas presentes en los workers DEV.
-    workloads = {}
-
-    for pod in dev_pods:
-        ns, pod_name = namespace(pod), obj_name(pod)
-        node = pod.get('spec', {}).get('nodeName', '')
-        kind, workload = pod_workload(pod, rs_owners)
-        status = pod.get('status', {})
-        states = (status.get('initContainerStatuses') or []) + (status.get('containerStatuses') or [])
-        restarts = sum(int(s.get('restartCount', 0) or 0) for s in states)
-        reasons = error_reasons(pod, restarts, args.reinicios)
-
-        # El reporte de errores incluye Redis y Mashery: el filtro solo se aplica al consumo.
-        if reasons:
-            errors.append({
-                'namespace': ns, 'pod': pod_name, 'tipo_workload': kind,
-                'deployment_o_workload': workload, 'nodo': node,
-                'fase': status.get('phase', ''), 'reinicios': restarts,
-                'motivos': ' | '.join(reasons),
-            })
-
-        # Fuera de workers DEV, solo interesa el estado, no su consumo.
-        if node not in dev_nodes:
-            continue
-        if is_excluded_service(ns, pod_name, workload):
-            continue
-        value = metrics.get((ns, pod_name))
-        if value is None:
-            missing_metrics.append({
-                'namespace': ns, 'pod': pod_name, 'tipo_workload': kind,
-                'deployment_o_workload': workload, 'nodo': node,
-                'fase': status.get('phase', ''),
-            })
-            continue
-
-        cpu, memory = value
-        key = (ns, kind, workload)
-        if key not in workloads:
-            workloads[key] = {'namespace': ns, 'tipo_workload': kind, 'deployment_o_workload': workload,
-                              'cantidad_pods': 0, 'nodos': set(), 'cpu': Decimal(0), 'mem': Decimal(0)}
-        entry = workloads[key]
-        entry['cantidad_pods'] += 1
-        entry['nodos'].add(node.split('.')[0])
-        entry['cpu'] += cpu
-        entry['mem'] += memory
-
-        if cpu > threshold_cpu and memory > threshold_mem:
-            consumption_pods.append({
-                'namespace': ns, 'deployment_o_workload': workload, 'tipo_workload': kind,
-                'pod': pod_name, 'nodo': node, 'cpu_m': number(cpu), 'memoria_Mi': number(memory),
-            })
-
-    consumption_pods.sort(key=lambda r: float(r['cpu_m']), reverse=True)
-    workload_report = []
-    for entry in workloads.values():
-        if entry['cpu'] > threshold_cpu and entry['mem'] > threshold_mem:
-            workload_report.append({
-                'namespace': entry['namespace'], 'deployment_o_workload': entry['deployment_o_workload'],
-                'tipo_workload': entry['tipo_workload'], 'cantidad_pods': entry['cantidad_pods'],
-                'nodos': ', '.join(sorted(entry['nodos'])),
-                'cpu_total_m': number(entry['cpu']), 'memoria_total_Mi': number(entry['mem']),
-            })
-    workload_report.sort(key=lambda r: float(r['cpu_total_m']), reverse=True)
-    errors.sort(key=lambda r: (-r['reinicios'], r['namespace'], r['pod']))
-
-    directory = Path(args.salida or f'auditoria_dev_{datetime.now():%Y%m%d_%H%M%S}')
-    directory.mkdir(parents=True, exist_ok=True)
-    write_csv(directory / '01_consumo_pods_dev.csv',
-              ['namespace', 'deployment_o_workload', 'tipo_workload', 'pod', 'nodo', 'cpu_m', 'memoria_Mi'], consumption_pods)
-    write_csv(directory / '02_consumo_por_deployment_dev.csv',
-              ['namespace', 'deployment_o_workload', 'tipo_workload', 'cantidad_pods', 'nodos', 'cpu_total_m', 'memoria_total_Mi'], workload_report)
-    write_csv(directory / '03_pods_errores_dev.csv',
-              ['namespace', 'pod', 'tipo_workload', 'deployment_o_workload', 'nodo', 'fase', 'reinicios', 'motivos'], errors)
-    write_csv(directory / '04_pods_sin_metricas_dev.csv',
-              ['namespace', 'pod', 'tipo_workload', 'deployment_o_workload', 'nodo', 'fase'], missing_metrics)
-
-    summary = [
-        'AUDITORIA DE WORKERS DEV - OPENSHIFT (SOLO LECTURA)',
-        f'Fecha: {datetime.now():%Y-%m-%d %H:%M:%S}',
-        f'Contexto: {context.strip()}',
-        f'Fuente de métricas: {metrics_origin}',
-        f'Filtro de namespaces: contiene "c-dev"',
-        f'Filtro de nodos: nombre comienza por "workerdev"',
-        f'Excluir Redis/Mashery: SI en consumo; NO en reporte de errores',
-        f'Umbrales de consumo: CPU > {args.cpu_m}m Y memoria > {args.mem_mi}Mi',
-        f'Umbral de reinicios: > {args.reinicios}',
-        '', 'NODOS INCLUIDOS:',
-        *[f'  - {n}' for n in sorted(dev_nodes)],
-        '', 'NAMESPACES DEV ENCONTRADOS EN EL CLUSTER:',
-        *[f'  - {ns}' for ns in namespaces],
-        '', 'RESULTADOS:',
-        f'  Pods en namespaces DEV (para detectar errores): {len(dev_pods)}',
-        f'  Pods DEV en workers DEV (para medir consumo): {len(selected)}',
-        f'  Pods con consumo por encima de ambos umbrales (excluidos Redis/Mashery): {len(consumption_pods)}',
-        f'  Deployments/workloads con consumo agregado por encima de ambos umbrales: {len(workload_report)}',
-        f'  Pods DEV con error, OOMKill anterior o >{args.reinicios} reinicios: {len(errors)}',
-        f'  Pods sin métricas (excluidos Redis/Mashery): {len(missing_metrics)}',
-        '', 'IMPORTANTE:',
-        '  - CPU y memoria son USO ACTUAL medido, no requests/limits.',
-        '  - Por-deployment agrupa solamente replicas de ese workload en los workers DEV.',
-        '  - Un pod sin metricas no se interpreta como consumo cero.',
-        '  - Los errores de OOMKilled_anterior pueden ser historicos; se distinguen de estados actuales.',
-        '  - Consumo: solo pods en workerdev. Errores: todos los pods c-dev, incluso Pending sin nodo.',
-        '  - No se ha modificado ningun recurso del cluster.',
-        '', 'TOP 20 WORKLOADS POR CPU:',
-        *[f"  {r['namespace']} | {r['tipo_workload']}/{r['deployment_o_workload']} | "
-          f"CPU {r['cpu_total_m']}m | MEM {r['memoria_total_Mi']}Mi | pods {r['cantidad_pods']}"
-          for r in workload_report[:20]],
-        '', 'TOP 30 PODS CON PROBLEMAS:',
-        *[f"  {r['namespace']} | {r['pod']} | reinicios {r['reinicios']} | {r['motivos']}"
-          for r in errors[:30]],
-    ]
-    (directory / '05_resumen.txt').write_text('\n'.join(summary) + '\n', encoding='utf-8')
-
-    print('\n'.join(summary))
-    print('\nArchivos generados:')
-    for path in sorted(directory.iterdir()):
-        print(' ', path)
-
-
-if __name__ == '__main__':
-    main()
+function mem_mi(s) {
+  if (s ~ /Ki$/) {sub(/Ki$/, "", s); return (s+0)/1024}
+  if (s ~ /Mi$/) {sub(/Mi$/, "", s); return s+0}
