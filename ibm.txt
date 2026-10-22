@@ -1,18 +1,11 @@
-ibmcloud target -r br-sao
+CL="carla-prd-tsp-ocw"
 
-ibmcloud target
+ibmcloud oc cluster get --cluster "$CL"
 
-ibmcloud oc cluster ls
+oc get clusterversion version
 
+oc get co
 
-
-
-CL="<NOMBRE_EXACTO_TSP_PROD>"
-
-ibmcloud oc cluster config --cluster "$CL" --admin
-
-ibmcloud oc worker-pool ls --cluster "$CL"
-
-ibmcloud oc worker ls --cluster "$CL"
-
-oc get nodes -o wide
+ibmcloud oc worker-pool get \
+  --cluster "$CL" \
+  --worker-pool default
