@@ -1,17 +1,231 @@
-ibmcloud target -r br-sao
+#!/usr/bin/env bash
+# Auditoria y limpieza controlada de referencias rotas en env.valueFrom de Deployments.
+# Requisitos: Bash >= 4, oc y utilidades basicas (sort, date, mkdir).
+# NO interpreta si una variable es usada por el codigo: solo detecta claves/objetos faltantes.
+set -Eeuo pipefail
+umask 077
 
-ibmcloud target
+usage() {
+  cat <<'HELP'
+Uso:
+  bash limpiar_env_rotas_oc.sh -n NAMESPACE -d DEPLOYMENT
+  bash limpiar_env_rotas_oc.sh -n NAMESPACE --all-deployments
 
-ibmcloud oc cluster ls
+Opciones:
+  -n, --namespace NAMESPACE     Namespace que se revisara (obligatorio).
+  -d, --deployment NOMBRE       Revisar solo un Deployment.
+      --all-deployments         Revisar todos los Deployments del namespace.
+      --apply                   Aplicar la eliminacion (sin esta opcion, solo audita).
+      --include-missing-objects Permite eliminar referencias a ConfigMaps/Secrets
+                                INEXISTENTES (sin esta opcion solo claves faltantes).
+      --output-dir DIRECTORIO   Donde guardar informe y backups.
+  -h, --help                    Ver ayuda.
 
+Ejemplos:
+  bash limpiar_env_rotas_oc.sh -n per-c-uat-qhapax-be -d NOMBRE
+  bash limpiar_env_rotas_oc.sh -n per-c-uat-qhapax-be -d NOMBRE --apply
 
-CL="<NOMBRE_EXACTO_TSP_PROD>"
+Seguridad:
+  * Conserva variables con valor literal, referencias validas y referencias optional:true.
+  * No modifica envFrom (solo lo registra si esta roto).
+  * Se detiene ante errores de permisos/API en vez de tratar el recurso como ausente.
+  * Antes de aplicar guarda un backup YAML por Deployment.
+  * Usa prueba de resourceVersion para impedir cambios sobre una version distinta.
+  * Cada Deployment modificado inicia un nuevo rollout.
+HELP
+}
 
-ibmcloud oc cluster config --cluster "$CL" --admin
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+info() { printf '%s\n' "$*"; }
 
-ibmcloud oc worker-pool ls --cluster "$CL"
+NS=""; ONE_DEPLOY=""; ALL=false; APPLY=false; INCLUDE_MISSING=false; OUTPUT_DIR=""
+while (($#)); do
+  case "$1" in
+    -n|--namespace) (($# >= 2)) || fail "Falta namespace"; NS=$2; shift 2 ;;
+    -d|--deployment) (($# >= 2)) || fail "Falta nombre del Deployment"; ONE_DEPLOY=$2; shift 2 ;;
+    --all-deployments) ALL=true; shift ;;
+    --apply) APPLY=true; shift ;;
+    --include-missing-objects) INCLUDE_MISSING=true; shift ;;
+    --output-dir) (($# >= 2)) || fail "Falta directorio"; OUTPUT_DIR=$2; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; fail "Opcion no reconocida: $1" ;;
+  esac
+done
+[[ -n $NS ]] || { usage >&2; fail "Debes indicar -n NAMESPACE"; }
+if [[ -n $ONE_DEPLOY && $ALL == true ]] || [[ -z $ONE_DEPLOY && $ALL == false ]]; then
+  usage >&2
+  fail "Selecciona exactamente uno: -d NOMBRE o --all-deployments"
+fi
+command -v oc >/dev/null 2>&1 || fail "No existe el comando oc en este bastion"
+[[ -n $OUTPUT_DIR ]] || OUTPUT_DIR="./auditoria_env_${NS}_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$OUTPUT_DIR" || fail "No se pudo crear $OUTPUT_DIR"
+REPORT="$OUTPUT_DIR/referencias.tsv"
+printf 'namespace\tdeployment\ttipo_contenedor\tcontenedor\tvariable\torigen\trecurso\tclave\testado\taccion\n' > "$REPORT"
 
-ibmcloud oc worker ls --cluster "$CL"
+# Templates go-template ejecutados por oc. Formato TSV (claves Kubernetes no contienen TAB).
+# Se extraen indices reales para crear JSON Patch con rutas precisas.
+DEPLOY_TEMPLATE=$(cat <<'TPL'
+{{printf "V\t%s\n" .metadata.resourceVersion}}{{range $ci,$c := .spec.template.spec.containers}}{{range $ei,$e := $c.env}}{{if $e.valueFrom}}{{if $e.valueFrom.configMapKeyRef}}{{printf "E\tC\t%d\t%d\t%s\t%s\tCM\t%s\t%s\t" $ci $ei $c.name $e.name $e.valueFrom.configMapKeyRef.name $e.valueFrom.configMapKeyRef.key}}{{if $e.valueFrom.configMapKeyRef.optional}}true{{else}}false{{end}}{{printf "\n"}}{{end}}{{if $e.valueFrom.secretKeyRef}}{{printf "E\tC\t%d\t%d\t%s\t%s\tSECRET\t%s\t%s\t" $ci $ei $c.name $e.name $e.valueFrom.secretKeyRef.name $e.valueFrom.secretKeyRef.key}}{{if $e.valueFrom.secretKeyRef.optional}}true{{else}}false{{end}}{{printf "\n"}}{{end}}{{end}}{{end}}{{range $fi,$f := $c.envFrom}}{{if $f.configMapRef}}{{printf "F\tC\t%d\t%d\t%s\tenvFrom\tCM\t%s\t-\t" $ci $fi $c.name $f.configMapRef.name}}{{if $f.configMapRef.optional}}true{{else}}false{{end}}{{printf "\n"}}{{end}}{{if $f.secretRef}}{{printf "F\tC\t%d\t%d\t%s\tenvFrom\tSECRET\t%s\t-\t" $ci $fi $c.name $f.secretRef.name}}{{if $f.secretRef.optional}}true{{else}}false{{end}}{{printf "\n"}}{{end}}{{end}}{{end}}{{range $ci,$c := .spec.template.spec.initContainers}}{{range $ei,$e := $c.env}}{{if $e.valueFrom}}{{if $e.valueFrom.configMapKeyRef}}{{printf "E\tI\t%d\t%d\t%s\t%s\tCM\t%s\t%s\t" $ci $ei $c.name $e.name $e.valueFrom.configMapKeyRef.name $e.valueFrom.configMapKeyRef.key}}{{if $e.valueFrom.configMapKeyRef.optional}}true{{else}}false{{end}}{{printf "\n"}}{{end}}{{if $e.valueFrom.secretKeyRef}}{{printf "E\tI\t%d\t%d\t%s\t%s\tSECRET\t%s\t%s\t" $ci $ei $c.name $e.name $e.valueFrom.secretKeyRef.name $e.valueFrom.secretKeyRef.key}}{{if $e.valueFrom.secretKeyRef.optional}}true{{else}}false{{end}}{{printf "\n"}}{{end}}{{end}}{{end}}{{range $fi,$f := $c.envFrom}}{{if $f.configMapRef}}{{printf "F\tI\t%d\t%d\t%s\tenvFrom\tCM\t%s\t-\t" $ci $fi $c.name $f.configMapRef.name}}{{if $f.configMapRef.optional}}true{{else}}false{{end}}{{printf "\n"}}{{end}}{{if $f.secretRef}}{{printf "F\tI\t%d\t%d\t%s\tenvFrom\tSECRET\t%s\t-\t" $ci $fi $c.name $f.secretRef.name}}{{if $f.secretRef.optional}}true{{else}}false{{end}}{{printf "\n"}}{{end}}{{end}}{{end}}
+TPL
+)
+CM_TEMPLATE='{{printf "__PRESENT__\n"}}{{range $k,$v := .data}}{{printf "%s\n" $k}}{{end}}{{range $k,$v := .binaryData}}{{printf "%s\n" $k}}{{end}}'
+SECRET_TEMPLATE='{{printf "__PRESENT__\n"}}{{range $k,$v := .data}}{{printf "%s\n" $k}}{{end}}'
 
-oc get nodes -o wide
+# Se cachea solo la lista de claves (sin exponer valores ni secretos).
+declare -A RESOURCE_EXISTS=()
+declare -A RESOURCE_KEYS=()
+declare -A RESOURCE_VERSIONS=()
+declare -a DEPLOYS=()
+declare -a REMOVE_DEPLOYS=()
+declare -a REMOVE_TYPES=()
+declare -a REMOVE_CI=()
+declare -a REMOVE_EI=()
+declare -a REMOVE_PATHS=()
 
+lookup_resource() {
+  local kind=$1 obj=$2 id="$1/$2" output template type
+  [[ -n $obj ]] || fail "Una referencia no tiene nombre de recurso"
+  if [[ -v RESOURCE_EXISTS[$id] ]]; then return 0; fi
+  if [[ $kind == CM ]]; then type=configmap; template=$CM_TEMPLATE
+  else type=secret; template=$SECRET_TEMPLATE; fi
+  # --ignore-not-found: recurso ausente => stdout vacio; fallo RBAC/API => comando falla.
+  if ! output=$(oc get "$type" "$obj" -n "$NS" --ignore-not-found -o "go-template=$template"); then
+    fail "Fallo al consultar $type/$obj. No se aplicara ninguna limpieza."
+  fi
+  if [[ $output == __PRESENT__* ]]; then
+    RESOURCE_EXISTS[$id]=true
+    RESOURCE_KEYS[$id]=$'\n'"$output"$'\n'
+  elif [[ -z $output ]]; then
+    RESOURCE_EXISTS[$id]=false
+    RESOURCE_KEYS[$id]=""
+  else
+    fail "Respuesta inesperada de oc para $type/$obj"
+  fi
+}
+
+if [[ -n $ONE_DEPLOY ]]; then
+  DEPLOYS+=("$ONE_DEPLOY")
+else
+  if ! deploy_list=$(oc get deployments -n "$NS" -o 'go-template={{range .items}}{{printf "%s\n" .metadata.name}}{{end}}'); then
+    fail "No se pueden listar Deployments en $NS"
+  fi
+  while IFS= read -r name; do [[ -n $name ]] && DEPLOYS+=("$name"); done <<< "$deploy_list"
+fi
+[[ ${#DEPLOYS[@]} -gt 0 ]] || fail "No se encontraron Deployments para auditar"
+info "Namespace: $NS | Deployments: ${#DEPLOYS[@]} | Modo: $([[ $APPLY == true ]] && echo APLICAR || echo AUDITORIA)"
+
+broken=0; selected=0; checked=0
+for deploy in "${DEPLOYS[@]}"; do
+  info "Revisando: deployment/$deploy"
+  if ! output=$(oc get deployment "$deploy" -n "$NS" -o "go-template=$DEPLOY_TEMPLATE"); then
+    fail "No se pudo obtener Deployment $deploy"
+  fi
+  version=""
+  while IFS=$'\t' read -r rec family ci ei cname envname kind obj key optional; do
+    [[ -n $rec ]] || continue
+    if [[ $rec == V ]]; then version=$family; continue; fi
+    [[ $rec == E || $rec == F ]] || fail "Formato inesperado de plantilla ($deploy)"
+    [[ $family == C || $family == I ]] || fail "Tipo de contenedor invalido ($deploy)"
+    [[ $ci =~ ^[0-9]+$ && $ei =~ ^[0-9]+$ ]] || fail "Indice invalido ($deploy)"
+    [[ $kind == CM || $kind == SECRET ]] || fail "Referencia invalida ($deploy)"
+    [[ $optional == true || $optional == false ]] || fail "Valor optional invalido ($deploy)"
+    ((checked+=1))
+    lookup_resource "$kind" "$obj"
+    id="$kind/$obj"
+    state=VALIDA; action=CONSERVAR
+    if [[ ${RESOURCE_EXISTS[$id]} == false ]]; then
+      state=OBJETO_INEXISTENTE
+    elif [[ $rec == E && ${RESOURCE_KEYS[$id]} != *$'\n'"$key"$'\n'* ]]; then
+      state=CLAVE_INEXISTENTE
+    fi
+    if [[ $state != VALIDA ]]; then
+      ((broken+=1))
+      if [[ $optional == true ]]; then
+        action=CONSERVAR_OPCIONAL
+      elif [[ $rec == F ]]; then
+        action=REVISAR_ENVFROM
+      elif [[ $state == OBJETO_INEXISTENTE && $INCLUDE_MISSING == false ]]; then
+        action=REVISAR_RECURSO
+      else
+        action=ELIMINAR_CON_APPLY
+        ((selected+=1))
+        if [[ $family == C ]]; then prefix=/spec/template/spec/containers
+        else prefix=/spec/template/spec/initContainers; fi
+        REMOVE_DEPLOYS+=("$deploy")
+        REMOVE_TYPES+=("$family")
+        REMOVE_CI+=("$ci")
+        REMOVE_EI+=("$ei")
+        REMOVE_PATHS+=("$prefix/$ci/env/$ei")
+      fi
+    fi
+    if [[ $state != VALIDA ]]; then
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$NS" "$deploy" "$family" "$cname" "$envname" "$kind" "$obj" "$key" "$state" "$action" \
+        | tee -a "$REPORT"
+    fi
+  done <<< "$output"
+  [[ -n $version ]] || fail "No se leyo resourceVersion para $deploy"
+  RESOURCE_VERSIONS[$deploy]=$version
+done
+
+info ""
+info "Referencias examinadas: $checked"
+info "Referencias rotas: $broken"
+info "Referencias seleccionadas para eliminar: $selected"
+info "Informe: $REPORT"
+
+if [[ $APPLY == false ]]; then
+  info "Solo auditoria: NO se modifico ningun Deployment."
+  info "Para realizar cambios, revisa el informe y vuelve a ejecutar con --apply."
+  exit 0
+fi
+
+if ((selected == 0)); then
+  info "No existen referencias candidatas para eliminar. No hay cambios."
+  exit 0
+fi
+
+# Antes de cualquier modificacion: generar TODOS los backups para limitar el riesgo.
+for deploy in "${DEPLOYS[@]}"; do
+  has_changes=false
+  for dep in "${REMOVE_DEPLOYS[@]}"; do
+    if [[ $dep == "$deploy" ]]; then has_changes=true; break; fi
+  done
+  [[ $has_changes == true ]] || continue
+  backup="$OUTPUT_DIR/${deploy}.antes.yaml"
+  if ! oc get deployment "$deploy" -n "$NS" -o yaml > "$backup"; then
+    fail "No se pudo guardar respaldo de $deploy; no se aplicaron cambios"
+  fi
+  [[ -s $backup ]] || fail "Respaldo vacio: $backup"
+  info "Respaldo creado: $backup"
+done
+
+info "Aplicando parches JSON (cambios por Deployment, no transaccion global)..."
+changed=0
+for deploy in "${DEPLOYS[@]}"; do
+  remove_lines=""
+  for i in "${!REMOVE_DEPLOYS[@]}"; do
+    if [[ ${REMOVE_DEPLOYS[$i]} == "$deploy" ]]; then
+      remove_lines+="${REMOVE_TYPES[$i]}"$'\t'"${REMOVE_CI[$i]}"$'\t'"${REMOVE_EI[$i]}"$'\t'"${REMOVE_PATHS[$i]}"$'\n'
+    fi
+  done
+  [[ -n $remove_lines ]] || continue
+  version=${RESOURCE_VERSIONS[$deploy]}
+  [[ $version =~ ^[[:alnum:]._-]+$ ]] || fail "resourceVersion inesperado en $deploy"
+  patch="[{\"op\":\"test\",\"path\":\"/metadata/resourceVersion\",\"value\":\"$version\"}"
+  # Se remueven indices DESCENDENTES dentro de cada lista env para evitar desplazamientos.
+  while IFS=$'\t' read -r family ci ei path; do
+    [[ -n $path ]] || continue
+    patch+=",{\"op\":\"remove\",\"path\":\"$path\"}"
+  done < <(printf '%s' "$remove_lines" | LC_ALL=C sort -t $'\t' -k1,1 -k2,2nr -k3,3nr)
+  patch+="]"
+  if oc patch deployment "$deploy" -n "$NS" --type=json -p "$patch"; then
+    ((changed+=1))
+    info "OK: $deploy actualizado. Puede iniciar un nuevo rollout."
+  else
+    fail "No se pudo modificar $deploy (puede haber cambiado su version). Backups en $OUTPUT_DIR; algunos Deployments anteriores podrian haberse actualizado."
+  fi
+done
+info "Listo: Deployments modificados: $changed"
+info "Valida pods: oc get pods -n $NS"
+info "Si hay errores, restaura desde el YAML respaldado (revisa el contenido antes de aplicar)."
