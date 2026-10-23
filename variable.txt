@@ -229,3 +229,28 @@ done
 info "Listo: Deployments modificados: $changed"
 info "Valida pods: oc get pods -n $NS"
 info "Si hay errores, restaura desde el YAML respaldado (revisa el contenido antes de aplicar)."
+
+
+
+
+
+
+
+
+
+
+*************
+
+
+chmod +x limpiar_env_rotas_oc.sh
+
+bash limpiar_env_rotas_oc.sh \
+  -n per-c-uat-qhapax-be \
+  -d NOMBRE_DEL_DEPLOYMENT
+
+
+
+  bash limpiar_env_rotas_oc.sh \
+  -n per-c-uat-qhapax-be \
+  -d NOMBRE_DEL_DEPLOYMENT \
+  --apply
