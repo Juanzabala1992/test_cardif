@@ -5,3 +5,11 @@ command -v sqlplus
 
 
 oc describe deployment/ms-generic-request-dac-batch-master -n <namespace> | grep -A 5 -B 5 DATA_SOURCE
+
+
+*************************
+
+oc describe deployment/ms-generic-request-dac-batch -n col-c-prd-dac | grep -A 5 -B 5 DATA_SOURCE
+
+
+oc exec -n col-c-prd-dac deployment/ms-generic-request-dac-batch -c ms-generic-request-dac-batch-master -- sh -c 'if [ -z "${DATA_SOURCE_PSW+x}" ]; then echo "VARIABLE NO DEFINIDA"; elif [ -z "$DATA_SOURCE_PSW" ]; then echo "VARIABLE VACIA"; else echo "VARIABLE CON VALOR"; fi'
