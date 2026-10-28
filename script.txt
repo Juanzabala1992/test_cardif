@@ -1,42 +1,7 @@
-oc get deploy ms-generic-request-dac-batch -n col-c-prd-dac -o jsonpath='{range .spec.template.spec.containers[*]}{.name}{"\n"}{range .env[*]}{.name}{" -> "}{.valueFrom.secretKeyRef.name}{"/"}{.valueFrom.secretKeyRef.key}{"\n"}{end}{range .envFrom[*]}{"envFrom Secret -> "}{.secretRef.name}{"\n"}{end}{end}'
+oc logs deploy/upload-dpm-outbound-consumer --previous --tail=1000 | grep -n -B 5 -A 10 -E 'NoSuchFileException|C:/Certificados'
 
+oc get deploy upload-dpm-outbound-consumer -o yaml | grep -n -C 5 -Ei 'certificados|keystore|truststore|envFrom|configMapRef|JAVA_OPTS'
 
-oc exec -n col-c-prd-dac deployment/ms-generic-request-dac-batch -c ms-generic-request-dac-batch-master -- sh -c 'printenv | cut -d= -f1 | grep -Ei "DATA|ORACLE|JDBC|DB_"'
+oc get cm upload-dpm-outbound-consumer -o yaml | grep -n -C 3 -Ei 'certificados|keystore|truststore'
 
-
-*************
-
-oc patch deployment ms-generic-request-dac-batch \
-  -n col-c-prd-dac \
-  --type=strategic \
-  -p '{
-    "spec": {
-      "template": {
-        "spec": {
-          "containers": [{
-            "name": "ms-generic-request-dac-batch-master",
-            "env": [
-              {
-                "name": "DATA_SOURCE_PSW",
-                "valueFrom": {
-                  "secretKeyRef": {
-                    "name": "ms-generic-request-dac-batch",
-                    "key": "DATA_SOURCE_PSW"
-                  }
-                }
-              },
-              {
-                "name": "DATA_SOURCE_SQUEMA",
-                "valueFrom": {
-                  "secretKeyRef": {
-                    "name": "ms-generic-request-dac-batch",
-                    "key": "DATA_SOURCE_SQUEMA"
-                  }
-                }
-              }
-            ]
-          }]
-        }
-      }
-    }
-  }'
+oc get cm -o yaml | grep -n -B 5 -A 5 'C:/Certificados'
