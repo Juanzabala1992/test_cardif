@@ -1,15 +1,4 @@
-nc -zv -w 5 latam-oracle-col-cobgacep-prod.br.xcd.net.intra 1521
+oc get deploy ms-generic-request-dac-batch -n col-c-prd-dac -o jsonpath='{range .spec.template.spec.containers[*]}{.name}{"\n"}{range .env[*]}{.name}{" -> "}{.valueFrom.secretKeyRef.name}{"/"}{.valueFrom.secretKeyRef.key}{"\n"}{end}{range .envFrom[*]}{"envFrom Secret -> "}{.secretRef.name}{"\n"}{end}{end}'
 
 
-command -v sqlplus
-
-
-oc describe deployment/ms-generic-request-dac-batch-master -n <namespace> | grep -A 5 -B 5 DATA_SOURCE
-
-
-*************************
-
-oc describe deployment/ms-generic-request-dac-batch -n col-c-prd-dac | grep -A 5 -B 5 DATA_SOURCE
-
-
-oc exec -n col-c-prd-dac deployment/ms-generic-request-dac-batch -c ms-generic-request-dac-batch-master -- sh -c 'if [ -z "${DATA_SOURCE_PSW+x}" ]; then echo "VARIABLE NO DEFINIDA"; elif [ -z "$DATA_SOURCE_PSW" ]; then echo "VARIABLE VACIA"; else echo "VARIABLE CON VALOR"; fi'
+oc exec -n col-c-prd-dac deployment/ms-generic-request-dac-batch -c ms-generic-request-dac-batch-master -- sh -c 'printenv | cut -d= -f1 | grep -Ei "DATA|ORACLE|JDBC|DB_"'
