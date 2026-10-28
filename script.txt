@@ -2,3 +2,6 @@ nc -zv -w 5 latam-oracle-col-cobgacep-prod.br.xcd.net.intra 1521
 
 
 command -v sqlplus
+
+
+oc describe deployment/ms-generic-request-dac-batch-master -n <namespace> | grep -A 5 -B 5 DATA_SOURCE
