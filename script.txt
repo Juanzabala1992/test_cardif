@@ -2,3 +2,41 @@ oc get deploy ms-generic-request-dac-batch -n col-c-prd-dac -o jsonpath='{range 
 
 
 oc exec -n col-c-prd-dac deployment/ms-generic-request-dac-batch -c ms-generic-request-dac-batch-master -- sh -c 'printenv | cut -d= -f1 | grep -Ei "DATA|ORACLE|JDBC|DB_"'
+
+
+*************
+
+oc patch deployment ms-generic-request-dac-batch \
+  -n col-c-prd-dac \
+  --type=strategic \
+  -p '{
+    "spec": {
+      "template": {
+        "spec": {
+          "containers": [{
+            "name": "ms-generic-request-dac-batch-master",
+            "env": [
+              {
+                "name": "DATA_SOURCE_PSW",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "ms-generic-request-dac-batch",
+                    "key": "DATA_SOURCE_PSW"
+                  }
+                }
+              },
+              {
+                "name": "DATA_SOURCE_SQUEMA",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "ms-generic-request-dac-batch",
+                    "key": "DATA_SOURCE_SQUEMA"
+                  }
+                }
+              }
+            ]
+          }]
+        }
+      }
+    }
+  }'
