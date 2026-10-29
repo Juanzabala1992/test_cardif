@@ -26,6 +26,28 @@ done
 
 
 
+for v in BNP00211_TLS_TRUSTSTORE_LOCATION \
+         BNP00211_TLS_TRUSTSTORE_PASSWORD \
+         BNP00211_TLS_TRUSTSTORE_TYPE; do
+  if [ -n "$(printenv "$v")" ]; then
+    echo "$v: definida"
+  else
+    echo "$v: NO definida"
+  fi
+done
+
+
+
+
+
+keytool -list \
+-keystore "$BNP00211_TLS_TRUSTSTORE_LOCATION" \
+-storetype PKCS12 \
+-storepass:env BNP00211_TLS_TRUSTSTORE_PASSWORD
+
+
+
+
 ********
 
 
