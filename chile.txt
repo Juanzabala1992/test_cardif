@@ -1,3 +1,22 @@
+
+[ -n "$SERVER_SSL_KEY_PASSWORD" ] && echo "KEY_PASSWORD: definida" || echo "KEY_PASSWORD: NO definida"
+
+[ -n "$SERVER_SSL_KEY_STORE_PASSWORD" ] && echo "KEY_STORE_PASSWORD: definida" || echo "KEY_STORE_PASSWORD: NO definida"
+
+
+
+
+keytool -list \
+-keystore /deployments/cert/Server.jks \
+-storetype JKS \
+-storepass:env SERVER_SSL_KEY_STORE_PASSWORD
+
+
+
+
+
+
+
 oc get pods -n chl-c-prd-carboosting | grep kafka-quotation
 
   oc logs -n chl-c-prd-carboosting <POD> --since=30m \
