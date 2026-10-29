@@ -14,6 +14,21 @@ keytool -list \
 
 
 
+for v in SERVER_SSL_KEY_PASSWORD \
+         SERVER_SSL_KEY_STORE_PASSWORD \
+         SERVER_SSL_KEYSTOREPASSWORD; do
+  if [ -n "$(printenv "$v")" ]; then
+    echo "$v: definida"
+  else
+    echo "$v: NO definida"
+  fi
+done
+
+
+
+********
+
+
 
 
 
